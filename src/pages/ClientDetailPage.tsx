@@ -279,6 +279,16 @@ const ClientDetailPage: React.FC = () => {
     loadAll();
   };
 
+  const deleteSession = async () => {
+    if (!editingSessionId) return;
+    if (!window.confirm('Einheit wirklich löschen?')) return;
+    await supabase.from('sessions').delete().eq('id', editingSessionId);
+    toast.success('Einheit gelöscht');
+    setSessionDialogOpen(false);
+    setEditingSessionId(null);
+    loadAll();
+  };
+
   const savePackage = async () => {
     if (!user || !id) return;
     const endDate = packageForm.start_date && packageForm.duration_weeks
