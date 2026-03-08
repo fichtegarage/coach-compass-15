@@ -808,6 +808,11 @@ const ClientDetailPage: React.FC = () => {
                     <Textarea value={sessionForm.notes} onChange={e => setSessionForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
                   </div>
                   <Button onClick={saveSession} className="w-full">{editingSessionId ? 'Änderungen speichern' : 'Einheit speichern'}</Button>
+                  {editingSessionId && (
+                    <Button variant="destructive" onClick={deleteSession} className="w-full gap-2">
+                      <Trash2 className="w-4 h-4" /> Einheit löschen
+                    </Button>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
