@@ -178,6 +178,46 @@ const ClientDetailPage: React.FC = () => {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  const toggleManualCompletion = useCallback(async (packageId: string, featureKey: string, currentlyDone: boolean) => {
+    if (!user) return;
+    if (currentlyDone) {
+      await supabase.from('package_feature_completions').delete().eq('package_id', packageId).eq('feature_key', featureKey);
+      setManualCompletions(prev => {
+        const next = { ...prev };
+        const s = new Set(next[packageId]);
+        s.delete(featureKey);
+        next[packageId] = s;
+        return next;
+      });
+    } else {
+      await supabase.from('package_feature_completions').insert({ user_id: user.id, package_id: packageId, feature_key: featureKey });
+      setManualCompletions(prev => {
+        const next = { ...prev };
+        const s = new Set(next[packageId] || []);
+        s.add(featureKey);
+        next[packageId] = s;
+        return next;
+      });
+    }
+  }, [user]);
+
+  const getFeatureStatusDetail = (key: string, pkg: any, usedSessions: number, checkinCount: number, hasMetrics: boolean): { done: boolean; detail?: string; manual?: boolean } => {
+    const manualDone = manualCompletions[pkg.id]?.has(key) || false;
+    switch (key) {
+      case 'erstgespraech': return { done: manualDone, manual: true };
+      case 'sessions': return { done: usedSessions >= pkg.sessions_included, detail: `${usedSessions} / ${pkg.sessions_included}` };
+      case 'trainingsplan': return { done: manualDone, manual: true };
+      case 'fortschrittsdoku': return { done: hasMetrics };
+      case 'checkin_calls': return { done: checkinCount >= pkg.checkin_calls_included, detail: `${checkinCount} / ${pkg.checkin_calls_included}` };
+      case 'ernaehrung': return { done: manualDone, manual: true };
+      case 'fortschrittsfotos': return { done: hasMetrics };
+      case 'whatsapp_support': return { done: true };
+      case 'prio_buchung': return { done: true };
+      case 'gratis_einheit': return { done: manualDone, manual: true };
+      default: return { done: false };
+    }
+  };
+
   const addQuickLog = async () => {
     if (!quickLogText.trim() || !user || !id) return;
     await supabase.from('quick_logs').insert({ client_id: id, user_id: user.id, content: quickLogText });
