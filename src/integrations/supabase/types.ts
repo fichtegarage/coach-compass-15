@@ -14,7 +14,323 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      body_metrics: {
+        Row: {
+          body_fat_pct: number | null
+          chest_cm: number | null
+          client_id: string
+          created_at: string
+          hip_cm: number | null
+          id: string
+          measured_at: string
+          user_id: string
+          waist_cm: number | null
+          weight_kg: number | null
+        }
+        Insert: {
+          body_fat_pct?: number | null
+          chest_cm?: number | null
+          client_id: string
+          created_at?: string
+          hip_cm?: number | null
+          id?: string
+          measured_at?: string
+          user_id: string
+          waist_cm?: number | null
+          weight_kg?: number | null
+        }
+        Update: {
+          body_fat_pct?: number | null
+          chest_cm?: number | null
+          client_id?: string
+          created_at?: string
+          hip_cm?: number | null
+          id?: string
+          measured_at?: string
+          user_id?: string
+          waist_cm?: number | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_metrics_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          acquisition_source: string | null
+          created_at: string
+          date_of_birth: string | null
+          email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          fitness_goal: string | null
+          fitness_goal_text: string | null
+          full_name: string
+          general_notes: string | null
+          health_notes: string | null
+          id: string
+          phone: string | null
+          pinned_note: string | null
+          profile_photo_url: string | null
+          starting_date: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          whatsapp_link: string | null
+        }
+        Insert: {
+          acquisition_source?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          fitness_goal?: string | null
+          fitness_goal_text?: string | null
+          full_name: string
+          general_notes?: string | null
+          health_notes?: string | null
+          id?: string
+          phone?: string | null
+          pinned_note?: string | null
+          profile_photo_url?: string | null
+          starting_date?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          whatsapp_link?: string | null
+        }
+        Update: {
+          acquisition_source?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          fitness_goal?: string | null
+          fitness_goal_text?: string | null
+          full_name?: string
+          general_notes?: string | null
+          health_notes?: string | null
+          id?: string
+          phone?: string | null
+          pinned_note?: string | null
+          profile_photo_url?: string | null
+          starting_date?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          whatsapp_link?: string | null
+        }
+        Relationships: []
+      }
+      fitness_benchmarks: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          label: string
+          measured_at: string
+          user_id: string
+          value: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          label: string
+          measured_at?: string
+          user_id: string
+          value: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          measured_at?: string
+          user_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fitness_benchmarks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      packages: {
+        Row: {
+          checkin_calls_included: number
+          client_id: string
+          created_at: string
+          deal_adjusted_terms: string | null
+          deal_discounted_price: number | null
+          deal_reason: string | null
+          duration_weeks: number | null
+          end_date: string | null
+          id: string
+          is_deal: boolean
+          package_name: string
+          package_price: number
+          payment_date: string | null
+          payment_status: string
+          sessions_included: number
+          start_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          checkin_calls_included?: number
+          client_id: string
+          created_at?: string
+          deal_adjusted_terms?: string | null
+          deal_discounted_price?: number | null
+          deal_reason?: string | null
+          duration_weeks?: number | null
+          end_date?: string | null
+          id?: string
+          is_deal?: boolean
+          package_name: string
+          package_price?: number
+          payment_date?: string | null
+          payment_status?: string
+          sessions_included?: number
+          start_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          checkin_calls_included?: number
+          client_id?: string
+          created_at?: string
+          deal_adjusted_terms?: string | null
+          deal_discounted_price?: number | null
+          deal_reason?: string | null
+          duration_weeks?: number | null
+          end_date?: string | null
+          id?: string
+          is_deal?: boolean
+          package_name?: string
+          package_price?: number
+          payment_date?: string | null
+          payment_status?: string
+          sessions_included?: number
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quick_logs: {
+        Row: {
+          client_id: string
+          content: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          content: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          client_id: string
+          created_at: string
+          duration_minutes: number
+          id: string
+          late_cancellation: boolean
+          notes: string | null
+          package_id: string | null
+          session_date: string
+          session_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          late_cancellation?: boolean
+          notes?: string | null
+          package_id?: string | null
+          session_date: string
+          session_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          late_cancellation?: boolean
+          notes?: string | null
+          package_id?: string | null
+          session_date?: string
+          session_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
