@@ -50,31 +50,31 @@ interface PackageFeature {
 
 const packageFeaturesMap: Record<string, PackageFeature[]> = {
   'Starter': [
-    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
     { label: 'Trainingseinheiten', key: 'sessions' },
-    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
     { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
   ],
   'Transformation': [
-    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
     { label: 'Trainingseinheiten', key: 'sessions' },
-    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
     { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
     { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
-    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
     { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
   ],
   'Intensiv': [
-    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
     { label: 'Trainingseinheiten', key: 'sessions' },
-    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
     { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
     { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
-    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
     { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
     { label: 'WhatsApp-Support zwischen den Einheiten', key: 'whatsapp_support' },
     { label: 'Priorisierte Terminbuchung', key: 'prio_buchung' },
-    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit' },
+    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit', manual: true },
   ],
 };
 
@@ -95,6 +95,8 @@ const ClientsPage: React.FC = () => {
   const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({});
   const [checkinCounts, setCheckinCounts] = useState<Record<string, number>>({});
   const [metricCounts, setMetricCounts] = useState<Record<string, number>>({});
+  // Map: packageId -> Set of completed feature keys
+  const [manualCompletions, setManualCompletions] = useState<Record<string, Set<string>>>({});
 
   useEffect(() => {
     if (!user) return;
