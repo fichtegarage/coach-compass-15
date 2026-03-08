@@ -76,7 +76,7 @@ const packageTemplates: Record<string, { sessions_included: string; checkin_call
 };
 const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
 
-const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
+const sessionStatuses = ['Scheduled', 'Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
 
 const sessionTypeLabelsDE: Record<string, string> = {
   'In-Person Training': 'Präsenz-Training',
