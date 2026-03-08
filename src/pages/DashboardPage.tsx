@@ -313,6 +313,12 @@ const DashboardPage: React.FC = () => {
           </div>
         </section>
       )}
+      <BookSessionDialog
+        open={bookDialogOpen}
+        onOpenChange={setBookDialogOpen}
+        prefillDate={bookPrefillDate}
+        onSaved={loadDashboard}
+      />
     </div>
   );
 };
