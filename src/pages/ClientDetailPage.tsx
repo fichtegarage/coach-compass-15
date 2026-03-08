@@ -424,12 +424,19 @@ const ClientDetailPage: React.FC = () => {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div
+          className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer relative group"
+          onClick={() => profilePhotoRef.current?.click()}
+        >
           {client.profile_photo_url ? (
             <img src={client.profile_photo_url} alt="" className="w-full h-full object-cover" />
           ) : (
             <User className="w-8 h-8 text-primary" />
           )}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
+            <Camera className="w-5 h-5 text-white" />
+          </div>
+          <input ref={profilePhotoRef} type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoUpload} />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
