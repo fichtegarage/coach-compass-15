@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, User, MessageCircle, ChevronDown, ChevronUp, CalendarDays, Check, Circle, Phone } from 'lucide-react';
+import { Plus, Search, User, ChevronDown, ChevronUp, CalendarDays, Check, Circle } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -267,16 +267,6 @@ const ClientsPage: React.FC = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {client.whatsapp_link && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-success"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(client.whatsapp_link!, '_blank'); }}
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                  </Button>
-                )}
                 <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
                 {pkg && (
                   <Button
@@ -352,18 +342,6 @@ const ClientsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* WhatsApp button */}
-              {client.whatsapp_link && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2 text-success border-success/30 hover:bg-success/10"
-                  onClick={() => window.open(client.whatsapp_link!, '_blank')}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  WhatsApp-Chat öffnen
-                </Button>
-              )}
             </div>
           )}
         </Card>
