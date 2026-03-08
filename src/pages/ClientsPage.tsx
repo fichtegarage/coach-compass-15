@@ -267,15 +267,6 @@ const ClientsPage: React.FC = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {client.whatsapp_link && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-success"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(client.whatsapp_link!, '_blank'); }}
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                  </Button>
                 )}
                 <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
                 {pkg && (
