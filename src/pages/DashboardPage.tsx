@@ -77,7 +77,7 @@ const DashboardPage: React.FC = () => {
     const today = format(new Date(), 'yyyy-MM-dd');
     const weekEnd = format(addDays(new Date(), 6), 'yyyy-MM-dd');
 
-    const [sessionsRes, packagesRes] = await Promise.all([
+    const [sessionsRes, packagesRes, clientsRes] = await Promise.all([
       supabase
         .from('sessions')
         .select('*, clients(full_name, id)')
@@ -87,6 +87,11 @@ const DashboardPage: React.FC = () => {
       supabase
         .from('packages')
         .select('*, clients(full_name, id)'),
+      supabase
+        .from('clients')
+        .select('id, full_name, date_of_birth')
+        .eq('status', 'Active')
+        .not('date_of_birth', 'is', null),
     ]);
 
     // Timeline sessions
