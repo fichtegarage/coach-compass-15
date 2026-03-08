@@ -972,6 +972,13 @@ const ClientDetailPage: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
+      <BookSessionDialog
+        open={bookDialogOpen}
+        onOpenChange={setBookDialogOpen}
+        clientId={id}
+        clientName={client?.full_name}
+        onSaved={loadAll}
+      />
     </div>
   );
 };
