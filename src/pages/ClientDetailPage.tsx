@@ -43,7 +43,7 @@ const ClientDetailPage: React.FC = () => {
   const [sessionForm, setSessionForm] = useState({
     session_date: new Date().toISOString().slice(0, 16),
     duration_minutes: '60', session_type: 'In-Person Training',
-    status: 'Completed', notes: '', package_id: '', late_cancellation: false,
+    status: 'Completed', notes: '', package_id: '', late_cancellation: false, location: 'Gym',
   });
 
   // Package form
