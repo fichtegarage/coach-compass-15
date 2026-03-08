@@ -234,10 +234,30 @@ const ClientDetailPage: React.FC = () => {
     toast.success('Notiz aktualisiert');
   };
 
+  const openEditSession = (s: any) => {
+    setEditingSessionId(s.id);
+    setSessionForm({
+      session_date: s.session_date?.slice(0, 16) || '',
+      duration_minutes: String(s.duration_minutes),
+      session_type: s.session_type,
+      status: s.status,
+      notes: s.notes || '',
+      package_id: s.package_id || '',
+      late_cancellation: s.late_cancellation,
+      location: s.location || 'Gym',
+    });
+    setSessionDialogOpen(true);
+  };
+
+  const openNewSession = () => {
+    setEditingSessionId(null);
+    setSessionForm(defaultSessionForm);
+    setSessionDialogOpen(true);
+  };
+
   const saveSession = async () => {
     if (!user || !id) return;
-    await supabase.from('sessions').insert({
-      client_id: id, user_id: user.id,
+    const payload = {
       session_date: sessionForm.session_date,
       duration_minutes: Number(sessionForm.duration_minutes),
       session_type: sessionForm.session_type,
@@ -246,9 +266,16 @@ const ClientDetailPage: React.FC = () => {
       package_id: sessionForm.package_id || null,
       late_cancellation: sessionForm.late_cancellation,
       location: sessionForm.location,
-    });
+    };
+    if (editingSessionId) {
+      await supabase.from('sessions').update(payload).eq('id', editingSessionId);
+      toast.success('Einheit aktualisiert');
+    } else {
+      await supabase.from('sessions').insert({ ...payload, client_id: id, user_id: user.id });
+      toast.success('Einheit gespeichert');
+    }
     setSessionDialogOpen(false);
-    toast.success('Einheit gespeichert');
+    setEditingSessionId(null);
     loadAll();
   };
 
