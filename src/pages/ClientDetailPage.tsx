@@ -430,6 +430,9 @@ const ClientDetailPage: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
+          <Button size="sm" className="gap-2" onClick={() => setBookDialogOpen(true)}>
+            <Plus className="w-4 h-4" /> Session buchen
+          </Button>
           <Link to={`/clients/${id}/edit`}>
             <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Bearbeiten</Button>
           </Link>
