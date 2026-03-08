@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp,
-  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle
+  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -274,6 +274,16 @@ const ClientDetailPage: React.FC = () => {
       await supabase.from('sessions').insert({ ...payload, client_id: id, user_id: user.id });
       toast.success('Einheit gespeichert');
     }
+    setSessionDialogOpen(false);
+    setEditingSessionId(null);
+    loadAll();
+  };
+
+  const deleteSession = async () => {
+    if (!editingSessionId) return;
+    if (!window.confirm('Einheit wirklich löschen?')) return;
+    await supabase.from('sessions').delete().eq('id', editingSessionId);
+    toast.success('Einheit gelöscht');
     setSessionDialogOpen(false);
     setEditingSessionId(null);
     loadAll();
@@ -798,6 +808,11 @@ const ClientDetailPage: React.FC = () => {
                     <Textarea value={sessionForm.notes} onChange={e => setSessionForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
                   </div>
                   <Button onClick={saveSession} className="w-full">{editingSessionId ? 'Änderungen speichern' : 'Einheit speichern'}</Button>
+                  {editingSessionId && (
+                    <Button variant="destructive" onClick={deleteSession} className="w-full gap-2">
+                      <Trash2 className="w-4 h-4" /> Einheit löschen
+                    </Button>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
