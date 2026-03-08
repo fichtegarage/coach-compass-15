@@ -269,6 +269,19 @@ const DashboardPage: React.FC = () => {
                   )}
                 </div>
 
+                {/* Birthday banners for this day */}
+                {(birthdaysByDay[format(day, 'yyyy-MM-dd')] || []).map(b => (
+                  <Link key={b.clientId} to={`/clients/${b.clientId}`}>
+                    <div className="pl-[52px] mb-2">
+                      <div className="flex items-center gap-2 rounded-lg bg-info/10 border border-info/20 px-3 py-1.5 text-sm hover:bg-info/15 transition-colors">
+                        <Cake className="w-4 h-4 text-info shrink-0" />
+                        <span className="font-medium">{b.clientName}</span>
+                        <span className="text-xs text-muted-foreground">hat Geburtstag 🎂</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+
                 {daySessions.length === 0 ? (
                   <div className="pl-[52px] flex items-center gap-2">
                     <p className="text-xs text-muted-foreground">Keine Termine</p>
