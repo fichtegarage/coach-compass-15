@@ -113,6 +113,7 @@ const ClientDetailPage: React.FC = () => {
   const [metrics, setMetrics] = useState<any[]>([]);
   const [benchmarks, setBenchmarks] = useState<any[]>([]);
   const [quickLogs, setQuickLogs] = useState<any[]>([]);
+  const [manualCompletions, setManualCompletions] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(true);
   const [quickLogText, setQuickLogText] = useState('');
   const [editingPinned, setEditingPinned] = useState(false);
