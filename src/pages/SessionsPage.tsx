@@ -59,6 +59,7 @@ const SessionsPage: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [form, setForm] = useState({
     client_id: '', package_id: '', session_date: new Date().toISOString().slice(0, 16),
     duration_minutes: '60', session_type: 'Präsenz-Training',
