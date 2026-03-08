@@ -116,6 +116,27 @@ const SessionsPage: React.FC = () => {
     loadData();
   };
 
+  const handleDrop = async (sessionId: string, targetDay: Date) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session || session.status !== 'Scheduled') return;
+    // Keep the original time, change the date
+    const oldDate = new Date(session.session_date);
+    const newDate = new Date(targetDay);
+    newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
+    const newDateStr = format(newDate, "yyyy-MM-dd'T'HH:mm:ss");
+    // Optimistic update
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, session_date: newDateStr } : s));
+    setDragOverDay(null);
+    const { error } = await supabase.from('sessions').update({ session_date: newDateStr }).eq('id', sessionId);
+    if (error) {
+      toast.error('Verschieben fehlgeschlagen');
+      loadData();
+    } else {
+      toast.success('Session verschoben');
+    }
+  };
+  };
+
   // Calendar grid
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
