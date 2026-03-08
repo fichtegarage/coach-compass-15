@@ -118,6 +118,7 @@ const ClientDetailPage: React.FC = () => {
       notes: sessionForm.notes || null,
       package_id: sessionForm.package_id || null,
       late_cancellation: sessionForm.late_cancellation,
+      location: sessionForm.location,
     });
     setSessionDialogOpen(false);
     toast.success('Session logged');
