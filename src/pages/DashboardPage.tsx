@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import BookSessionDialog from '@/components/BookSessionDialog';
 import {
-  format, addDays, isSameDay, isToday, differenceInDays, differenceInWeeks,
+  format, addDays, isSameDay, isToday, differenceInDays, getMonth, getDate,
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 
