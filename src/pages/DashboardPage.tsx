@@ -168,11 +168,9 @@ const DashboardPage: React.FC = () => {
             {format(new Date(), 'EEEE, d. MMMM yyyy', { locale: de })}
           </p>
         </div>
-        <Link to="/sessions">
-          <Button size="sm" className="gap-2">
-            <Plus className="w-4 h-4" /> Einheit erfassen
-          </Button>
-        </Link>
+        <Button size="sm" className="gap-2" onClick={() => { setBookPrefillDate(undefined); setBookDialogOpen(true); }}>
+          <Plus className="w-4 h-4" /> Session buchen
+        </Button>
       </div>
 
       {/* 7-Day Timeline */}
