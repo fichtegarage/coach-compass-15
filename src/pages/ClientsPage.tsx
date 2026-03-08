@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, User, MessageCircle, ChevronDown, ChevronUp, CalendarDays, Check, Circle, Phone } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -44,35 +45,36 @@ interface SessionCount {
 interface PackageFeature {
   label: string;
   key: 'erstgespraech' | 'sessions' | 'trainingsplan' | 'fortschrittsdoku' | 'checkin_calls' | 'ernaehrung' | 'fortschrittsfotos' | 'whatsapp_support' | 'prio_buchung' | 'gratis_einheit';
+  manual?: boolean; // can be toggled manually
 }
 
 const packageFeaturesMap: Record<string, PackageFeature[]> = {
   'Starter': [
-    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
     { label: 'Trainingseinheiten', key: 'sessions' },
-    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
     { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
   ],
   'Transformation': [
-    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
     { label: 'Trainingseinheiten', key: 'sessions' },
-    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
     { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
     { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
-    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
     { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
   ],
   'Intensiv': [
-    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
     { label: 'Trainingseinheiten', key: 'sessions' },
-    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
     { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
     { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
-    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
     { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
     { label: 'WhatsApp-Support zwischen den Einheiten', key: 'whatsapp_support' },
     { label: 'Priorisierte Terminbuchung', key: 'prio_buchung' },
-    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit' },
+    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit', manual: true },
   ],
 };
 
@@ -93,6 +95,8 @@ const ClientsPage: React.FC = () => {
   const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({});
   const [checkinCounts, setCheckinCounts] = useState<Record<string, number>>({});
   const [metricCounts, setMetricCounts] = useState<Record<string, number>>({});
+  // Map: packageId -> Set of completed feature keys
+  const [manualCompletions, setManualCompletions] = useState<Record<string, Set<string>>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -100,46 +104,82 @@ const ClientsPage: React.FC = () => {
   }, [user]);
 
   const loadData = async () => {
-    const [clientsRes, packagesRes, sessionsRes, checkinsRes, metricsRes] = await Promise.all([
+    const [clientsRes, packagesRes, sessionsRes, checkinsRes, metricsRes, completionsRes] = await Promise.all([
       supabase.from('clients').select('*').order('full_name'),
       supabase.from('packages').select('*').order('start_date', { ascending: false }),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').neq('session_type', 'Check-In Call'),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').eq('session_type', 'Check-In Call'),
       supabase.from('body_metrics').select('client_id, id'),
+      supabase.from('package_feature_completions').select('package_id, feature_key'),
     ]);
 
     setClients(clientsRes.data || []);
 
-    // Map latest package per client
     const pkgMap: Record<string, PackageData> = {};
     (packagesRes.data || []).forEach((p: any) => {
       if (!pkgMap[p.client_id]) pkgMap[p.client_id] = p;
     });
     setPackages(pkgMap);
 
-    // Count completed sessions per client
     const sMap: Record<string, number> = {};
     (sessionsRes.data || []).forEach((s: any) => {
       sMap[s.client_id] = (sMap[s.client_id] || 0) + 1;
     });
     setSessionCounts(sMap);
 
-    // Count check-in calls per client
     const cMap: Record<string, number> = {};
     (checkinsRes.data || []).forEach((s: any) => {
       cMap[s.client_id] = (cMap[s.client_id] || 0) + 1;
     });
     setCheckinCounts(cMap);
 
-    // Count body metrics per client
     const mMap: Record<string, number> = {};
     (metricsRes.data || []).forEach((m: any) => {
       mMap[m.client_id] = (mMap[m.client_id] || 0) + 1;
     });
     setMetricCounts(mMap);
 
+    // Manual completions
+    const mcMap: Record<string, Set<string>> = {};
+    (completionsRes.data || []).forEach((c: any) => {
+      if (!mcMap[c.package_id]) mcMap[c.package_id] = new Set();
+      mcMap[c.package_id].add(c.feature_key);
+    });
+    setManualCompletions(mcMap);
+
     setLoading(false);
   };
+
+  const toggleManualCompletion = useCallback(async (packageId: string, featureKey: string, currentlyDone: boolean) => {
+    if (!user) return;
+    if (currentlyDone) {
+      // Remove completion
+      await supabase
+        .from('package_feature_completions')
+        .delete()
+        .eq('package_id', packageId)
+        .eq('feature_key', featureKey);
+      setManualCompletions(prev => {
+        const next = { ...prev };
+        const s = new Set(next[packageId]);
+        s.delete(featureKey);
+        next[packageId] = s;
+        return next;
+      });
+    } else {
+      // Add completion
+      await supabase
+        .from('package_feature_completions')
+        .insert({ user_id: user.id, package_id: packageId, feature_key: featureKey });
+      setManualCompletions(prev => {
+        const next = { ...prev };
+        const s = new Set(next[packageId] || []);
+        s.add(featureKey);
+        next[packageId] = s;
+        return next;
+      });
+    }
+  }, [user]);
 
   const sortByFirstName = (a: Client, b: Client) => a.full_name.localeCompare(b.full_name, 'de');
 
@@ -171,28 +211,29 @@ const ClientsPage: React.FC = () => {
     setExpandedClient(prev => prev === clientId ? null : clientId);
   };
 
-  const getFeatureStatus = (key: string, pkg: PackageData, usedSessions: number, usedCheckins: number, hasMetrics: boolean): { done: boolean; detail?: string } => {
+  const getFeatureStatus = (key: string, pkg: PackageData, usedSessions: number, usedCheckins: number, hasMetrics: boolean): { done: boolean; detail?: string; manual?: boolean } => {
+    const manualDone = manualCompletions[pkg.id]?.has(key) || false;
     switch (key) {
       case 'erstgespraech':
-        return { done: usedSessions >= 1 };
+        return { done: manualDone, manual: true };
       case 'sessions':
         return { done: usedSessions >= pkg.sessions_included, detail: `${usedSessions} / ${pkg.sessions_included}` };
       case 'trainingsplan':
-        return { done: usedSessions >= 1 }; // assumed created after first session
+        return { done: manualDone, manual: true };
       case 'fortschrittsdoku':
         return { done: hasMetrics };
       case 'checkin_calls':
         return { done: usedCheckins >= pkg.checkin_calls_included, detail: `${usedCheckins} / ${pkg.checkin_calls_included}` };
       case 'ernaehrung':
-        return { done: usedSessions >= 2 }; // assumed after 2nd session
+        return { done: manualDone, manual: true };
       case 'fortschrittsfotos':
         return { done: hasMetrics };
       case 'whatsapp_support':
-        return { done: !!true }; // always active for Intensiv
+        return { done: true };
       case 'prio_buchung':
-        return { done: !!true }; // always active for Intensiv
+        return { done: true };
       case 'gratis_einheit':
-        return { done: false }; // manual tracking
+        return { done: manualDone, manual: true };
       default:
         return { done: false };
     }
@@ -277,9 +318,21 @@ const ClientsPage: React.FC = () => {
                   <ul className="space-y-1.5">
                     {features.map((feat, i) => {
                       const status = getFeatureStatus(feat.key, pkg, usedSessions, usedCheckins, hasMetrics);
+                      const isManual = feat.manual === true;
                       return (
-                        <li key={i} className="flex items-center gap-2.5 text-sm">
-                          {status.done ? (
+                        <li
+                          key={i}
+                          className={`flex items-center gap-2.5 text-sm ${isManual ? 'cursor-pointer hover:bg-accent/50 -mx-1 px-1 rounded' : ''}`}
+                          onClick={isManual ? (e) => { e.preventDefault(); e.stopPropagation(); toggleManualCompletion(pkg.id, feat.key, status.done); } : undefined}
+                        >
+                          {isManual ? (
+                            <Checkbox
+                              checked={status.done}
+                              className="flex-shrink-0"
+                              onCheckedChange={() => toggleManualCompletion(pkg.id, feat.key, status.done)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : status.done ? (
                             <Check className="w-4 h-4 flex-shrink-0 text-success" />
                           ) : (
                             <Circle className="w-4 h-4 flex-shrink-0 text-muted-foreground/30" />
