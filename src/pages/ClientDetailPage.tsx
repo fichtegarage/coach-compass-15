@@ -151,13 +151,14 @@ const ClientDetailPage: React.FC = () => {
 
   const loadAll = useCallback(async () => {
     if (!id || !user) return;
-    const [cRes, pRes, sRes, mRes, bRes, qlRes] = await Promise.all([
+    const [cRes, pRes, sRes, mRes, bRes, qlRes, fcRes] = await Promise.all([
       supabase.from('clients').select('*').eq('id', id).single(),
       supabase.from('packages').select('*').eq('client_id', id).order('start_date', { ascending: false }),
       supabase.from('sessions').select('*').eq('client_id', id).order('session_date', { ascending: false }),
       supabase.from('body_metrics').select('*').eq('client_id', id).order('measured_at'),
       supabase.from('fitness_benchmarks').select('*').eq('client_id', id).order('measured_at', { ascending: false }),
       supabase.from('quick_logs').select('*').eq('client_id', id).order('created_at', { ascending: false }),
+      supabase.from('package_feature_completions').select('package_id, feature_key'),
     ]);
     setClient(cRes.data);
     setPinnedText(cRes.data?.pinned_note || '');
@@ -166,6 +167,12 @@ const ClientDetailPage: React.FC = () => {
     setMetrics(mRes.data || []);
     setBenchmarks(bRes.data || []);
     setQuickLogs(qlRes.data || []);
+    const mcMap: Record<string, Set<string>> = {};
+    (fcRes.data || []).forEach((c: any) => {
+      if (!mcMap[c.package_id]) mcMap[c.package_id] = new Set();
+      mcMap[c.package_id].add(c.feature_key);
+    });
+    setManualCompletions(mcMap);
     setLoading(false);
   }, [id, user]);
 
