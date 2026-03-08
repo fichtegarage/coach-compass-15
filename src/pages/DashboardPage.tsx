@@ -9,6 +9,7 @@ import {
   CalendarDays, AlertTriangle, DollarSign, Plus, Clock,
   ChevronRight, Package,
 } from 'lucide-react';
+import BookSessionDialog from '@/components/BookSessionDialog';
 import {
   format, addDays, isSameDay, isToday, differenceInDays, differenceInWeeks,
 } from 'date-fns';
