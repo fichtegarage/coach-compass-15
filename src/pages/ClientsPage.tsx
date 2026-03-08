@@ -104,46 +104,82 @@ const ClientsPage: React.FC = () => {
   }, [user]);
 
   const loadData = async () => {
-    const [clientsRes, packagesRes, sessionsRes, checkinsRes, metricsRes] = await Promise.all([
+    const [clientsRes, packagesRes, sessionsRes, checkinsRes, metricsRes, completionsRes] = await Promise.all([
       supabase.from('clients').select('*').order('full_name'),
       supabase.from('packages').select('*').order('start_date', { ascending: false }),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').neq('session_type', 'Check-In Call'),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').eq('session_type', 'Check-In Call'),
       supabase.from('body_metrics').select('client_id, id'),
+      supabase.from('package_feature_completions').select('package_id, feature_key'),
     ]);
 
     setClients(clientsRes.data || []);
 
-    // Map latest package per client
     const pkgMap: Record<string, PackageData> = {};
     (packagesRes.data || []).forEach((p: any) => {
       if (!pkgMap[p.client_id]) pkgMap[p.client_id] = p;
     });
     setPackages(pkgMap);
 
-    // Count completed sessions per client
     const sMap: Record<string, number> = {};
     (sessionsRes.data || []).forEach((s: any) => {
       sMap[s.client_id] = (sMap[s.client_id] || 0) + 1;
     });
     setSessionCounts(sMap);
 
-    // Count check-in calls per client
     const cMap: Record<string, number> = {};
     (checkinsRes.data || []).forEach((s: any) => {
       cMap[s.client_id] = (cMap[s.client_id] || 0) + 1;
     });
     setCheckinCounts(cMap);
 
-    // Count body metrics per client
     const mMap: Record<string, number> = {};
     (metricsRes.data || []).forEach((m: any) => {
       mMap[m.client_id] = (mMap[m.client_id] || 0) + 1;
     });
     setMetricCounts(mMap);
 
+    // Manual completions
+    const mcMap: Record<string, Set<string>> = {};
+    (completionsRes.data || []).forEach((c: any) => {
+      if (!mcMap[c.package_id]) mcMap[c.package_id] = new Set();
+      mcMap[c.package_id].add(c.feature_key);
+    });
+    setManualCompletions(mcMap);
+
     setLoading(false);
   };
+
+  const toggleManualCompletion = useCallback(async (packageId: string, featureKey: string, currentlyDone: boolean) => {
+    if (!user) return;
+    if (currentlyDone) {
+      // Remove completion
+      await supabase
+        .from('package_feature_completions')
+        .delete()
+        .eq('package_id', packageId)
+        .eq('feature_key', featureKey);
+      setManualCompletions(prev => {
+        const next = { ...prev };
+        const s = new Set(next[packageId]);
+        s.delete(featureKey);
+        next[packageId] = s;
+        return next;
+      });
+    } else {
+      // Add completion
+      await supabase
+        .from('package_feature_completions')
+        .insert({ user_id: user.id, package_id: packageId, feature_key: featureKey });
+      setManualCompletions(prev => {
+        const next = { ...prev };
+        const s = new Set(next[packageId] || []);
+        s.add(featureKey);
+        next[packageId] = s;
+        return next;
+      });
+    }
+  }, [user]);
 
   const sortByFirstName = (a: Client, b: Client) => a.full_name.localeCompare(b.full_name, 'de');
 
