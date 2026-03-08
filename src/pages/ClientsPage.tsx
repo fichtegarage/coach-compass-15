@@ -40,25 +40,39 @@ interface SessionCount {
   count: number;
 }
 
-// Package features based on the actual offerings
-const packageFeatures: Record<string, string[]> = {
+// Package features with logic keys for determining completion
+interface PackageFeature {
+  label: string;
+  key: 'erstgespraech' | 'sessions' | 'trainingsplan' | 'fortschrittsdoku' | 'checkin_calls' | 'ernaehrung' | 'fortschrittsfotos' | 'whatsapp_support' | 'prio_buchung' | 'gratis_einheit';
+}
+
+const packageFeaturesMap: Record<string, PackageFeature[]> = {
   'Starter': [
-    'Persönliches Erstgespräch & Zielsetzung',
-    '5 individuelle 1:1-Trainingseinheiten',
-    'Trainingsplan passend zu deinen Zielen',
-    'Fortschrittsdokumentation',
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
   ],
   'Transformation': [
-    'Alles aus Paket Starter',
-    'Monatlicher Check-in-Call (15 Min.)',
-    'Angepasster Ernährungsleitfaden',
-    'Fortschrittsfotos & Messung',
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung' },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
   ],
   'Intensiv': [
-    'Alles aus Paket Transformation',
-    'WhatsApp-Support zwischen den Einheiten',
-    'Priorisierte Terminbuchung',
-    'Eine Gratis-Einheit bei Weiterempfehlung',
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung' },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
+    { label: 'WhatsApp-Support zwischen den Einheiten', key: 'whatsapp_support' },
+    { label: 'Priorisierte Terminbuchung', key: 'prio_buchung' },
+    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit' },
   ],
 };
 
