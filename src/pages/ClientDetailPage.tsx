@@ -121,11 +121,13 @@ const ClientDetailPage: React.FC = () => {
   
   // Session form
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
-  const [sessionForm, setSessionForm] = useState({
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const defaultSessionForm = {
     session_date: new Date().toISOString().slice(0, 16),
     duration_minutes: '60', session_type: 'In-Person Training',
     status: 'Completed', notes: '', package_id: '', late_cancellation: false, location: 'Gym',
-  });
+  };
+  const [sessionForm, setSessionForm] = useState(defaultSessionForm);
 
   // Package form
   const [packageDialogOpen, setPackageDialogOpen] = useState(false);
@@ -232,10 +234,30 @@ const ClientDetailPage: React.FC = () => {
     toast.success('Notiz aktualisiert');
   };
 
+  const openEditSession = (s: any) => {
+    setEditingSessionId(s.id);
+    setSessionForm({
+      session_date: s.session_date?.slice(0, 16) || '',
+      duration_minutes: String(s.duration_minutes),
+      session_type: s.session_type,
+      status: s.status,
+      notes: s.notes || '',
+      package_id: s.package_id || '',
+      late_cancellation: s.late_cancellation,
+      location: s.location || 'Gym',
+    });
+    setSessionDialogOpen(true);
+  };
+
+  const openNewSession = () => {
+    setEditingSessionId(null);
+    setSessionForm(defaultSessionForm);
+    setSessionDialogOpen(true);
+  };
+
   const saveSession = async () => {
     if (!user || !id) return;
-    await supabase.from('sessions').insert({
-      client_id: id, user_id: user.id,
+    const payload = {
       session_date: sessionForm.session_date,
       duration_minutes: Number(sessionForm.duration_minutes),
       session_type: sessionForm.session_type,
@@ -244,9 +266,16 @@ const ClientDetailPage: React.FC = () => {
       package_id: sessionForm.package_id || null,
       late_cancellation: sessionForm.late_cancellation,
       location: sessionForm.location,
-    });
+    };
+    if (editingSessionId) {
+      await supabase.from('sessions').update(payload).eq('id', editingSessionId);
+      toast.success('Einheit aktualisiert');
+    } else {
+      await supabase.from('sessions').insert({ ...payload, client_id: id, user_id: user.id });
+      toast.success('Einheit gespeichert');
+    }
     setSessionDialogOpen(false);
-    toast.success('Einheit gespeichert');
+    setEditingSessionId(null);
     loadAll();
   };
 
@@ -711,12 +740,10 @@ const ClientDetailPage: React.FC = () => {
         {/* SESSIONS TAB */}
         <TabsContent value="sessions" className="space-y-4 mt-4">
           <div className="flex justify-end">
-            <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Einheit erfassen</Button>
-              </DialogTrigger>
+            <Button size="sm" className="gap-2" onClick={openNewSession}><Plus className="w-4 h-4" /> Einheit erfassen</Button>
+            <Dialog open={sessionDialogOpen} onOpenChange={(open) => { setSessionDialogOpen(open); if (!open) setEditingSessionId(null); }}>
               <DialogContent>
-                <DialogHeader><DialogTitle className="font-display">Einheit erfassen</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="font-display">{editingSessionId ? 'Einheit bearbeiten' : 'Einheit erfassen'}</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Datum & Uhrzeit</Label>
@@ -777,7 +804,7 @@ const ClientDetailPage: React.FC = () => {
                     <Label>Notizen</Label>
                     <Textarea value={sessionForm.notes} onChange={e => setSessionForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
                   </div>
-                  <Button onClick={saveSession} className="w-full">Einheit speichern</Button>
+                  <Button onClick={saveSession} className="w-full">{editingSessionId ? 'Änderungen speichern' : 'Einheit speichern'}</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -787,16 +814,17 @@ const ClientDetailPage: React.FC = () => {
           ) : (
             <div className="space-y-2">
               {sessions.map(s => (
-                <Card key={s.id}>
+                <Card key={s.id} className="hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => openEditSession(s)}>
                   <CardContent className="p-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">{format(new Date(s.session_date), 'd. MMM yyyy · HH:mm', { locale: de })}</p>
-                      <p className="text-xs text-muted-foreground">{sessionTypeLabelsDE[s.session_type] || s.session_type} · {s.duration_minutes} Min.</p>
+                      <p className="text-xs text-muted-foreground">{sessionTypeLabelsDE[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}</p>
                       {s.notes && <p className="text-xs text-muted-foreground mt-1">{s.notes}</p>}
                     </div>
                     <div className="flex items-center gap-2">
                       {s.late_cancellation && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">Kurzfristig</Badge>}
                       <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'No-Show' ? 'destructive' : 'secondary'}>{sessionStatusLabelsDE[s.status] || s.status}</Badge>
+                      <Edit className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
                   </CardContent>
                 </Card>
