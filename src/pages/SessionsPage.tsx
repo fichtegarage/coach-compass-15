@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, CalendarDays } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { de } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,8 +16,32 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 
-const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
+const sessionTypes = ['Präsenz-Training', 'Online-Training', 'Telefonat', 'Check-In Call', 'Kostenloses Erstgespräch'];
 const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
+
+const sessionTypeLabels: Record<string, string> = {
+  'In-Person Training': 'Präsenz-Training',
+  'Online Training': 'Online-Training',
+  'Phone Call': 'Telefonat',
+  'Check-In Call': 'Check-In Call',
+  'Free Intro': 'Kostenloses Erstgespräch',
+};
+
+const statusLabels: Record<string, string> = {
+  'Completed': 'Abgeschlossen',
+  'No-Show': 'Nicht erschienen',
+  'Cancelled by Client': 'Vom Kunden abgesagt',
+  'Cancelled by Trainer': 'Vom Trainer abgesagt',
+};
+
+// Map German display labels back to DB values
+const sessionTypeToDb: Record<string, string> = {
+  'Präsenz-Training': 'In-Person Training',
+  'Online-Training': 'Online Training',
+  'Telefonat': 'Phone Call',
+  'Check-In Call': 'Check-In Call',
+  'Kostenloses Erstgespräch': 'Free Intro',
+};
 
 const SessionsPage: React.FC = () => {
   const { user } = useAuth();
@@ -26,7 +51,7 @@ const SessionsPage: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({
     client_id: '', session_date: new Date().toISOString().slice(0, 16),
-    duration_minutes: '60', session_type: 'In-Person Training',
+    duration_minutes: '60', session_type: 'Präsenz-Training',
     status: 'Completed', notes: '', late_cancellation: false,
   });
 
@@ -52,13 +77,13 @@ const SessionsPage: React.FC = () => {
       client_id: form.client_id, user_id: user.id,
       session_date: form.session_date,
       duration_minutes: Number(form.duration_minutes),
-      session_type: form.session_type,
+      session_type: sessionTypeToDb[form.session_type] || form.session_type,
       status: form.status,
       notes: form.notes || null,
       late_cancellation: form.late_cancellation,
     });
     setDialogOpen(false);
-    toast.success('Session logged');
+    toast.success('Einheit erfasst');
     loadData();
   };
 
@@ -69,34 +94,34 @@ const SessionsPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-display font-bold">Sessions</h1>
+        <h1 className="text-2xl md:text-3xl font-display font-bold">Einheiten</h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Log Session</Button>
+            <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Einheit erfassen</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle className="font-display">Log Session</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="font-display">Einheit erfassen</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Client *</Label>
+                <Label>Kunde *</Label>
                 <Select value={form.client_id} onValueChange={v => setForm(f => ({ ...f, client_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Kunde wählen" /></SelectTrigger>
                   <SelectContent>
                     {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Date & Time</Label>
+                <Label>Datum & Uhrzeit</Label>
                 <Input type="datetime-local" value={form.session_date} onChange={e => setForm(f => ({ ...f, session_date: e.target.value }))} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Duration (min)</Label>
+                  <Label>Dauer (Min.)</Label>
                   <Input type="number" value={form.duration_minutes} onChange={e => setForm(f => ({ ...f, duration_minutes: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Type</Label>
+                  <Label>Art</Label>
                   <Select value={form.session_type} onValueChange={v => setForm(f => ({ ...f, session_type: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -110,30 +135,30 @@ const SessionsPage: React.FC = () => {
                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {sessionStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    {sessionStatuses.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={form.late_cancellation} onCheckedChange={v => setForm(f => ({ ...f, late_cancellation: v }))} />
-                <Label>Late Cancellation (&lt;24h)</Label>
+                <Label>Kurzfristige Absage (&lt;24h)</Label>
               </div>
               <div className="space-y-2">
-                <Label>Notes</Label>
+                <Label>Notizen</Label>
                 <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
               </div>
-              <Button onClick={save} className="w-full">Save Session</Button>
+              <Button onClick={save} className="w-full">Einheit speichern</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      <p className="text-sm text-muted-foreground">{format(new Date(), 'MMMM yyyy')} · {sessions.length} sessions</p>
+      <p className="text-sm text-muted-foreground">{format(new Date(), 'MMMM yyyy', { locale: de })} · {sessions.length} Einheiten</p>
 
       {sessions.length === 0 ? (
         <div className="text-center py-12">
           <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">No sessions this month</p>
+          <p className="text-muted-foreground">Keine Einheiten diesen Monat</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -144,12 +169,12 @@ const SessionsPage: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium">{(s.clients as any)?.full_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {format(new Date(s.session_date), 'MMM d · HH:mm')} · {s.session_type} · {s.duration_minutes}min
+                      {format(new Date(s.session_date), 'd. MMM · HH:mm', { locale: de })} · {sessionTypeLabels[s.session_type] || s.session_type} · {s.duration_minutes} Min.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {s.late_cancellation && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">Late</Badge>}
-                    <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'No-Show' ? 'destructive' : 'secondary'}>{s.status}</Badge>
+                    {s.late_cancellation && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">Kurzfristig</Badge>}
+                    <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'No-Show' ? 'destructive' : 'secondary'}>{statusLabels[s.status] || s.status}</Badge>
                   </div>
                 </CardContent>
               </Card>

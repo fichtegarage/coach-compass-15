@@ -18,7 +18,7 @@ const LoginPage: React.FC = () => {
     setError('');
     const { error } = await signIn(email, password);
     if (error) {
-      setError('Invalid credentials');
+      setError('Ungültige Anmeldedaten');
     }
     setLoading(false);
   };
@@ -31,23 +31,23 @@ const LoginPage: React.FC = () => {
             <Dumbbell className="w-8 h-8 text-primary" />
           </div>
           <h1 className="text-2xl font-display font-bold text-foreground">CoachHub</h1>
-          <p className="text-muted-foreground text-sm mt-1">Personal Training Management</p>
+          <p className="text-muted-foreground text-sm mt-1">Personal Training Verwaltung</p>
         </div>
 
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">E-Mail</Label>
             <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
+              placeholder="deine@email.de"
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Passwort</Label>
             <Input
               id="password"
               type="password"
@@ -59,7 +59,7 @@ const LoginPage: React.FC = () => {
           </div>
           {error && <p className="text-destructive text-sm">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sign In'}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Anmelden'}
           </Button>
         </form>
       </div>

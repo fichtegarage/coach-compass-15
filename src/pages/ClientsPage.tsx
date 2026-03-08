@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, User, MessageCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { de } from 'date-fns/locale';
 
 interface Client {
   id: string;
@@ -21,6 +22,12 @@ interface Client {
   starting_date: string | null;
   profile_photo_url: string | null;
 }
+
+const statusLabelsDE: Record<string, string> = {
+  'Active': 'Aktiv',
+  'Paused': 'Pausiert',
+  'Churned': 'Abgemeldet',
+};
 
 const ClientsPage: React.FC = () => {
   const { user } = useAuth();
@@ -59,9 +66,9 @@ const ClientsPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-display font-bold">Clients</h1>
+        <h1 className="text-2xl md:text-3xl font-display font-bold">Kunden</h1>
         <Link to="/clients/new">
-          <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Add Client</Button>
+          <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Neuer Kunde</Button>
         </Link>
       </div>
 
@@ -69,7 +76,7 @@ const ClientsPage: React.FC = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search clients..."
+            placeholder="Kunden suchen..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -77,13 +84,13 @@ const ClientsPage: React.FC = () => {
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="All statuses" />
+            <SelectValue placeholder="Alle Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="Active">Active</SelectItem>
-            <SelectItem value="Paused">Paused</SelectItem>
-            <SelectItem value="Churned">Churned</SelectItem>
+            <SelectItem value="all">Alle Status</SelectItem>
+            <SelectItem value="Active">Aktiv</SelectItem>
+            <SelectItem value="Paused">Pausiert</SelectItem>
+            <SelectItem value="Churned">Abgemeldet</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -91,7 +98,7 @@ const ClientsPage: React.FC = () => {
       {filtered.length === 0 ? (
         <div className="text-center py-12">
           <User className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">No clients found</p>
+          <p className="text-muted-foreground">Keine Kunden gefunden</p>
         </div>
       ) : (
         <div className="grid gap-3">
@@ -109,8 +116,8 @@ const ClientsPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{client.full_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {client.fitness_goal || 'No goal set'}
-                      {client.starting_date && ` · Client for ${formatDistanceToNow(new Date(client.starting_date))}`}
+                      {client.fitness_goal || 'Kein Ziel gesetzt'}
+                      {client.starting_date && ` · Kunde seit ${formatDistanceToNow(new Date(client.starting_date), { locale: de })}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -124,7 +131,7 @@ const ClientsPage: React.FC = () => {
                         <MessageCircle className="w-4 h-4" />
                       </Button>
                     )}
-                    <Badge variant="outline" className={statusColor(client.status)}>{client.status}</Badge>
+                    <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
                   </div>
                 </CardContent>
               </Card>
