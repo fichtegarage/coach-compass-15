@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   CalendarDays, AlertTriangle, DollarSign, Plus, Clock,
-  ChevronRight, Package,
+  ChevronRight, Package, Cake,
 } from 'lucide-react';
 import BookSessionDialog from '@/components/BookSessionDialog';
 import {
-  format, addDays, isSameDay, isToday, differenceInDays, differenceInWeeks,
+  format, addDays, isSameDay, isToday, differenceInDays, getMonth, getDate,
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -43,12 +43,18 @@ interface TimelineSession {
 }
 
 interface Reminder {
-  type: 'unpaid' | 'expiring';
+  type: 'unpaid' | 'expiring' | 'birthday';
   clientName: string;
   clientId: string;
   packageName: string;
   detail: string;
-  severity: 'warning' | 'destructive';
+  severity: 'warning' | 'destructive' | 'info';
+}
+
+interface BirthdayInfo {
+  clientName: string;
+  clientId: string;
+  date: Date;
 }
 
 const DashboardPage: React.FC = () => {
@@ -58,6 +64,7 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
   const [bookPrefillDate, setBookPrefillDate] = useState<string | undefined>();
+  const [birthdaysByDay, setBirthdaysByDay] = useState<Record<string, BirthdayInfo[]>>({});
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
 
@@ -70,7 +77,7 @@ const DashboardPage: React.FC = () => {
     const today = format(new Date(), 'yyyy-MM-dd');
     const weekEnd = format(addDays(new Date(), 6), 'yyyy-MM-dd');
 
-    const [sessionsRes, packagesRes] = await Promise.all([
+    const [sessionsRes, packagesRes, clientsRes] = await Promise.all([
       supabase
         .from('sessions')
         .select('*, clients(full_name, id)')
@@ -80,6 +87,11 @@ const DashboardPage: React.FC = () => {
       supabase
         .from('packages')
         .select('*, clients(full_name, id)'),
+      supabase
+        .from('clients')
+        .select('id, full_name, date_of_birth')
+        .eq('status', 'Active')
+        .not('date_of_birth', 'is', null),
     ]);
 
     // Timeline sessions
@@ -151,6 +163,43 @@ const DashboardPage: React.FC = () => {
       }
     }
 
+    // Birthday reminders
+    const bdayMap: Record<string, BirthdayInfo[]> = {};
+    const clients = clientsRes.data || [];
+    for (const day of next7Days) {
+      const dayKey = format(day, 'yyyy-MM-dd');
+      bdayMap[dayKey] = [];
+    }
+    for (const c of clients) {
+      if (!c.date_of_birth) continue;
+      const dob = new Date(c.date_of_birth);
+      const dobMonth = getMonth(dob);
+      const dobDay = getDate(dob);
+      for (const day of next7Days) {
+        if (getMonth(day) === dobMonth && getDate(day) === dobDay) {
+          const dayKey = format(day, 'yyyy-MM-dd');
+          bdayMap[dayKey].push({
+            clientName: c.full_name,
+            clientId: c.id,
+            date: day,
+          });
+          // Also add as a reminder if it's today
+          if (isToday(day)) {
+            const age = new Date().getFullYear() - dob.getFullYear();
+            reminderList.push({
+              type: 'birthday',
+              clientName: c.full_name,
+              clientId: c.id,
+              packageName: '',
+              detail: `Wird heute ${age} Jahre alt 🎂`,
+              severity: 'info',
+            });
+          }
+        }
+      }
+    }
+    setBirthdaysByDay(bdayMap);
+
     setReminders(reminderList);
     setLoading(false);
   };
@@ -219,6 +268,19 @@ const DashboardPage: React.FC = () => {
                     </Badge>
                   )}
                 </div>
+
+                {/* Birthday banners for this day */}
+                {(birthdaysByDay[format(day, 'yyyy-MM-dd')] || []).map(b => (
+                  <Link key={b.clientId} to={`/clients/${b.clientId}`}>
+                    <div className="pl-[52px] mb-2">
+                      <div className="flex items-center gap-2 rounded-lg bg-info/10 border border-info/20 px-3 py-1.5 text-sm hover:bg-info/15 transition-colors">
+                        <Cake className="w-4 h-4 text-info shrink-0" />
+                        <span className="font-medium">{b.clientName}</span>
+                        <span className="text-xs text-muted-foreground">hat Geburtstag 🎂</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
 
                 {daySessions.length === 0 ? (
                   <div className="pl-[52px] flex items-center gap-2">
@@ -293,10 +355,14 @@ const DashboardPage: React.FC = () => {
                       className={`p-2 rounded-lg shrink-0 ${
                         r.severity === 'destructive'
                           ? 'bg-destructive/10'
+                          : r.severity === 'info'
+                          ? 'bg-info/10'
                           : 'bg-warning/10'
                       }`}
                     >
-                      {r.type === 'unpaid' ? (
+                      {r.type === 'birthday' ? (
+                        <Cake className="w-4 h-4 text-info" />
+                      ) : r.type === 'unpaid' ? (
                         <DollarSign
                           className={`w-4 h-4 ${
                             r.severity === 'destructive' ? 'text-destructive' : 'text-warning'
@@ -313,7 +379,7 @@ const DashboardPage: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{r.clientName}</p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {r.packageName} · {r.detail}
+                        {r.packageName ? `${r.packageName} · ` : ''}{r.detail}
                       </p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
