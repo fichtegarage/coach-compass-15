@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   CalendarDays, AlertTriangle, DollarSign, Plus, Clock,
-  ChevronRight, Package, Cake,
+  ChevronRight, Package, Cake, Users, TrendingUp, Trophy, BarChart3,
+  CalendarCheck,
 } from 'lucide-react';
 import BookSessionDialog from '@/components/BookSessionDialog';
 import {
@@ -29,6 +31,20 @@ const sessionStatusLabels: Record<string, string> = {
   'No-Show': 'Nicht erschienen',
   'Cancelled by Client': 'Abgesagt',
   'Cancelled by Trainer': 'Abgesagt',
+};
+
+const bookingStatusLabels: Record<string, string> = {
+  pending: 'Ausstehend',
+  confirmed: 'Bestätigt',
+  rejected: 'Abgelehnt',
+  cancelled: 'Storniert',
+};
+
+const bookingStatusColors: Record<string, string> = {
+  pending: 'bg-warning/10 text-warning border-warning/20',
+  confirmed: 'bg-success/10 text-success border-success/20',
+  rejected: 'bg-destructive/10 text-destructive border-destructive/20',
+  cancelled: 'bg-muted text-muted-foreground border-border',
 };
 
 interface TimelineSession {
@@ -57,6 +73,17 @@ interface BirthdayInfo {
   date: Date;
 }
 
+interface YearStats {
+  totalRevenue: number;
+  totalClients: number;
+  totalSessions: number;
+  totalBookings: number;
+  sessionsYTD: any[];
+  bookingsYTD: any[];
+  clientSessionRanking: { clientId: string; clientName: string; count: number }[];
+  clientRevenueRanking: { clientId: string; clientName: string; revenue: number }[];
+}
+
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [timelineSessions, setTimelineSessions] = useState<TimelineSession[]>([]);
@@ -65,8 +92,12 @@ const DashboardPage: React.FC = () => {
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
   const [bookPrefillDate, setBookPrefillDate] = useState<string | undefined>();
   const [birthdaysByDay, setBirthdaysByDay] = useState<Record<string, BirthdayInfo[]>>({});
+  const [yearStats, setYearStats] = useState<YearStats | null>(null);
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
+  const currentYear = new Date().getFullYear();
+  const yearStart = `${currentYear}-01-01T00:00:00`;
+  const yearEnd = `${currentYear}-12-31T23:59:59`;
 
   useEffect(() => {
     if (!user) return;
@@ -77,7 +108,7 @@ const DashboardPage: React.FC = () => {
     const today = format(new Date(), 'yyyy-MM-dd');
     const weekEnd = format(addDays(new Date(), 6), 'yyyy-MM-dd');
 
-    const [sessionsRes, packagesRes, clientsRes] = await Promise.all([
+    const [sessionsRes, packagesRes, clientsRes, ytdSessionsRes, ytdBookingsRes, allClientsRes] = await Promise.all([
       supabase
         .from('sessions')
         .select('*, clients(full_name, id)')
@@ -92,6 +123,24 @@ const DashboardPage: React.FC = () => {
         .select('id, full_name, date_of_birth')
         .eq('status', 'Active')
         .not('date_of_birth', 'is', null),
+      // YTD sessions
+      supabase
+        .from('sessions')
+        .select('*, clients(full_name, id)')
+        .gte('session_date', yearStart)
+        .lte('session_date', yearEnd)
+        .order('session_date', { ascending: false }),
+      // YTD bookings
+      supabase
+        .from('booking_requests')
+        .select('*, clients(full_name, id), availability_slots(start_time, end_time, slot_type)')
+        .gte('requested_at', yearStart)
+        .lte('requested_at', yearEnd)
+        .order('requested_at', { ascending: false }),
+      // All clients for count
+      supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true }),
     ]);
 
     // Timeline sessions
@@ -115,7 +164,6 @@ const DashboardPage: React.FC = () => {
       const clientName = (pkg.clients as any)?.full_name || 'Unbekannt';
       const clientId = (pkg.clients as any)?.id || pkg.client_id;
 
-      // Unpaid reminder
       if (pkg.payment_status !== 'Paid in full') {
         const price = pkg.is_deal && pkg.deal_discounted_price
           ? pkg.deal_discounted_price
@@ -130,7 +178,6 @@ const DashboardPage: React.FC = () => {
         });
       }
 
-      // Expiring: <33% of total runtime remaining
       if (pkg.start_date && pkg.duration_weeks) {
         const start = new Date(pkg.start_date);
         const totalDays = pkg.duration_weeks * 7;
@@ -139,7 +186,6 @@ const DashboardPage: React.FC = () => {
         const pctRemaining = daysRemaining / totalDays;
 
         if (pctRemaining > 0 && pctRemaining < 0.33) {
-          // Count used sessions
           const { count } = await supabase
             .from('sessions')
             .select('id', { count: 'exact', head: true })
@@ -183,7 +229,6 @@ const DashboardPage: React.FC = () => {
             clientId: c.id,
             date: day,
           });
-          // Also add as a reminder if it's today
           if (isToday(day)) {
             const age = new Date().getFullYear() - dob.getFullYear();
             reminderList.push({
@@ -199,8 +244,62 @@ const DashboardPage: React.FC = () => {
       }
     }
     setBirthdaysByDay(bdayMap);
-
     setReminders(reminderList);
+
+    // Year stats
+    const ytdSessions = ytdSessionsRes.data || [];
+    const ytdBookings = ytdBookingsRes.data || [];
+
+    // Revenue: sum of packages with start_date in current year
+    const ytdPackages = packages.filter(p => p.start_date && p.start_date.startsWith(String(currentYear)));
+    const totalRevenue = ytdPackages.reduce((sum, p) => {
+      const price = p.is_deal && p.deal_discounted_price ? Number(p.deal_discounted_price) : Number(p.package_price);
+      return sum + price;
+    }, 0);
+
+    const completedSessions = ytdSessions.filter(s => s.status === 'Completed');
+
+    // Client session ranking
+    const sessionCountByClient: Record<string, { name: string; count: number }> = {};
+    completedSessions.forEach(s => {
+      const cid = s.client_id;
+      const cname = (s.clients as any)?.full_name || 'Unbekannt';
+      if (!sessionCountByClient[cid]) sessionCountByClient[cid] = { name: cname, count: 0 };
+      sessionCountByClient[cid].count++;
+    });
+    const clientSessionRanking = Object.entries(sessionCountByClient)
+      .map(([id, v]) => ({ clientId: id, clientName: v.name, count: v.count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Client revenue ranking
+    const revenueByClient: Record<string, { name: string; revenue: number }> = {};
+    ytdPackages.forEach(p => {
+      const cid = (p.clients as any)?.id || p.client_id;
+      const cname = (p.clients as any)?.full_name || 'Unbekannt';
+      const price = p.is_deal && p.deal_discounted_price ? Number(p.deal_discounted_price) : Number(p.package_price);
+      if (!revenueByClient[cid]) revenueByClient[cid] = { name: cname, revenue: 0 };
+      revenueByClient[cid].revenue += price;
+    });
+    const clientRevenueRanking = Object.entries(revenueByClient)
+      .map(([id, v]) => ({ clientId: id, clientName: v.name, revenue: v.revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+
+    // Unique clients with sessions this year
+    const uniqueClients = new Set(ytdSessions.map(s => s.client_id));
+
+    setYearStats({
+      totalRevenue,
+      totalClients: allClientsRes.count || 0,
+      totalSessions: completedSessions.length,
+      totalBookings: ytdBookings.length,
+      sessionsYTD: ytdSessions,
+      bookingsYTD: ytdBookings,
+      clientSessionRanking,
+      clientRevenueRanking,
+    });
+
     setLoading(false);
   };
 
@@ -229,6 +328,53 @@ const DashboardPage: React.FC = () => {
           <Plus className="w-4 h-4" /> Session buchen
         </Button>
       </div>
+
+      {/* YTD Stats Cards */}
+      {yearStats && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" /> Jahresübersicht {currentYear}
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="stat-glow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <DollarSign className="w-4 h-4 text-primary" />
+                  <span className="text-xs text-muted-foreground">Umsatz</span>
+                </div>
+                <p className="text-2xl font-display font-bold">€{yearStats.totalRevenue.toLocaleString('de-DE')}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="w-4 h-4 text-info" />
+                  <span className="text-xs text-muted-foreground">Kunden gesamt</span>
+                </div>
+                <p className="text-2xl font-display font-bold">{yearStats.totalClients}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <CalendarDays className="w-4 h-4 text-success" />
+                  <span className="text-xs text-muted-foreground">Sessions (YTD)</span>
+                </div>
+                <p className="text-2xl font-display font-bold">{yearStats.totalSessions}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <CalendarCheck className="w-4 h-4 text-warning" />
+                  <span className="text-xs text-muted-foreground">Buchungen (YTD)</span>
+                </div>
+                <p className="text-2xl font-display font-bold">{yearStats.totalBookings}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      )}
 
       {/* 7-Day Timeline */}
       <section className="space-y-3">
@@ -390,6 +536,160 @@ const DashboardPage: React.FC = () => {
           </div>
         </section>
       )}
+
+      {/* YTD Rankings & History */}
+      {yearStats && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Trophy className="w-4 h-4" /> Rankings & Verlauf {currentYear}
+          </h2>
+
+          <Tabs defaultValue="rankings">
+            <TabsList className="bg-muted/50">
+              <TabsTrigger value="rankings">Rankings</TabsTrigger>
+              <TabsTrigger value="sessions">Sessions ({yearStats.sessionsYTD.length})</TabsTrigger>
+              <TabsTrigger value="bookings">Buchungen ({yearStats.bookingsYTD.length})</TabsTrigger>
+            </TabsList>
+
+            {/* Rankings */}
+            <TabsContent value="rankings" className="mt-3">
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Session Ranking */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-display flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-primary" /> Meiste Sessions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1.5">
+                    {yearStats.clientSessionRanking.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Noch keine Daten</p>
+                    ) : (
+                      yearStats.clientSessionRanking.map((c, i) => (
+                        <Link key={c.clientId} to={`/clients/${c.clientId}`}>
+                          <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-accent/50 transition-colors">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                              i === 0 ? 'bg-primary text-primary-foreground' :
+                              i === 1 ? 'bg-primary/20 text-primary' :
+                              i === 2 ? 'bg-primary/10 text-primary' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {i + 1}
+                            </span>
+                            <span className="text-sm flex-1 truncate">{c.clientName}</span>
+                            <span className="text-sm font-display font-bold text-primary">{c.count}</span>
+                          </div>
+                        </Link>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Revenue Ranking */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-display flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-success" /> Größter Umsatz
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1.5">
+                    {yearStats.clientRevenueRanking.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Noch keine Daten</p>
+                    ) : (
+                      yearStats.clientRevenueRanking.map((c, i) => (
+                        <Link key={c.clientId} to={`/clients/${c.clientId}`}>
+                          <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-accent/50 transition-colors">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                              i === 0 ? 'bg-success text-success-foreground' :
+                              i === 1 ? 'bg-success/20 text-success' :
+                              i === 2 ? 'bg-success/10 text-success' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {i + 1}
+                            </span>
+                            <span className="text-sm flex-1 truncate">{c.clientName}</span>
+                            <span className="text-sm font-display font-bold text-success">€{c.revenue.toLocaleString('de-DE')}</span>
+                          </div>
+                        </Link>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* Sessions History */}
+            <TabsContent value="sessions" className="mt-3">
+              <Card>
+                <CardContent className="p-0">
+                  {yearStats.sessionsYTD.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">Keine Sessions in {currentYear}</p>
+                  ) : (
+                    <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
+                      {yearStats.sessionsYTD.map(s => (
+                        <Link key={s.id} to={`/clients/${s.client_id}`}>
+                          <div className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 transition-colors">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {(s.clients as any)?.full_name || 'Unbekannt'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(s.session_date), 'd. MMM yyyy · HH:mm', { locale: de })} · {sessionTypeLabels[s.session_type] || s.session_type}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={s.status === 'Completed' ? 'default' : s.status === 'Scheduled' ? 'secondary' : 'destructive'}
+                              className="text-xs shrink-0"
+                            >
+                              {sessionStatusLabels[s.status] || s.status}
+                            </Badge>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Bookings History */}
+            <TabsContent value="bookings" className="mt-3">
+              <Card>
+                <CardContent className="p-0">
+                  {yearStats.bookingsYTD.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">Keine Buchungen in {currentYear}</p>
+                  ) : (
+                    <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
+                      {yearStats.bookingsYTD.map((b: any) => (
+                        <Link key={b.id} to={`/clients/${b.client_id}`}>
+                          <div className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 transition-colors">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {(b.clients as any)?.full_name || 'Unbekannt'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {b.availability_slots
+                                  ? `${format(new Date(b.availability_slots.start_time), 'd. MMM yyyy · HH:mm', { locale: de })} – ${format(new Date(b.availability_slots.end_time), 'HH:mm')}`
+                                  : `Angefragt ${format(new Date(b.requested_at), 'd. MMM yyyy · HH:mm', { locale: de })}`
+                                }
+                              </p>
+                              {b.client_message && <p className="text-xs text-muted-foreground truncate">„{b.client_message}"</p>}
+                            </div>
+                            <Badge variant="outline" className={`text-xs shrink-0 ${bookingStatusColors[b.status] || ''}`}>
+                              {bookingStatusLabels[b.status] || b.status}
+                            </Badge>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </section>
+      )}
+
       <BookSessionDialog
         open={bookDialogOpen}
         onOpenChange={setBookDialogOpen}
