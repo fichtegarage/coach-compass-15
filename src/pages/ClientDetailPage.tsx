@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp,
-  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2
+  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2, Camera
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -154,6 +154,20 @@ const ClientDetailPage: React.FC = () => {
     label: '', value: '', measured_at: new Date().toISOString().split('T')[0],
   });
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
+  const profilePhotoRef = useRef<HTMLInputElement>(null);
+
+  const handleProfilePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !id) return;
+    const ext = file.name.split('.').pop();
+    const filePath = `${user.id}/${id}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('client-photos').upload(filePath, file, { upsert: true });
+    if (error) { toast.error('Upload fehlgeschlagen'); return; }
+    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
+    await supabase.from('clients').update({ profile_photo_url: urlData.publicUrl }).eq('id', id);
+    toast.success('Profilbild aktualisiert');
+    loadAll();
+  };
 
   const loadAll = useCallback(async () => {
     if (!id || !user) return;
@@ -410,12 +424,19 @@ const ClientDetailPage: React.FC = () => {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div
+          className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer relative group"
+          onClick={() => profilePhotoRef.current?.click()}
+        >
           {client.profile_photo_url ? (
             <img src={client.profile_photo_url} alt="" className="w-full h-full object-cover" />
           ) : (
             <User className="w-8 h-8 text-primary" />
           )}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
+            <Camera className="w-5 h-5 text-white" />
+          </div>
+          <input ref={profilePhotoRef} type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoUpload} />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
