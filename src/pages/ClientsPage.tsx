@@ -318,9 +318,21 @@ const ClientsPage: React.FC = () => {
                   <ul className="space-y-1.5">
                     {features.map((feat, i) => {
                       const status = getFeatureStatus(feat.key, pkg, usedSessions, usedCheckins, hasMetrics);
+                      const isManual = feat.manual === true;
                       return (
-                        <li key={i} className="flex items-center gap-2.5 text-sm">
-                          {status.done ? (
+                        <li
+                          key={i}
+                          className={`flex items-center gap-2.5 text-sm ${isManual ? 'cursor-pointer hover:bg-accent/50 -mx-1 px-1 rounded' : ''}`}
+                          onClick={isManual ? (e) => { e.preventDefault(); e.stopPropagation(); toggleManualCompletion(pkg.id, feat.key, status.done); } : undefined}
+                        >
+                          {isManual ? (
+                            <Checkbox
+                              checked={status.done}
+                              className="flex-shrink-0"
+                              onCheckedChange={() => toggleManualCompletion(pkg.id, feat.key, status.done)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : status.done ? (
                             <Check className="w-4 h-4 flex-shrink-0 text-success" />
                           ) : (
                             <Circle className="w-4 h-4 flex-shrink-0 text-muted-foreground/30" />
