@@ -278,6 +278,7 @@ export type Database = {
           duration_minutes: number
           id: string
           late_cancellation: boolean
+          location: string | null
           notes: string | null
           package_id: string | null
           session_date: string
@@ -292,6 +293,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           late_cancellation?: boolean
+          location?: string | null
           notes?: string | null
           package_id?: string | null
           session_date: string
@@ -306,6 +308,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           late_cancellation?: boolean
+          location?: string | null
           notes?: string | null
           package_id?: string | null
           session_date?: string
