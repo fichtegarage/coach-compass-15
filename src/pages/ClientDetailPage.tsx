@@ -430,8 +430,31 @@ const ClientDetailPage: React.FC = () => {
                 <DialogHeader><DialogTitle className="font-display">Neues Paket</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Paketname *</Label>
-                    <Input value={packageForm.package_name} onChange={e => setPackageForm(f => ({ ...f, package_name: e.target.value }))} placeholder="z.B. Starter, Transformation" />
+                    <Label>Paketvorlage</Label>
+                    <Select value={packageForm.package_name} onValueChange={v => {
+                      const tpl = packageTemplates[v];
+                      if (tpl) {
+                        setPackageForm(f => ({
+                          ...f, package_name: v,
+                          sessions_included: tpl.sessions_included,
+                          checkin_calls_included: tpl.checkin_calls_included,
+                          package_price: tpl.package_price,
+                          duration_weeks: tpl.duration_weeks,
+                        }));
+                      } else {
+                        setPackageForm(f => ({ ...f, package_name: v }));
+                      }
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Paket wählen" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Starter">Starter – 5 Einheiten · 470€</SelectItem>
+                        <SelectItem value="Transformation">Transformation – 10 Einheiten · 890€</SelectItem>
+                        <SelectItem value="Intensiv">Intensiv – 20 Einheiten · 1.700€</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {packageForm.package_name && packageTemplates[packageForm.package_name] && (
+                      <p className="text-xs text-muted-foreground">{packageTemplates[packageForm.package_name].description}</p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
