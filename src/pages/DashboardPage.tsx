@@ -241,12 +241,15 @@ const DashboardPage: React.FC = () => {
                   <div className="space-y-1.5 pl-[52px]">
                     {daySessions.map(s => {
                       const isCancelled = s.status.startsWith('Cancelled') || s.status === 'No-Show';
+                      const isScheduled = s.status === 'Scheduled';
                       return (
                         <Link key={s.id} to={`/clients/${s.clientId}`}>
                           <div
                             className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                               isCancelled
                                 ? 'bg-destructive/10 text-destructive/70 line-through'
+                                : isScheduled
+                                ? 'bg-primary/10 border border-primary/20 hover:bg-primary/15'
                                 : 'bg-muted/50 hover:bg-muted'
                             }`}
                           >

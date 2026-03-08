@@ -33,6 +33,7 @@ const sessionTypeLabels: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
+  'Scheduled': 'Geplant',
   'Completed': 'Abgeschlossen',
   'No-Show': 'Nicht erschienen',
   'Cancelled by Client': 'Vom Kunden abgesagt',
