@@ -480,8 +480,8 @@ const ClientDetailPage: React.FC = () => {
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Kontakt</CardTitle></CardHeader>
               <CardContent className="text-sm space-y-1">
-                {client.email && <p>{client.email}</p>}
-                {client.phone && <p>{client.phone}</p>}
+                {client.email && <a href={`mailto:${client.email}`} className="text-primary hover:underline block">{client.email}</a>}
+                {client.phone && <a href={`tel:${client.phone}`} className="text-primary hover:underline block">{client.phone}</a>}
                 {client.date_of_birth && <p>Geb.: {format(new Date(client.date_of_birth), 'd. MMM yyyy', { locale: de })}</p>}
               </CardContent>
             </Card>
