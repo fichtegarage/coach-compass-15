@@ -135,7 +135,6 @@ const SessionsPage: React.FC = () => {
       toast.success('Session verschoben');
     }
   };
-  };
 
   // Calendar grid
   const calendarDays = useMemo(() => {
