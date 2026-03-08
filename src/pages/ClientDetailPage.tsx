@@ -21,6 +21,7 @@ import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
+import ProgressPhotos from '@/components/ProgressPhotos';
 
 interface PackageFeature {
   label: string;
