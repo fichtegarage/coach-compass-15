@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, User, MessageCircle, Pin, Plus, CalendarDays, Package, TrendingUp,
-  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText
+  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
