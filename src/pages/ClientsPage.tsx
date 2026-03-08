@@ -99,11 +99,12 @@ const ClientsPage: React.FC = () => {
   }, [user]);
 
   const loadData = async () => {
-    const [clientsRes, packagesRes, sessionsRes, checkinsRes] = await Promise.all([
+    const [clientsRes, packagesRes, sessionsRes, checkinsRes, metricsRes] = await Promise.all([
       supabase.from('clients').select('*').order('full_name'),
       supabase.from('packages').select('*').order('start_date', { ascending: false }),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').neq('session_type', 'Check-In Call'),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').eq('session_type', 'Check-In Call'),
+      supabase.from('body_metrics').select('client_id, id'),
     ]);
 
     setClients(clientsRes.data || []);
