@@ -17,11 +17,39 @@ import {
   StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
+import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
 const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
+
+const sessionTypeLabelsDE: Record<string, string> = {
+  'In-Person Training': 'Präsenz-Training',
+  'Online Training': 'Online-Training',
+  'Phone Call': 'Telefonat',
+  'Check-In Call': 'Check-In Call',
+  'Free Intro': 'Kostenloses Erstgespräch',
+};
+
+const sessionStatusLabelsDE: Record<string, string> = {
+  'Completed': 'Abgeschlossen',
+  'No-Show': 'Nicht erschienen',
+  'Cancelled by Client': 'Vom Kunden abgesagt',
+  'Cancelled by Trainer': 'Vom Trainer abgesagt',
+};
+
+const paymentStatusLabelsDE: Record<string, string> = {
+  'Unpaid': 'Unbezahlt',
+  'Partially paid': 'Teilweise bezahlt',
+  'Paid in full': 'Vollständig bezahlt',
+};
+
+const statusLabelsDE: Record<string, string> = {
+  'Active': 'Aktiv',
+  'Paused': 'Pausiert',
+  'Churned': 'Abgemeldet',
+};
 
 const ClientDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -101,14 +129,11 @@ const ClientDetailPage: React.FC = () => {
     await supabase.from('clients').update({ pinned_note: pinnedText }).eq('id', id);
     setEditingPinned(false);
     loadAll();
-    toast.success('Pinned note updated');
+    toast.success('Notiz aktualisiert');
   };
 
   const saveSession = async () => {
     if (!user || !id) return;
-    const endDate = packageForm.start_date && packageForm.duration_weeks
-      ? new Date(new Date(packageForm.start_date).getTime() + Number(packageForm.duration_weeks) * 7 * 86400000).toISOString().split('T')[0]
-      : null;
     await supabase.from('sessions').insert({
       client_id: id, user_id: user.id,
       session_date: sessionForm.session_date,
@@ -121,7 +146,7 @@ const ClientDetailPage: React.FC = () => {
       location: sessionForm.location,
     });
     setSessionDialogOpen(false);
-    toast.success('Session logged');
+    toast.success('Einheit gespeichert');
     loadAll();
   };
 
@@ -147,7 +172,7 @@ const ClientDetailPage: React.FC = () => {
       payment_date: packageForm.payment_date || null,
     });
     setPackageDialogOpen(false);
-    toast.success('Package added');
+    toast.success('Paket hinzugefügt');
     loadAll();
   };
 
@@ -163,7 +188,7 @@ const ClientDetailPage: React.FC = () => {
       chest_cm: metricForm.chest_cm ? Number(metricForm.chest_cm) : null,
     });
     setMetricDialogOpen(false);
-    toast.success('Metrics saved');
+    toast.success('Messwerte gespeichert');
     loadAll();
   };
 
@@ -174,7 +199,7 @@ const ClientDetailPage: React.FC = () => {
       label: benchmarkForm.label, value: benchmarkForm.value, measured_at: benchmarkForm.measured_at,
     });
     setBenchmarkDialogOpen(false);
-    toast.success('Benchmark saved');
+    toast.success('Benchmark gespeichert');
     loadAll();
   };
 
@@ -183,7 +208,7 @@ const ClientDetailPage: React.FC = () => {
   }
 
   if (!client) {
-    return <div className="text-center py-12"><p className="text-muted-foreground">Client not found</p></div>;
+    return <div className="text-center py-12"><p className="text-muted-foreground">Kunde nicht gefunden</p></div>;
   }
 
   // Calculations
@@ -219,7 +244,7 @@ const ClientDetailPage: React.FC = () => {
   })();
 
   const clientSinceDuration = client.starting_date
-    ? formatDistanceToNow(new Date(client.starting_date))
+    ? formatDistanceToNow(new Date(client.starting_date), { locale: de })
     : null;
 
   const statusColor = (s: string) => {
@@ -237,7 +262,7 @@ const ClientDetailPage: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <Button variant="ghost" onClick={() => navigate('/clients')} className="gap-2">
-        <ArrowLeft className="w-4 h-4" /> Clients
+        <ArrowLeft className="w-4 h-4" /> Kunden
       </Button>
 
       {/* Header */}
@@ -252,25 +277,25 @@ const ClientDetailPage: React.FC = () => {
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-display font-bold">{client.full_name}</h1>
-            <Badge variant="outline" className={statusColor(client.status)}>{client.status}</Badge>
+            <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
-            {clientSinceDuration && <span>Client for {clientSinceDuration}</span>}
+            {clientSinceDuration && <span>Kunde seit {clientSinceDuration}</span>}
             {client.fitness_goal && <span>· {client.fitness_goal}</span>}
-            <span>· {streakWeeks}🔥 week streak</span>
-            <span>· {noShowRate}% no-show</span>
+            <span>· {streakWeeks}🔥 Wochen-Serie</span>
+            <span>· {noShowRate}% Ausfallquote</span>
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
           {client.phone && (
             <Button variant="outline" size="sm" className="gap-2 text-success border-success/30" asChild>
-              <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(client.full_name.split(' ')[0])}%2C%20just%20a%20reminder%20about%20your%20upcoming%20session!`} target="_blank" rel="noopener">
+              <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(client.full_name.split(' ')[0])}%2C%20kurze%20Erinnerung%20an%20deine%20n%C3%A4chste%20Einheit!`} target="_blank" rel="noopener">
                 <MessageCircle className="w-4 h-4" /> WhatsApp
               </a>
             </Button>
           )}
           <Link to={`/clients/${id}/edit`}>
-            <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Edit</Button>
+            <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Bearbeiten</Button>
           </Link>
         </div>
       </div>
@@ -283,12 +308,12 @@ const ClientDetailPage: React.FC = () => {
             {editingPinned ? (
               <div className="flex-1 flex gap-2">
                 <Input value={pinnedText} onChange={e => setPinnedText(e.target.value)} className="flex-1" />
-                <Button size="sm" onClick={savePinnedNote}>Save</Button>
+                <Button size="sm" onClick={savePinnedNote}>Speichern</Button>
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-between">
                 <p className="text-sm">{client.pinned_note}</p>
-                <Button variant="ghost" size="sm" onClick={() => setEditingPinned(true)}>Edit</Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditingPinned(true)}>Bearbeiten</Button>
               </div>
             )}
           </CardContent>
@@ -296,59 +321,59 @@ const ClientDetailPage: React.FC = () => {
       )}
       {!client.pinned_note && !editingPinned && (
         <Button variant="ghost" size="sm" onClick={() => setEditingPinned(true)} className="text-muted-foreground gap-2">
-          <Pin className="w-3 h-3" /> Add pinned note
+          <Pin className="w-3 h-3" /> Notiz anheften
         </Button>
       )}
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="bg-muted/50 w-full justify-start overflow-x-auto">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="packages">Packages</TabsTrigger>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="progress">Progress</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="overview">Übersicht</TabsTrigger>
+          <TabsTrigger value="packages">Pakete</TabsTrigger>
+          <TabsTrigger value="sessions">Einheiten</TabsTrigger>
+          <TabsTrigger value="progress">Fortschritt</TabsTrigger>
+          <TabsTrigger value="notes">Notizen</TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW TAB */}
         <TabsContent value="overview" className="space-y-4 mt-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Contact</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Kontakt</CardTitle></CardHeader>
               <CardContent className="text-sm space-y-1">
                 {client.email && <p>{client.email}</p>}
                 {client.phone && <p>{client.phone}</p>}
-                {client.date_of_birth && <p>DOB: {format(new Date(client.date_of_birth), 'MMM d, yyyy')}</p>}
+                {client.date_of_birth && <p>Geb.: {format(new Date(client.date_of_birth), 'd. MMM yyyy', { locale: de })}</p>}
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Emergency Contact</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Notfallkontakt</CardTitle></CardHeader>
               <CardContent className="text-sm space-y-1">
-                <p>{client.emergency_contact_name || 'Not set'}</p>
+                <p>{client.emergency_contact_name || 'Nicht hinterlegt'}</p>
                 <p>{client.emergency_contact_phone || ''}</p>
               </CardContent>
             </Card>
           </div>
           {client.health_notes && (
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-display text-destructive">Health Notes</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display text-destructive">Gesundheitsnotizen</CardTitle></CardHeader>
               <CardContent className="text-sm whitespace-pre-wrap">{client.health_notes}</CardContent>
             </Card>
           )}
           {activePackage && (
             <Card className="stat-glow">
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Active Package</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Aktives Paket</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">{activePackage.package_name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {getSessionsUsed(activePackage.id)} / {activePackage.sessions_included} sessions used
+                      {getSessionsUsed(activePackage.id)} / {activePackage.sessions_included} Einheiten genutzt
                     </p>
                   </div>
                   {activePackage.sessions_included - getSessionsUsed(activePackage.id) <= 2 && (
                     <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
-                      <AlertTriangle className="w-3 h-3 mr-1" /> Low
+                      <AlertTriangle className="w-3 h-3 mr-1" /> Wenig übrig
                     </Badge>
                   )}
                 </div>
@@ -359,7 +384,7 @@ const ClientDetailPage: React.FC = () => {
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-display font-bold">{totalSessions}</p>
-                <p className="text-xs text-muted-foreground">Total Sessions</p>
+                <p className="text-xs text-muted-foreground">Einheiten gesamt</p>
               </CardContent>
             </Card>
             <Card>
@@ -367,13 +392,13 @@ const ClientDetailPage: React.FC = () => {
                 <p className="text-2xl font-display font-bold flex items-center justify-center gap-1">
                   {streakWeeks} <Flame className="w-5 h-5 text-primary" />
                 </p>
-                <p className="text-xs text-muted-foreground">Week Streak</p>
+                <p className="text-xs text-muted-foreground">Wochen-Serie</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-display font-bold">{noShowRate}%</p>
-                <p className="text-xs text-muted-foreground">No-Show Rate</p>
+                <p className="text-xs text-muted-foreground">Ausfallquote</p>
               </CardContent>
             </Card>
           </div>
@@ -384,18 +409,18 @@ const ClientDetailPage: React.FC = () => {
           <div className="flex justify-end">
             <Dialog open={packageDialogOpen} onOpenChange={setPackageDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Add Package</Button>
+                <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Paket hinzufügen</Button>
               </DialogTrigger>
               <DialogContent className="max-h-[85vh] overflow-y-auto">
-                <DialogHeader><DialogTitle className="font-display">New Package</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="font-display">Neues Paket</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Package Name *</Label>
-                    <Input value={packageForm.package_name} onChange={e => setPackageForm(f => ({ ...f, package_name: e.target.value }))} placeholder="e.g. 10er-Karte" />
+                    <Label>Paketname *</Label>
+                    <Input value={packageForm.package_name} onChange={e => setPackageForm(f => ({ ...f, package_name: e.target.value }))} placeholder="z.B. Starter, Transformation" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Sessions Included</Label>
+                      <Label>Enthaltene Einheiten</Label>
                       <Input type="number" value={packageForm.sessions_included} onChange={e => setPackageForm(f => ({ ...f, sessions_included: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
@@ -405,11 +430,11 @@ const ClientDetailPage: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Package Price (€)</Label>
+                      <Label>Paketpreis (€)</Label>
                       <Input type="number" value={packageForm.package_price} onChange={e => setPackageForm(f => ({ ...f, package_price: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Price per Session</Label>
+                      <Label>Preis je Einheit</Label>
                       <p className="text-sm text-muted-foreground mt-2">
                         {packageForm.package_price && Number(packageForm.sessions_included) > 0
                           ? `€${(Number(packageForm.package_price) / Number(packageForm.sessions_included)).toFixed(2)}`
@@ -419,58 +444,58 @@ const ClientDetailPage: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Start Date</Label>
+                      <Label>Startdatum</Label>
                       <Input type="date" value={packageForm.start_date} onChange={e => setPackageForm(f => ({ ...f, start_date: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Duration (weeks)</Label>
-                      <Input type="number" value={packageForm.duration_weeks} onChange={e => setPackageForm(f => ({ ...f, duration_weeks: e.target.value }))} placeholder="Auto-calculates end date" />
+                      <Label>Laufzeit (Wochen)</Label>
+                      <Input type="number" value={packageForm.duration_weeks} onChange={e => setPackageForm(f => ({ ...f, duration_weeks: e.target.value }))} placeholder="Berechnet Enddatum" />
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch checked={packageForm.is_deal} onCheckedChange={v => setPackageForm(f => ({ ...f, is_deal: v }))} />
-                    <Label>Special Deal / Offer</Label>
+                    <Label>Sonderkonditionen / Angebot</Label>
                   </div>
                   {packageForm.is_deal && (
                     <div className="space-y-4 pl-4 border-l-2 border-primary/30">
                       <div className="space-y-2">
-                        <Label>Discount Reason</Label>
-                        <Input value={packageForm.deal_reason} onChange={e => setPackageForm(f => ({ ...f, deal_reason: e.target.value }))} placeholder="e.g. Freundin von Stammkunde – 15% Rabatt" />
+                        <Label>Rabattgrund</Label>
+                        <Input value={packageForm.deal_reason} onChange={e => setPackageForm(f => ({ ...f, deal_reason: e.target.value }))} placeholder="z.B. Freundin von Stammkunde – 15% Rabatt" />
                       </div>
                       <div className="space-y-2">
-                        <Label>Discounted Price (€)</Label>
+                        <Label>Rabattierter Preis (€)</Label>
                         <Input type="number" value={packageForm.deal_discounted_price} onChange={e => setPackageForm(f => ({ ...f, deal_discounted_price: e.target.value }))} />
                       </div>
                       <div className="space-y-2">
-                        <Label>Adjusted Terms</Label>
+                        <Label>Angepasste Konditionen</Label>
                         <Input value={packageForm.deal_adjusted_terms} onChange={e => setPackageForm(f => ({ ...f, deal_adjusted_terms: e.target.value }))} />
                       </div>
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Payment Status</Label>
+                      <Label>Zahlungsstatus</Label>
                       <Select value={packageForm.payment_status} onValueChange={v => setPackageForm(f => ({ ...f, payment_status: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Unpaid">Unpaid</SelectItem>
-                          <SelectItem value="Partially paid">Partially paid</SelectItem>
-                          <SelectItem value="Paid in full">Paid in full</SelectItem>
+                          <SelectItem value="Unpaid">Unbezahlt</SelectItem>
+                          <SelectItem value="Partially paid">Teilweise bezahlt</SelectItem>
+                          <SelectItem value="Paid in full">Vollständig bezahlt</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Payment Date</Label>
+                      <Label>Zahlungsdatum</Label>
                       <Input type="date" value={packageForm.payment_date} onChange={e => setPackageForm(f => ({ ...f, payment_date: e.target.value }))} />
                     </div>
                   </div>
-                  <Button onClick={savePackage} className="w-full">Save Package</Button>
+                  <Button onClick={savePackage} className="w-full">Paket speichern</Button>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
           {packages.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No packages yet</p>
+            <p className="text-sm text-muted-foreground text-center py-8">Noch keine Pakete</p>
           ) : (
             <div className="space-y-3">
               {packages.map(pkg => {
@@ -484,25 +509,25 @@ const ClientDetailPage: React.FC = () => {
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="font-medium">{pkg.package_name}</p>
-                            {pkg.is_deal && <Badge variant="outline" className="text-primary border-primary/30">Deal</Badge>}
-                            <Badge variant="outline" className={paymentColor(pkg.payment_status)}>{pkg.payment_status}</Badge>
+                            {pkg.is_deal && <Badge variant="outline" className="text-primary border-primary/30">Angebot</Badge>}
+                            <Badge variant="outline" className={paymentColor(pkg.payment_status)}>{paymentStatusLabelsDE[pkg.payment_status] || pkg.payment_status}</Badge>
                           </div>
                           <p className="text-sm text-muted-foreground mt-1">
-                            {used}/{pkg.sessions_included} sessions · €{pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price}
-                            {pkg.start_date && ` · ${format(new Date(pkg.start_date), 'MMM d, yyyy')}`}
-                            {pkg.end_date && ` → ${format(new Date(pkg.end_date), 'MMM d, yyyy')}`}
+                            {used}/{pkg.sessions_included} Einheiten · €{pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price}
+                            {pkg.start_date && ` · ${format(new Date(pkg.start_date), 'd. MMM yyyy', { locale: de })}`}
+                            {pkg.end_date && ` → ${format(new Date(pkg.end_date), 'd. MMM yyyy', { locale: de })}`}
                           </p>
                           {pkg.deal_reason && <p className="text-xs text-primary mt-1">{pkg.deal_reason}</p>}
                         </div>
                         <div className="flex items-center gap-2">
                           {remaining <= 2 && remaining > 0 && (
                             <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
-                              {remaining} left
+                              {remaining} übrig
                             </Badge>
                           )}
                           {remaining <= 0 && !hasFollowUp && (
                             <Badge className="bg-destructive/10 text-destructive border-destructive/20" variant="outline">
-                              Needs renewal
+                              Verlängerung nötig
                             </Badge>
                           )}
                         </div>
@@ -520,26 +545,26 @@ const ClientDetailPage: React.FC = () => {
           <div className="flex justify-end">
             <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Log Session</Button>
+                <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Einheit erfassen</Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle className="font-display">Log Session</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="font-display">Einheit erfassen</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Date & Time</Label>
+                    <Label>Datum & Uhrzeit</Label>
                     <Input type="datetime-local" value={sessionForm.session_date} onChange={e => setSessionForm(f => ({ ...f, session_date: e.target.value }))} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Duration (min)</Label>
+                      <Label>Dauer (Min.)</Label>
                       <Input type="number" value={sessionForm.duration_minutes} onChange={e => setSessionForm(f => ({ ...f, duration_minutes: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Type</Label>
+                      <Label>Art</Label>
                       <Select value={sessionForm.session_type} onValueChange={v => setSessionForm(f => ({ ...f, session_type: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {sessionTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                          {sessionTypes.map(t => <SelectItem key={t} value={t}>{sessionTypeLabelsDE[t] || t}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -550,14 +575,14 @@ const ClientDetailPage: React.FC = () => {
                       <Select value={sessionForm.status} onValueChange={v => setSessionForm(f => ({ ...f, status: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {sessionStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                          {sessionStatuses.map(s => <SelectItem key={s} value={s}>{sessionStatusLabelsDE[s] || s}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Package</Label>
+                      <Label>Paket</Label>
                       <Select value={sessionForm.package_id} onValueChange={v => setSessionForm(f => ({ ...f, package_id: v }))}>
-                        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Keins" /></SelectTrigger>
                         <SelectContent>
                           {packages.map(p => <SelectItem key={p.id} value={p.id}>{p.package_name}</SelectItem>)}
                         </SelectContent>
@@ -590,20 +615,20 @@ const ClientDetailPage: React.FC = () => {
             </Dialog>
           </div>
           {sessions.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No sessions yet</p>
+            <p className="text-sm text-muted-foreground text-center py-8">Noch keine Einheiten</p>
           ) : (
             <div className="space-y-2">
               {sessions.map(s => (
                 <Card key={s.id}>
                   <CardContent className="p-3 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">{format(new Date(s.session_date), 'MMM d, yyyy · HH:mm')}</p>
-                      <p className="text-xs text-muted-foreground">{s.session_type} · {s.duration_minutes}min</p>
+                      <p className="text-sm font-medium">{format(new Date(s.session_date), 'd. MMM yyyy · HH:mm', { locale: de })}</p>
+                      <p className="text-xs text-muted-foreground">{sessionTypeLabelsDE[s.session_type] || s.session_type} · {s.duration_minutes} Min.</p>
                       {s.notes && <p className="text-xs text-muted-foreground mt-1">{s.notes}</p>}
                     </div>
                     <div className="flex items-center gap-2">
-                      {s.late_cancellation && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">Late Cancel</Badge>}
-                      <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'No-Show' ? 'destructive' : 'secondary'}>{s.status}</Badge>
+                      {s.late_cancellation && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">Kurzfristig</Badge>}
+                      <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'No-Show' ? 'destructive' : 'secondary'}>{sessionStatusLabelsDE[s.status] || s.status}</Badge>
                     </div>
                   </CardContent>
                 </Card>
@@ -615,25 +640,25 @@ const ClientDetailPage: React.FC = () => {
         {/* PROGRESS TAB */}
         <TabsContent value="progress" className="space-y-6 mt-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-display font-semibold">Body Metrics</h3>
+            <h3 className="font-display font-semibold">Körpermaße</h3>
             <Dialog open={metricDialogOpen} onOpenChange={setMetricDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-2"><Plus className="w-4 h-4" /> Add Metric</Button>
+                <Button size="sm" variant="outline" className="gap-2"><Plus className="w-4 h-4" /> Messung hinzufügen</Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle className="font-display">Log Body Metrics</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="font-display">Körpermaße erfassen</DialogTitle></DialogHeader>
                 <div className="space-y-4">
-                  <div className="space-y-2"><Label>Date</Label><Input type="date" value={metricForm.measured_at} onChange={e => setMetricForm(f => ({ ...f, measured_at: e.target.value }))} /></div>
+                  <div className="space-y-2"><Label>Datum</Label><Input type="date" value={metricForm.measured_at} onChange={e => setMetricForm(f => ({ ...f, measured_at: e.target.value }))} /></div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>Weight (kg)</Label><Input type="number" step="0.1" value={metricForm.weight_kg} onChange={e => setMetricForm(f => ({ ...f, weight_kg: e.target.value }))} /></div>
-                    <div className="space-y-2"><Label>Body Fat (%)</Label><Input type="number" step="0.1" value={metricForm.body_fat_pct} onChange={e => setMetricForm(f => ({ ...f, body_fat_pct: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Gewicht (kg)</Label><Input type="number" step="0.1" value={metricForm.weight_kg} onChange={e => setMetricForm(f => ({ ...f, weight_kg: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Körperfett (%)</Label><Input type="number" step="0.1" value={metricForm.body_fat_pct} onChange={e => setMetricForm(f => ({ ...f, body_fat_pct: e.target.value }))} /></div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2"><Label>Waist (cm)</Label><Input type="number" step="0.1" value={metricForm.waist_cm} onChange={e => setMetricForm(f => ({ ...f, waist_cm: e.target.value }))} /></div>
-                    <div className="space-y-2"><Label>Hip (cm)</Label><Input type="number" step="0.1" value={metricForm.hip_cm} onChange={e => setMetricForm(f => ({ ...f, hip_cm: e.target.value }))} /></div>
-                    <div className="space-y-2"><Label>Chest (cm)</Label><Input type="number" step="0.1" value={metricForm.chest_cm} onChange={e => setMetricForm(f => ({ ...f, chest_cm: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Taille (cm)</Label><Input type="number" step="0.1" value={metricForm.waist_cm} onChange={e => setMetricForm(f => ({ ...f, waist_cm: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Hüfte (cm)</Label><Input type="number" step="0.1" value={metricForm.hip_cm} onChange={e => setMetricForm(f => ({ ...f, hip_cm: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Brust (cm)</Label><Input type="number" step="0.1" value={metricForm.chest_cm} onChange={e => setMetricForm(f => ({ ...f, chest_cm: e.target.value }))} /></div>
                   </div>
-                  <Button onClick={saveMetric} className="w-full">Save Metrics</Button>
+                  <Button onClick={saveMetric} className="w-full">Messwerte speichern</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -647,8 +672,8 @@ const ClientDetailPage: React.FC = () => {
                     <XAxis dataKey="measured_at" tick={{ fontSize: 12, fill: 'hsl(215 15% 55%)' }} />
                     <YAxis tick={{ fontSize: 12, fill: 'hsl(215 15% 55%)' }} />
                     <Tooltip contentStyle={{ background: 'hsl(220 18% 10%)', border: '1px solid hsl(220 14% 18%)', borderRadius: '8px', color: 'hsl(210 20% 92%)' }} />
-                    <Line type="monotone" dataKey="weight_kg" name="Weight (kg)" stroke="hsl(84 81% 44%)" strokeWidth={2} dot={{ r: 4 }} />
-                    <Line type="monotone" dataKey="body_fat_pct" name="Body Fat (%)" stroke="hsl(217 91% 60%)" strokeWidth={2} dot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="weight_kg" name="Gewicht (kg)" stroke="hsl(84 81% 44%)" strokeWidth={2} dot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="body_fat_pct" name="Körperfett (%)" stroke="hsl(217 91% 60%)" strokeWidth={2} dot={{ r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -656,18 +681,18 @@ const ClientDetailPage: React.FC = () => {
           )}
 
           <div className="flex items-center justify-between">
-            <h3 className="font-display font-semibold">Fitness Benchmarks</h3>
+            <h3 className="font-display font-semibold">Fitness-Benchmarks</h3>
             <Dialog open={benchmarkDialogOpen} onOpenChange={setBenchmarkDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-2"><Plus className="w-4 h-4" /> Add Benchmark</Button>
+                <Button size="sm" variant="outline" className="gap-2"><Plus className="w-4 h-4" /> Benchmark hinzufügen</Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle className="font-display">Log Benchmark</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="font-display">Benchmark erfassen</DialogTitle></DialogHeader>
                 <div className="space-y-4">
-                  <div className="space-y-2"><Label>Label (e.g. Max Push-ups, Plank Time)</Label><Input value={benchmarkForm.label} onChange={e => setBenchmarkForm(f => ({ ...f, label: e.target.value }))} /></div>
-                  <div className="space-y-2"><Label>Value</Label><Input value={benchmarkForm.value} onChange={e => setBenchmarkForm(f => ({ ...f, value: e.target.value }))} /></div>
-                  <div className="space-y-2"><Label>Date</Label><Input type="date" value={benchmarkForm.measured_at} onChange={e => setBenchmarkForm(f => ({ ...f, measured_at: e.target.value }))} /></div>
-                  <Button onClick={saveBenchmark} className="w-full">Save Benchmark</Button>
+                  <div className="space-y-2"><Label>Bezeichnung (z.B. Max. Liegestütze, Plank-Zeit)</Label><Input value={benchmarkForm.label} onChange={e => setBenchmarkForm(f => ({ ...f, label: e.target.value }))} /></div>
+                  <div className="space-y-2"><Label>Wert</Label><Input value={benchmarkForm.value} onChange={e => setBenchmarkForm(f => ({ ...f, value: e.target.value }))} /></div>
+                  <div className="space-y-2"><Label>Datum</Label><Input type="date" value={benchmarkForm.measured_at} onChange={e => setBenchmarkForm(f => ({ ...f, measured_at: e.target.value }))} /></div>
+                  <Button onClick={saveBenchmark} className="w-full">Benchmark speichern</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -679,7 +704,7 @@ const ClientDetailPage: React.FC = () => {
                   <CardContent className="p-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">{b.label}</p>
-                      <p className="text-xs text-muted-foreground">{format(new Date(b.measured_at), 'MMM d, yyyy')}</p>
+                      <p className="text-xs text-muted-foreground">{format(new Date(b.measured_at), 'd. MMM yyyy', { locale: de })}</p>
                     </div>
                     <p className="text-sm font-display font-bold text-primary">{b.value}</p>
                   </CardContent>
@@ -693,23 +718,23 @@ const ClientDetailPage: React.FC = () => {
         <TabsContent value="notes" className="space-y-4 mt-4">
           {/* Quick Log */}
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Quick Log</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Schnellnotiz</CardTitle></CardHeader>
             <CardContent>
               <div className="flex gap-2">
                 <Input
                   value={quickLogText}
                   onChange={e => setQuickLogText(e.target.value)}
-                  placeholder="Quick note..."
+                  placeholder="Kurze Notiz..."
                   onKeyDown={e => e.key === 'Enter' && addQuickLog()}
                 />
-                <Button size="sm" onClick={addQuickLog}>Add</Button>
+                <Button size="sm" onClick={addQuickLog}>Hinzufügen</Button>
               </div>
               {quickLogs.length > 0 && (
                 <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
                   {quickLogs.map(ql => (
                     <div key={ql.id} className="text-sm p-2 rounded bg-muted/50">
                       <p>{ql.content}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{format(new Date(ql.created_at), 'MMM d, yyyy · HH:mm')}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{format(new Date(ql.created_at), 'd. MMM yyyy · HH:mm', { locale: de })}</p>
                     </div>
                   ))}
                 </div>
@@ -719,7 +744,7 @@ const ClientDetailPage: React.FC = () => {
 
           {/* General Notes */}
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-display">General Notes</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Allgemeine Notizen</CardTitle></CardHeader>
             <CardContent>
               <Textarea
                 defaultValue={client.general_notes || ''}
@@ -727,7 +752,7 @@ const ClientDetailPage: React.FC = () => {
                   await supabase.from('clients').update({ general_notes: e.target.value }).eq('id', id);
                 }}
                 rows={6}
-                placeholder="General notes about this client..."
+                placeholder="Allgemeine Notizen zu diesem Kunden..."
               />
             </CardContent>
           </Card>
