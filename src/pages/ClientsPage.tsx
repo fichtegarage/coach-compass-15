@@ -91,7 +91,7 @@ const ClientsPage: React.FC = () => {
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
   const [packages, setPackages] = useState<Record<string, PackageData>>({});
   const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({});
-  const [checkinCounts, setCheckinCounts] = useState<Record<string, number>>({});
+  const [metricCounts, setMetricCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!user) return;
