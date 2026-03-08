@@ -6,14 +6,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, CalendarDays, ChevronLeft, ChevronRight, Download, MapPin, List, LayoutGrid } from 'lucide-react';
+import { Plus, CalendarDays, ChevronLeft, ChevronRight, RefreshCw, MapPin, List, LayoutGrid, Copy, Check } from 'lucide-react';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, eachDayOfInterval, isSameMonth, isSameDay, isToday,
   addMinutes,
 } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -54,6 +54,8 @@ const SessionsPage: React.FC = () => {
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
   const [form, setForm] = useState({
@@ -123,49 +125,15 @@ const SessionsPage: React.FC = () => {
   const getSessionsForDay = (day: Date) =>
     sessions.filter(s => isSameDay(new Date(s.session_date), day));
 
-  // iCal export
-  const generateICal = () => {
-    const lines = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//CoachHub//Training Sessions//DE',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'X-WR-CALNAME:CoachHub Trainings',
-    ];
+  const calendarFeedUrl = user
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-feed?user_id=${user.id}`
+    : '';
 
-    for (const s of sessions) {
-      const start = new Date(s.session_date);
-      const end = addMinutes(start, s.duration_minutes || 60);
-      const clientName = (s.clients as any)?.full_name || 'Unbekannt';
-      const loc = s.location || 'Gym';
-      const sessionCount = getSessionCount(s.client_id, s.package_id);
-      const countStr = sessionCount ? ` (${sessionCount.used}/${sessionCount.total})` : '';
-
-      lines.push('BEGIN:VEVENT');
-      lines.push(`DTSTART:${formatICalDate(start)}`);
-      lines.push(`DTEND:${formatICalDate(end)}`);
-      lines.push(`SUMMARY:${clientName} – ${sessionTypeLabels[s.session_type] || s.session_type}${countStr}`);
-      lines.push(`LOCATION:${loc}`);
-      lines.push(`DESCRIPTION:${statusLabels[s.status] || s.status}${s.notes ? '\\n' + s.notes : ''}`);
-      lines.push(`UID:${s.id}@coachhub`);
-      lines.push('END:VEVENT');
-    }
-
-    lines.push('END:VCALENDAR');
-    
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `coachhub-${format(currentMonth, 'yyyy-MM')}.ics`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Kalender exportiert');
-  };
-
-  const formatICalDate = (d: Date) => {
-    return format(d, "yyyyMMdd'T'HHmmss");
+  const copyFeedUrl = async () => {
+    await navigator.clipboard.writeText(calendarFeedUrl);
+    setCopied(true);
+    toast.success('Feed-URL kopiert');
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const weekDays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -180,9 +148,34 @@ const SessionsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h1 className="text-2xl md:text-3xl font-display font-bold">Einheiten</h1>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={generateICal} className="gap-2">
-            <Download className="w-4 h-4" /> iCal Export
-          </Button>
+          <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <RefreshCw className="w-4 h-4" /> Kalender-Sync
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="font-display">Kalender synchronisieren</DialogTitle>
+                <DialogDescription>
+                  Füge diese URL als Kalender-Abonnement in deiner Kalender-App hinzu (Apple Kalender, Google Calendar, Outlook). Der Kalender aktualisiert sich automatisch.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Input readOnly value={calendarFeedUrl} className="text-xs font-mono" />
+                  <Button size="icon" variant="outline" onClick={copyFeedUrl}>
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p><strong>Apple Kalender:</strong> Ablage → Neues Kalenderabonnement → URL einfügen</p>
+                  <p><strong>Google Calendar:</strong> Andere Kalender → Per URL hinzufügen</p>
+                  <p><strong>Outlook:</strong> Kalender hinzufügen → Aus dem Internet abonnieren</p>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <div className="flex border border-border rounded-lg overflow-hidden">
             <Button
               variant={view === 'calendar' ? 'default' : 'ghost'}
