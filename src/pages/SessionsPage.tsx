@@ -78,7 +78,7 @@ const SessionsPage: React.FC = () => {
         .lte('session_date', monthEnd + 'T23:59:59')
         .order('session_date'),
       supabase.from('clients').select('id, full_name').eq('status', 'Active').order('full_name'),
-      supabase.from('packages').select('id, client_id, package_name, sessions_included'),
+      supabase.from('packages').select('id, client_id, package_name, sessions_included, start_date, end_date'),
     ]);
     setSessions(sRes.data || []);
     setClients(cRes.data || []);
