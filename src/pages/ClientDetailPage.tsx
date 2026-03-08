@@ -21,7 +21,22 @@ import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
+const packageTemplates: Record<string, { sessions_included: string; checkin_calls_included: string; package_price: string; duration_weeks: string; description: string }> = {
+  'Starter': {
+    sessions_included: '5', checkin_calls_included: '0', package_price: '470', duration_weeks: '13',
+    description: '5 Einheiten à 60 Min. • gültig 3 Monate',
+  },
+  'Transformation': {
+    sessions_included: '10', checkin_calls_included: '6', package_price: '890', duration_weeks: '26',
+    description: '10 Einheiten à 60 Min. • gültig 6 Monate',
+  },
+  'Intensiv': {
+    sessions_included: '20', checkin_calls_included: '12', package_price: '1700', duration_weeks: '52',
+    description: '20 Einheiten à 60 Min. • gültig 12 Monate',
+  },
+};
+
+
 const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
 
 const sessionTypeLabelsDE: Record<string, string> = {
