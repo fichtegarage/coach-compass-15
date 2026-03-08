@@ -814,16 +814,17 @@ const ClientDetailPage: React.FC = () => {
           ) : (
             <div className="space-y-2">
               {sessions.map(s => (
-                <Card key={s.id}>
+                <Card key={s.id} className="hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => openEditSession(s)}>
                   <CardContent className="p-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">{format(new Date(s.session_date), 'd. MMM yyyy · HH:mm', { locale: de })}</p>
-                      <p className="text-xs text-muted-foreground">{sessionTypeLabelsDE[s.session_type] || s.session_type} · {s.duration_minutes} Min.</p>
+                      <p className="text-xs text-muted-foreground">{sessionTypeLabelsDE[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}</p>
                       {s.notes && <p className="text-xs text-muted-foreground mt-1">{s.notes}</p>}
                     </div>
                     <div className="flex items-center gap-2">
                       {s.late_cancellation && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">Kurzfristig</Badge>}
                       <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'No-Show' ? 'destructive' : 'secondary'}>{sessionStatusLabelsDE[s.status] || s.status}</Badge>
+                      <Edit className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
                   </CardContent>
                 </Card>
