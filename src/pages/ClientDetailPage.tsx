@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
 import ProgressPhotos from '@/components/ProgressPhotos';
+import BookSessionDialog from '@/components/BookSessionDialog';
 
 interface PackageFeature {
   label: string;
