@@ -14,12 +14,49 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, User, MessageCircle, Pin, Plus, CalendarDays, Package, TrendingUp,
-  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText
+  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Checkbox } from '@/components/ui/checkbox';
+
+interface PackageFeature {
+  label: string;
+  key: string;
+  manual?: boolean;
+}
+
+const packageFeaturesMap: Record<string, PackageFeature[]> = {
+  'Starter': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+  ],
+  'Transformation': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
+  ],
+  'Intensiv': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
+    { label: 'WhatsApp-Support zwischen den Einheiten', key: 'whatsapp_support' },
+    { label: 'Priorisierte Terminbuchung', key: 'prio_buchung' },
+    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit', manual: true },
+  ],
+};
 
 const packageTemplates: Record<string, { sessions_included: string; checkin_calls_included: string; package_price: string; duration_weeks: string; description: string }> = {
   'Starter': {
@@ -76,6 +113,7 @@ const ClientDetailPage: React.FC = () => {
   const [metrics, setMetrics] = useState<any[]>([]);
   const [benchmarks, setBenchmarks] = useState<any[]>([]);
   const [quickLogs, setQuickLogs] = useState<any[]>([]);
+  const [manualCompletions, setManualCompletions] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(true);
   const [quickLogText, setQuickLogText] = useState('');
   const [editingPinned, setEditingPinned] = useState(false);
@@ -113,13 +151,14 @@ const ClientDetailPage: React.FC = () => {
 
   const loadAll = useCallback(async () => {
     if (!id || !user) return;
-    const [cRes, pRes, sRes, mRes, bRes, qlRes] = await Promise.all([
+    const [cRes, pRes, sRes, mRes, bRes, qlRes, fcRes] = await Promise.all([
       supabase.from('clients').select('*').eq('id', id).single(),
       supabase.from('packages').select('*').eq('client_id', id).order('start_date', { ascending: false }),
       supabase.from('sessions').select('*').eq('client_id', id).order('session_date', { ascending: false }),
       supabase.from('body_metrics').select('*').eq('client_id', id).order('measured_at'),
       supabase.from('fitness_benchmarks').select('*').eq('client_id', id).order('measured_at', { ascending: false }),
       supabase.from('quick_logs').select('*').eq('client_id', id).order('created_at', { ascending: false }),
+      supabase.from('package_feature_completions').select('package_id, feature_key'),
     ]);
     setClient(cRes.data);
     setPinnedText(cRes.data?.pinned_note || '');
@@ -128,10 +167,56 @@ const ClientDetailPage: React.FC = () => {
     setMetrics(mRes.data || []);
     setBenchmarks(bRes.data || []);
     setQuickLogs(qlRes.data || []);
+    const mcMap: Record<string, Set<string>> = {};
+    (fcRes.data || []).forEach((c: any) => {
+      if (!mcMap[c.package_id]) mcMap[c.package_id] = new Set();
+      mcMap[c.package_id].add(c.feature_key);
+    });
+    setManualCompletions(mcMap);
     setLoading(false);
   }, [id, user]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  const toggleManualCompletion = useCallback(async (packageId: string, featureKey: string, currentlyDone: boolean) => {
+    if (!user) return;
+    if (currentlyDone) {
+      await supabase.from('package_feature_completions').delete().eq('package_id', packageId).eq('feature_key', featureKey);
+      setManualCompletions(prev => {
+        const next = { ...prev };
+        const s = new Set(next[packageId]);
+        s.delete(featureKey);
+        next[packageId] = s;
+        return next;
+      });
+    } else {
+      await supabase.from('package_feature_completions').insert({ user_id: user.id, package_id: packageId, feature_key: featureKey });
+      setManualCompletions(prev => {
+        const next = { ...prev };
+        const s = new Set(next[packageId] || []);
+        s.add(featureKey);
+        next[packageId] = s;
+        return next;
+      });
+    }
+  }, [user]);
+
+  const getFeatureStatusDetail = (key: string, pkg: any, usedSessions: number, checkinCount: number, hasMetrics: boolean): { done: boolean; detail?: string; manual?: boolean } => {
+    const manualDone = manualCompletions[pkg.id]?.has(key) || false;
+    switch (key) {
+      case 'erstgespraech': return { done: manualDone, manual: true };
+      case 'sessions': return { done: usedSessions >= pkg.sessions_included, detail: `${usedSessions} / ${pkg.sessions_included}` };
+      case 'trainingsplan': return { done: manualDone, manual: true };
+      case 'fortschrittsdoku': return { done: hasMetrics };
+      case 'checkin_calls': return { done: checkinCount >= pkg.checkin_calls_included, detail: `${checkinCount} / ${pkg.checkin_calls_included}` };
+      case 'ernaehrung': return { done: manualDone, manual: true };
+      case 'fortschrittsfotos': return { done: hasMetrics };
+      case 'whatsapp_support': return { done: true };
+      case 'prio_buchung': return { done: true };
+      case 'gratis_einheit': return { done: manualDone, manual: true };
+      default: return { done: false };
+    }
+  };
 
   const addQuickLog = async () => {
     if (!quickLogText.trim() || !user || !id) return;
@@ -375,26 +460,71 @@ const ClientDetailPage: React.FC = () => {
               <CardContent className="text-sm whitespace-pre-wrap">{client.health_notes}</CardContent>
             </Card>
           )}
-          {activePackage && (
-            <Card className="stat-glow">
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Aktives Paket</CardTitle></CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{activePackage.package_name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {getSessionsUsed(activePackage.id)} / {activePackage.sessions_included} Einheiten genutzt
-                    </p>
+          {activePackage && (() => {
+            const features = packageFeaturesMap[activePackage.package_name] || [];
+            const usedSessions = getSessionsUsed(activePackage.id);
+            const checkinCount = sessions.filter(s => s.package_id === activePackage.id && s.session_type === 'Check-In Call' && s.status === 'Completed').length;
+            const hasMetrics = metrics.length > 0;
+            return (
+              <Card className="stat-glow">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Aktives Paket</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{activePackage.package_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {usedSessions} / {activePackage.sessions_included} Einheiten genutzt
+                      </p>
+                    </div>
+                    {activePackage.sessions_included - usedSessions <= 2 && (
+                      <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
+                        <AlertTriangle className="w-3 h-3 mr-1" /> Wenig übrig
+                      </Badge>
+                    )}
                   </div>
-                  {activePackage.sessions_included - getSessionsUsed(activePackage.id) <= 2 && (
-                    <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
-                      <AlertTriangle className="w-3 h-3 mr-1" /> Wenig übrig
-                    </Badge>
+                  {features.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Paketinhalte</p>
+                      <ul className="space-y-1.5">
+                        {features.map((feat, i) => {
+                          const status = getFeatureStatusDetail(feat.key, activePackage, usedSessions, checkinCount, hasMetrics);
+                          const isManual = feat.manual === true;
+                          return (
+                            <li
+                              key={i}
+                              className={`flex items-center gap-2.5 text-sm ${isManual ? 'cursor-pointer hover:bg-accent/50 -mx-1 px-1 rounded' : ''}`}
+                              onClick={isManual ? () => toggleManualCompletion(activePackage.id, feat.key, status.done) : undefined}
+                            >
+                              {isManual ? (
+                                <Checkbox
+                                  checked={status.done}
+                                  className="flex-shrink-0"
+                                  onCheckedChange={() => toggleManualCompletion(activePackage.id, feat.key, status.done)}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              ) : status.done ? (
+                                <Check className="w-4 h-4 flex-shrink-0 text-success" />
+                              ) : (
+                                <Circle className="w-4 h-4 flex-shrink-0 text-muted-foreground/30" />
+                              )}
+                              <span className={status.done ? 'text-foreground' : 'text-muted-foreground'}>
+                                {feat.label}
+                              </span>
+                              {status.detail && (
+                                <span className={`ml-auto text-xs font-medium ${status.done ? 'text-success' : 'text-muted-foreground'}`}>
+                                  {status.detail}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            );
+          })()}
           <div className="grid grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-4 text-center">
