@@ -21,7 +21,22 @@ import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+const packageTemplates: Record<string, { sessions_included: string; checkin_calls_included: string; package_price: string; duration_weeks: string; description: string }> = {
+  'Starter': {
+    sessions_included: '5', checkin_calls_included: '0', package_price: '470', duration_weeks: '13',
+    description: '5 Einheiten à 60 Min. • gültig 3 Monate',
+  },
+  'Transformation': {
+    sessions_included: '10', checkin_calls_included: '6', package_price: '890', duration_weeks: '26',
+    description: '10 Einheiten à 60 Min. • gültig 6 Monate',
+  },
+  'Intensiv': {
+    sessions_included: '20', checkin_calls_included: '12', package_price: '1700', duration_weeks: '52',
+    description: '20 Einheiten à 60 Min. • gültig 12 Monate',
+  },
+};
 const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
+
 const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
 
 const sessionTypeLabelsDE: Record<string, string> = {
@@ -415,8 +430,31 @@ const ClientDetailPage: React.FC = () => {
                 <DialogHeader><DialogTitle className="font-display">Neues Paket</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Paketname *</Label>
-                    <Input value={packageForm.package_name} onChange={e => setPackageForm(f => ({ ...f, package_name: e.target.value }))} placeholder="z.B. Starter, Transformation" />
+                    <Label>Paketvorlage</Label>
+                    <Select value={packageForm.package_name} onValueChange={v => {
+                      const tpl = packageTemplates[v];
+                      if (tpl) {
+                        setPackageForm(f => ({
+                          ...f, package_name: v,
+                          sessions_included: tpl.sessions_included,
+                          checkin_calls_included: tpl.checkin_calls_included,
+                          package_price: tpl.package_price,
+                          duration_weeks: tpl.duration_weeks,
+                        }));
+                      } else {
+                        setPackageForm(f => ({ ...f, package_name: v }));
+                      }
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Paket wählen" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Starter">Starter – 5 Einheiten · 470€</SelectItem>
+                        <SelectItem value="Transformation">Transformation – 10 Einheiten · 890€</SelectItem>
+                        <SelectItem value="Intensiv">Intensiv – 20 Einheiten · 1.700€</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {packageForm.package_name && packageTemplates[packageForm.package_name] && (
+                      <p className="text-xs text-muted-foreground">{packageTemplates[packageForm.package_name].description}</p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
