@@ -129,7 +129,7 @@ const DashboardPage: React.FC = () => {
           <h1 className="text-2xl md:text-3xl font-display font-bold">Übersicht</h1>
           <p className="text-muted-foreground text-sm">{format(new Date(), 'EEEE, d. MMMM yyyy', { locale: de })}</p>
         </div>
-        <Link to="/sessions/new">
+        <Link to="/sessions">
           <Button size="sm" className="gap-2">
             <Plus className="w-4 h-4" /> Einheit erfassen
           </Button>
