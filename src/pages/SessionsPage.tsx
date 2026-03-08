@@ -107,6 +107,7 @@ const SessionsPage: React.FC = () => {
       notes: form.notes || null,
       late_cancellation: form.late_cancellation,
       location: form.location,
+      package_id: form.package_id || null,
     });
     setDialogOpen(false);
     toast.success('Einheit erfasst');
