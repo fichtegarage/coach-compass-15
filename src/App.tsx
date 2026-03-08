@@ -36,6 +36,7 @@ const AppRoutes = () => {
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/clients/new" element={<ClientFormPage />} />
         <Route path="/clients/:id" element={<ClientDetailPage />} />
+        <Route path="/clients/:id/edit" element={<ClientFormPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
