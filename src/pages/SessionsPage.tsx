@@ -125,49 +125,15 @@ const SessionsPage: React.FC = () => {
   const getSessionsForDay = (day: Date) =>
     sessions.filter(s => isSameDay(new Date(s.session_date), day));
 
-  // iCal export
-  const generateICal = () => {
-    const lines = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//CoachHub//Training Sessions//DE',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'X-WR-CALNAME:CoachHub Trainings',
-    ];
+  const calendarFeedUrl = user
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-feed?user_id=${user.id}`
+    : '';
 
-    for (const s of sessions) {
-      const start = new Date(s.session_date);
-      const end = addMinutes(start, s.duration_minutes || 60);
-      const clientName = (s.clients as any)?.full_name || 'Unbekannt';
-      const loc = s.location || 'Gym';
-      const sessionCount = getSessionCount(s.client_id, s.package_id);
-      const countStr = sessionCount ? ` (${sessionCount.used}/${sessionCount.total})` : '';
-
-      lines.push('BEGIN:VEVENT');
-      lines.push(`DTSTART:${formatICalDate(start)}`);
-      lines.push(`DTEND:${formatICalDate(end)}`);
-      lines.push(`SUMMARY:${clientName} – ${sessionTypeLabels[s.session_type] || s.session_type}${countStr}`);
-      lines.push(`LOCATION:${loc}`);
-      lines.push(`DESCRIPTION:${statusLabels[s.status] || s.status}${s.notes ? '\\n' + s.notes : ''}`);
-      lines.push(`UID:${s.id}@coachhub`);
-      lines.push('END:VEVENT');
-    }
-
-    lines.push('END:VCALENDAR');
-    
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `coachhub-${format(currentMonth, 'yyyy-MM')}.ics`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Kalender exportiert');
-  };
-
-  const formatICalDate = (d: Date) => {
-    return format(d, "yyyyMMdd'T'HHmmss");
+  const copyFeedUrl = async () => {
+    await navigator.clipboard.writeText(calendarFeedUrl);
+    setCopied(true);
+    toast.success('Feed-URL kopiert');
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const weekDays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
