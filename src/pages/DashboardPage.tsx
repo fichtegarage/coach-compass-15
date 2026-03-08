@@ -23,6 +23,14 @@ const sessionTypeLabels: Record<string, string> = {
   'Free Intro': 'Erstgespräch',
 };
 
+const sessionStatusLabels: Record<string, string> = {
+  'Scheduled': 'Geplant',
+  'Completed': 'Abgeschlossen',
+  'No-Show': 'Nicht erschienen',
+  'Cancelled by Client': 'Abgesagt',
+  'Cancelled by Trainer': 'Abgesagt',
+};
+
 interface TimelineSession {
   id: string;
   clientName: string;
