@@ -64,6 +64,7 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
   const [bookPrefillDate, setBookPrefillDate] = useState<string | undefined>();
+  const [birthdaysByDay, setBirthdaysByDay] = useState<Record<string, BirthdayInfo[]>>({});
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
 
