@@ -267,7 +267,6 @@ const ClientsPage: React.FC = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                )}
                 <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
                 {pkg && (
                   <Button
