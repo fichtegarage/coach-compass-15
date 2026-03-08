@@ -343,18 +343,6 @@ const ClientsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* WhatsApp button */}
-              {client.whatsapp_link && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2 text-success border-success/30 hover:bg-success/10"
-                  onClick={() => window.open(client.whatsapp_link!, '_blank')}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  WhatsApp-Chat öffnen
-                </Button>
-              )}
             </div>
           )}
         </Card>

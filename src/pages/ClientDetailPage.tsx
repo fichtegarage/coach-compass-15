@@ -416,13 +416,6 @@ const ClientDetailPage: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
-          {client.whatsapp_link && (
-            <Button variant="outline" size="sm" className="gap-2 text-success border-success/30" asChild>
-              <a href={client.whatsapp_link} target="_blank" rel="noopener noreferrer">
-                <MessageCircle className="w-4 h-4" /> WhatsApp
-              </a>
-            </Button>
-          )}
           <Link to={`/clients/${id}/edit`}>
             <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Bearbeiten</Button>
           </Link>
