@@ -379,7 +379,7 @@ const DashboardPage: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{r.clientName}</p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {r.packageName} · {r.detail}
+                        {r.packageName ? `${r.packageName} · ` : ''}{r.detail}
                       </p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
