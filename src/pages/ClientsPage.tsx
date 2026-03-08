@@ -40,25 +40,39 @@ interface SessionCount {
   count: number;
 }
 
-// Package features based on the actual offerings
-const packageFeatures: Record<string, string[]> = {
+// Package features with logic keys for determining completion
+interface PackageFeature {
+  label: string;
+  key: 'erstgespraech' | 'sessions' | 'trainingsplan' | 'fortschrittsdoku' | 'checkin_calls' | 'ernaehrung' | 'fortschrittsfotos' | 'whatsapp_support' | 'prio_buchung' | 'gratis_einheit';
+}
+
+const packageFeaturesMap: Record<string, PackageFeature[]> = {
   'Starter': [
-    'Persönliches Erstgespräch & Zielsetzung',
-    '5 individuelle 1:1-Trainingseinheiten',
-    'Trainingsplan passend zu deinen Zielen',
-    'Fortschrittsdokumentation',
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
   ],
   'Transformation': [
-    'Alles aus Paket Starter',
-    'Monatlicher Check-in-Call (15 Min.)',
-    'Angepasster Ernährungsleitfaden',
-    'Fortschrittsfotos & Messung',
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung' },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
   ],
   'Intensiv': [
-    'Alles aus Paket Transformation',
-    'WhatsApp-Support zwischen den Einheiten',
-    'Priorisierte Terminbuchung',
-    'Eine Gratis-Einheit bei Weiterempfehlung',
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech' },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan' },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung' },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
+    { label: 'WhatsApp-Support zwischen den Einheiten', key: 'whatsapp_support' },
+    { label: 'Priorisierte Terminbuchung', key: 'prio_buchung' },
+    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit' },
   ],
 };
 
@@ -78,6 +92,7 @@ const ClientsPage: React.FC = () => {
   const [packages, setPackages] = useState<Record<string, PackageData>>({});
   const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({});
   const [checkinCounts, setCheckinCounts] = useState<Record<string, number>>({});
+  const [metricCounts, setMetricCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -85,11 +100,12 @@ const ClientsPage: React.FC = () => {
   }, [user]);
 
   const loadData = async () => {
-    const [clientsRes, packagesRes, sessionsRes, checkinsRes] = await Promise.all([
+    const [clientsRes, packagesRes, sessionsRes, checkinsRes, metricsRes] = await Promise.all([
       supabase.from('clients').select('*').order('full_name'),
       supabase.from('packages').select('*').order('start_date', { ascending: false }),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').neq('session_type', 'Check-In Call'),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').eq('session_type', 'Check-In Call'),
+      supabase.from('body_metrics').select('client_id, id'),
     ]);
 
     setClients(clientsRes.data || []);
@@ -114,6 +130,13 @@ const ClientsPage: React.FC = () => {
       cMap[s.client_id] = (cMap[s.client_id] || 0) + 1;
     });
     setCheckinCounts(cMap);
+
+    // Count body metrics per client
+    const mMap: Record<string, number> = {};
+    (metricsRes.data || []).forEach((m: any) => {
+      mMap[m.client_id] = (mMap[m.client_id] || 0) + 1;
+    });
+    setMetricCounts(mMap);
 
     setLoading(false);
   };
@@ -148,12 +171,40 @@ const ClientsPage: React.FC = () => {
     setExpandedClient(prev => prev === clientId ? null : clientId);
   };
 
+  const getFeatureStatus = (key: string, pkg: PackageData, usedSessions: number, usedCheckins: number, hasMetrics: boolean): { done: boolean; detail?: string } => {
+    switch (key) {
+      case 'erstgespraech':
+        return { done: usedSessions >= 1 };
+      case 'sessions':
+        return { done: usedSessions >= pkg.sessions_included, detail: `${usedSessions} / ${pkg.sessions_included}` };
+      case 'trainingsplan':
+        return { done: usedSessions >= 1 }; // assumed created after first session
+      case 'fortschrittsdoku':
+        return { done: hasMetrics };
+      case 'checkin_calls':
+        return { done: usedCheckins >= pkg.checkin_calls_included, detail: `${usedCheckins} / ${pkg.checkin_calls_included}` };
+      case 'ernaehrung':
+        return { done: usedSessions >= 2 }; // assumed after 2nd session
+      case 'fortschrittsfotos':
+        return { done: hasMetrics };
+      case 'whatsapp_support':
+        return { done: !!true }; // always active for Intensiv
+      case 'prio_buchung':
+        return { done: !!true }; // always active for Intensiv
+      case 'gratis_einheit':
+        return { done: false }; // manual tracking
+      default:
+        return { done: false };
+    }
+  };
+
   const renderClientCard = (client: Client) => {
     const pkg = packages[client.id];
     const isExpanded = expandedClient === client.id;
     const usedSessions = sessionCounts[client.id] || 0;
     const usedCheckins = checkinCounts[client.id] || 0;
-    const features = pkg ? (packageFeatures[pkg.package_name] || []) : [];
+    const hasMetrics = (metricCounts[client.id] || 0) > 0;
+    const features = pkg ? (packageFeaturesMap[pkg.package_name] || []) : [];
 
     return (
       <div key={client.id}>
@@ -207,7 +258,7 @@ const ClientsPage: React.FC = () => {
                   <p className="font-semibold text-sm">Paket {pkg.package_name}</p>
                   <p className="text-xs text-muted-foreground">
                     {pkg.package_price}€
-                    {pkg.sessions_included > 0 && ` · ${Math.round(pkg.package_price / pkg.sessions_included)}€ je Session`}
+                    {pkg.sessions_included > 0 && ` · ${Math.round(pkg.package_price / pkg.sessions_included)}€ je Einheit`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -219,34 +270,28 @@ const ClientsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Einheiten</span>
-                  <span className="font-medium">{usedSessions} / {pkg.sessions_included}</span>
-                </div>
-                <Progress value={pkg.sessions_included > 0 ? (usedSessions / pkg.sessions_included) * 100 : 0} className="h-2" />
-              </div>
-
-              {pkg.checkin_calls_included > 0 && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Check-in Calls</span>
-                    <span className="font-medium">{usedCheckins} / {pkg.checkin_calls_included}</span>
-                  </div>
-                  <Progress value={(usedCheckins / pkg.checkin_calls_included) * 100} className="h-2" />
-                </div>
-              )}
-
+              {/* Paketinhalte with smart status */}
               {features.length > 0 && (
-                <div className="space-y-1.5 pt-1">
+                <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Paketinhalte</p>
-                  <ul className="space-y-1">
+                  <ul className="space-y-1.5">
                     {features.map((feat, i) => {
-                      const isDone = i === 0;
+                      const status = getFeatureStatus(feat.key, pkg, usedSessions, usedCheckins, hasMetrics);
                       return (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <Check className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isDone ? 'text-success' : 'text-muted-foreground/40'}`} />
-                          <span className={isDone ? 'text-foreground' : 'text-muted-foreground'}>{feat}</span>
+                        <li key={i} className="flex items-center gap-2.5 text-sm">
+                          {status.done ? (
+                            <Check className="w-4 h-4 flex-shrink-0 text-success" />
+                          ) : (
+                            <Circle className="w-4 h-4 flex-shrink-0 text-muted-foreground/30" />
+                          )}
+                          <span className={status.done ? 'text-foreground' : 'text-muted-foreground'}>
+                            {feat.label}
+                          </span>
+                          {status.detail && (
+                            <span className={`ml-auto text-xs font-medium ${status.done ? 'text-success' : 'text-muted-foreground'}`}>
+                              {status.detail}
+                            </span>
+                          )}
                         </li>
                       );
                     })}
@@ -254,6 +299,7 @@ const ClientsPage: React.FC = () => {
                 </div>
               )}
 
+              {/* WhatsApp button */}
               {client.whatsapp_link && (
                 <Button
                   variant="outline"
