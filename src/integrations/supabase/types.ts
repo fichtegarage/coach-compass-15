@@ -271,6 +271,44 @@ export type Database = {
           },
         ]
       }
+      progress_photos: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          note: string | null
+          photo_url: string
+          taken_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          photo_url: string
+          taken_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          photo_url?: string
+          taken_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_photos_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quick_logs: {
         Row: {
           client_id: string
