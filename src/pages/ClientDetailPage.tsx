@@ -917,6 +917,9 @@ const ClientDetailPage: React.FC = () => {
               ))}
             </div>
           )}
+
+          {/* PROGRESS PHOTOS */}
+          {id && <ProgressPhotos clientId={id} />}
         </TabsContent>
 
         {/* NOTES TAB */}
