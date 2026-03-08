@@ -59,7 +59,7 @@ const SessionsPage: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
   const [form, setForm] = useState({
-    client_id: '', session_date: new Date().toISOString().slice(0, 16),
+    client_id: '', package_id: '', session_date: new Date().toISOString().slice(0, 16),
     duration_minutes: '60', session_type: 'Präsenz-Training',
     status: 'Completed', notes: '', late_cancellation: false, location: 'Gym',
   });
