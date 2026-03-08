@@ -163,6 +163,43 @@ const DashboardPage: React.FC = () => {
       }
     }
 
+    // Birthday reminders
+    const bdayMap: Record<string, BirthdayInfo[]> = {};
+    const clients = clientsRes.data || [];
+    for (const day of next7Days) {
+      const dayKey = format(day, 'yyyy-MM-dd');
+      bdayMap[dayKey] = [];
+    }
+    for (const c of clients) {
+      if (!c.date_of_birth) continue;
+      const dob = new Date(c.date_of_birth);
+      const dobMonth = getMonth(dob);
+      const dobDay = getDate(dob);
+      for (const day of next7Days) {
+        if (getMonth(day) === dobMonth && getDate(day) === dobDay) {
+          const dayKey = format(day, 'yyyy-MM-dd');
+          bdayMap[dayKey].push({
+            clientName: c.full_name,
+            clientId: c.id,
+            date: day,
+          });
+          // Also add as a reminder if it's today
+          if (isToday(day)) {
+            const age = new Date().getFullYear() - dob.getFullYear();
+            reminderList.push({
+              type: 'birthday',
+              clientName: c.full_name,
+              clientId: c.id,
+              packageName: '',
+              detail: `Wird heute ${age} Jahre alt 🎂`,
+              severity: 'info',
+            });
+          }
+        }
+      }
+    }
+    setBirthdaysByDay(bdayMap);
+
     setReminders(reminderList);
     setLoading(false);
   };
