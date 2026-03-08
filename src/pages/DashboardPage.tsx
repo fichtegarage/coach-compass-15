@@ -355,10 +355,14 @@ const DashboardPage: React.FC = () => {
                       className={`p-2 rounded-lg shrink-0 ${
                         r.severity === 'destructive'
                           ? 'bg-destructive/10'
+                          : r.severity === 'info'
+                          ? 'bg-info/10'
                           : 'bg-warning/10'
                       }`}
                     >
-                      {r.type === 'unpaid' ? (
+                      {r.type === 'birthday' ? (
+                        <Cake className="w-4 h-4 text-info" />
+                      ) : r.type === 'unpaid' ? (
                         <DollarSign
                           className={`w-4 h-4 ${
                             r.severity === 'destructive' ? 'text-destructive' : 'text-warning'
@@ -370,6 +374,7 @@ const DashboardPage: React.FC = () => {
                             r.severity === 'destructive' ? 'text-destructive' : 'text-warning'
                           }`}
                         />
+                      )}
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
