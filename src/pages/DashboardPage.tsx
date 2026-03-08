@@ -9,6 +9,7 @@ import {
   CalendarDays, AlertTriangle, DollarSign, Plus, Clock,
   ChevronRight, Package,
 } from 'lucide-react';
+import BookSessionDialog from '@/components/BookSessionDialog';
 import {
   format, addDays, isSameDay, isToday, differenceInDays, differenceInWeeks,
 } from 'date-fns';
@@ -20,6 +21,14 @@ const sessionTypeLabels: Record<string, string> = {
   'Phone Call': 'Telefonat',
   'Check-In Call': 'Check-In Call',
   'Free Intro': 'Erstgespräch',
+};
+
+const sessionStatusLabels: Record<string, string> = {
+  'Scheduled': 'Geplant',
+  'Completed': 'Abgeschlossen',
+  'No-Show': 'Nicht erschienen',
+  'Cancelled by Client': 'Abgesagt',
+  'Cancelled by Trainer': 'Abgesagt',
 };
 
 interface TimelineSession {
@@ -47,6 +56,8 @@ const DashboardPage: React.FC = () => {
   const [timelineSessions, setTimelineSessions] = useState<TimelineSession[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookDialogOpen, setBookDialogOpen] = useState(false);
+  const [bookPrefillDate, setBookPrefillDate] = useState<string | undefined>();
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
 
@@ -165,11 +176,9 @@ const DashboardPage: React.FC = () => {
             {format(new Date(), 'EEEE, d. MMMM yyyy', { locale: de })}
           </p>
         </div>
-        <Link to="/sessions">
-          <Button size="sm" className="gap-2">
-            <Plus className="w-4 h-4" /> Einheit erfassen
-          </Button>
-        </Link>
+        <Button size="sm" className="gap-2" onClick={() => { setBookPrefillDate(undefined); setBookDialogOpen(true); }}>
+          <Plus className="w-4 h-4" /> Session buchen
+        </Button>
       </div>
 
       {/* 7-Day Timeline */}
@@ -212,17 +221,35 @@ const DashboardPage: React.FC = () => {
                 </div>
 
                 {daySessions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground pl-[52px]">Keine Termine</p>
+                  <div className="pl-[52px] flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">Keine Termine</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
+                      onClick={() => {
+                        const d = new Date(day);
+                        d.setHours(10, 0, 0, 0);
+                        setBookPrefillDate(d.toISOString().slice(0, 16));
+                        setBookDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Buchen
+                    </Button>
+                  </div>
                 ) : (
                   <div className="space-y-1.5 pl-[52px]">
                     {daySessions.map(s => {
                       const isCancelled = s.status.startsWith('Cancelled') || s.status === 'No-Show';
+                      const isScheduled = s.status === 'Scheduled';
                       return (
                         <Link key={s.id} to={`/clients/${s.clientId}`}>
                           <div
                             className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                               isCancelled
                                 ? 'bg-destructive/10 text-destructive/70 line-through'
+                                : isScheduled
+                                ? 'bg-primary/10 border border-primary/20 hover:bg-primary/15'
                                 : 'bg-muted/50 hover:bg-muted'
                             }`}
                           >
@@ -297,6 +324,12 @@ const DashboardPage: React.FC = () => {
           </div>
         </section>
       )}
+      <BookSessionDialog
+        open={bookDialogOpen}
+        onOpenChange={setBookDialogOpen}
+        prefillDate={bookPrefillDate}
+        onSaved={loadDashboard}
+      />
     </div>
   );
 };

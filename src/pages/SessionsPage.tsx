@@ -21,7 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 
 const sessionTypes = ['Präsenz-Training', 'Online-Training', 'Telefonat', 'Check-In Call', 'Kostenloses Erstgespräch'];
-const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
+const sessionStatuses = ['Scheduled', 'Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
 const locations = ['Gym', 'Outdoor'];
 
 const sessionTypeLabels: Record<string, string> = {
@@ -33,6 +33,7 @@ const sessionTypeLabels: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
+  'Scheduled': 'Geplant',
   'Completed': 'Abgeschlossen',
   'No-Show': 'Nicht erschienen',
   'Cancelled by Client': 'Vom Kunden abgesagt',

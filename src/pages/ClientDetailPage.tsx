@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
 import ProgressPhotos from '@/components/ProgressPhotos';
+import BookSessionDialog from '@/components/BookSessionDialog';
 
 interface PackageFeature {
   label: string;
@@ -75,7 +76,7 @@ const packageTemplates: Record<string, { sessions_included: string; checkin_call
 };
 const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
 
-const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
+const sessionStatuses = ['Scheduled', 'Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
 
 const sessionTypeLabelsDE: Record<string, string> = {
   'In-Person Training': 'Präsenz-Training',
@@ -86,6 +87,7 @@ const sessionTypeLabelsDE: Record<string, string> = {
 };
 
 const sessionStatusLabelsDE: Record<string, string> = {
+  'Scheduled': 'Geplant',
   'Completed': 'Abgeschlossen',
   'No-Show': 'Nicht erschienen',
   'Cancelled by Client': 'Vom Kunden abgesagt',
@@ -151,6 +153,7 @@ const ClientDetailPage: React.FC = () => {
   const [benchmarkForm, setBenchmarkForm] = useState({
     label: '', value: '', measured_at: new Date().toISOString().split('T')[0],
   });
+  const [bookDialogOpen, setBookDialogOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
     if (!id || !user) return;
@@ -427,6 +430,9 @@ const ClientDetailPage: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
+          <Button size="sm" className="gap-2" onClick={() => setBookDialogOpen(true)}>
+            <Plus className="w-4 h-4" /> Session buchen
+          </Button>
           <Link to={`/clients/${id}/edit`}>
             <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Bearbeiten</Button>
           </Link>
@@ -966,6 +972,13 @@ const ClientDetailPage: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
+      <BookSessionDialog
+        open={bookDialogOpen}
+        onOpenChange={setBookDialogOpen}
+        clientId={id}
+        clientName={client?.full_name}
+        onSaved={loadAll}
+      />
     </div>
   );
 };
