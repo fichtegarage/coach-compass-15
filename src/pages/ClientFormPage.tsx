@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Camera, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fitnessGoals = ['Abnehmen', 'Muskelaufbau', 'Ausdauer', 'Reha', 'Allgemeine Fitness', 'Wettkampfvorbereitung'];
@@ -21,6 +21,9 @@ const ClientFormPage: React.FC = () => {
   const isEdit = Boolean(id);
   const [saving, setSaving] = useState(false);
   const [loadingClient, setLoadingClient] = useState(isEdit);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     full_name: '', date_of_birth: '', email: '', phone: '', whatsapp_link: '',
     emergency_contact_name: '', emergency_contact_phone: '',
@@ -48,12 +51,35 @@ const ClientFormPage: React.FC = () => {
           status: data.status || 'Active',
           acquisition_source: data.acquisition_source || '',
         });
+        setProfilePhotoUrl(data.profile_photo_url || null);
       }
       setLoadingClient(false);
     });
   }, [id, isEdit, user]);
 
   const update = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingPhoto(true);
+    const ext = file.name.split('.').pop();
+    const filePath = `${user.id}/${id || 'new'}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('client-photos').upload(filePath, file, { upsert: true });
+    if (error) {
+      toast.error('Foto konnte nicht hochgeladen werden');
+      setUploadingPhoto(false);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
+    setProfilePhotoUrl(urlData.publicUrl);
+    // If editing, update immediately
+    if (isEdit && id) {
+      await supabase.from('clients').update({ profile_photo_url: urlData.publicUrl }).eq('id', id);
+      toast.success('Profilbild aktualisiert');
+    }
+    setUploadingPhoto(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +89,7 @@ const ClientFormPage: React.FC = () => {
       ...form,
       date_of_birth: form.date_of_birth || null,
       whatsapp_link: form.phone ? `https://wa.me/${form.phone.replace(/\D/g, '')}` : null,
+      profile_photo_url: profilePhotoUrl,
     };
 
     if (isEdit && id) {
@@ -96,6 +123,43 @@ const ClientFormPage: React.FC = () => {
       </Button>
       <h1 className="text-2xl font-display font-bold">{isEdit ? 'Kunde bearbeiten' : 'Neuer Kunde'}</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Profile Photo */}
+        <Card>
+          <CardHeader><CardTitle className="text-base font-display">Profilbild</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div
+                className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center overflow-hidden cursor-pointer relative group"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {profilePhotoUrl ? (
+                  <img src={profilePhotoUrl} alt="Profilbild" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-8 h-8 text-muted-foreground" />
+                )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  {uploadingPhoto ? (
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-white" />
+                  )}
+                </div>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                <p>Klicke auf das Bild, um ein Profilbild hochzuladen.</p>
+                <p className="text-xs mt-1">JPG, PNG · max. 5 MB</p>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader><CardTitle className="text-base font-display">Persönliche Daten</CardTitle></CardHeader>
           <CardContent className="space-y-4">
