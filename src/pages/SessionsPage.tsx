@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, CalendarDays, ChevronLeft, ChevronRight, Download, MapPin, List, LayoutGrid } from 'lucide-react';
+import { Plus, CalendarDays, ChevronLeft, ChevronRight, RefreshCw, MapPin, List, LayoutGrid, Copy, Check } from 'lucide-react';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, eachDayOfInterval, isSameMonth, isSameDay, isToday,
