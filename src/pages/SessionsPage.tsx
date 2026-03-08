@@ -59,6 +59,7 @@ const SessionsPage: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [form, setForm] = useState({
     client_id: '', package_id: '', session_date: new Date().toISOString().slice(0, 16),
     duration_minutes: '60', session_type: 'Präsenz-Training',
@@ -113,6 +114,27 @@ const SessionsPage: React.FC = () => {
     setDialogOpen(false);
     toast.success('Einheit erfasst');
     loadData();
+  };
+
+  const handleDrop = async (sessionId: string, targetDay: Date) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session || session.status !== 'Scheduled') return;
+    // Keep the original time, change the date
+    const oldDate = new Date(session.session_date);
+    const newDate = new Date(targetDay);
+    newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
+    const newDateStr = format(newDate, "yyyy-MM-dd'T'HH:mm:ss");
+    // Optimistic update
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, session_date: newDateStr } : s));
+    setDragOverDay(null);
+    const { error } = await supabase.from('sessions').update({ session_date: newDateStr }).eq('id', sessionId);
+    if (error) {
+      toast.error('Verschieben fehlgeschlagen');
+      loadData();
+    } else {
+      toast.success('Session verschoben');
+    }
+  };
   };
 
   // Calendar grid
@@ -314,12 +336,21 @@ const SessionsPage: React.FC = () => {
               const daySessions = getSessionsForDay(day);
               const inMonth = isSameMonth(day, currentMonth);
               const today = isToday(day);
+              const dayKey = format(day, 'yyyy-MM-dd');
+              const isDragOver = dragOverDay === dayKey;
               return (
                 <div
                   key={i}
                   className={`min-h-[100px] md:min-h-[120px] border-b border-r border-border p-1.5 transition-colors ${
                     !inMonth ? 'bg-muted/20 opacity-40' : ''
-                  } ${today ? 'bg-primary/5' : ''}`}
+                  } ${today ? 'bg-primary/5' : ''} ${isDragOver ? 'bg-primary/15 ring-2 ring-primary/30 ring-inset' : ''}`}
+                  onDragOver={e => { e.preventDefault(); setDragOverDay(dayKey); }}
+                  onDragLeave={() => setDragOverDay(null)}
+                  onDrop={e => {
+                    e.preventDefault();
+                    const sessionId = e.dataTransfer.getData('sessionId');
+                    if (sessionId) handleDrop(sessionId, day);
+                  }}
                 >
                   <p className={`text-xs font-medium mb-1 ${
                     today ? 'text-primary font-bold' : 'text-muted-foreground'
@@ -332,25 +363,41 @@ const SessionsPage: React.FC = () => {
                       const loc = s.location || 'Gym';
                       const count = getSessionCount(s.client_id, s.package_id);
                       const isCancelled = s.status.startsWith('Cancelled') || s.status === 'No-Show';
-                      return (
-                        <Link key={s.id} to={`/clients/${s.client_id}`}>
-                          <div className={`rounded-md px-1.5 py-1 text-[10px] md:text-xs cursor-pointer transition-colors ${
+                      const isScheduled = s.status === 'Scheduled';
+                      const inner = (
+                        <div
+                          draggable={isScheduled}
+                          onDragStart={isScheduled ? (e) => {
+                            e.dataTransfer.setData('sessionId', s.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                          } : undefined}
+                          className={`rounded-md px-1.5 py-1 text-[10px] md:text-xs transition-colors ${
                             isCancelled
-                              ? 'bg-destructive/10 text-destructive/70 line-through'
-                              : 'bg-primary/10 text-foreground hover:bg-primary/20'
-                          }`}>
-                            <p className="font-medium truncate">{format(new Date(s.session_date), 'HH:mm')} {clientName}</p>
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
-                              <span className="truncate">{loc}</span>
-                              {count && (
-                                <span className="ml-auto flex-shrink-0 font-medium text-primary">
-                                  {count.used}/{count.total}
-                                </span>
-                              )}
-                            </div>
+                              ? 'bg-destructive/10 text-destructive/70 line-through cursor-default'
+                              : isScheduled
+                              ? 'bg-primary/10 text-foreground hover:bg-primary/20 cursor-grab active:cursor-grabbing border border-dashed border-primary/30'
+                              : 'bg-primary/10 text-foreground hover:bg-primary/20 cursor-pointer'
+                          }`}
+                        >
+                          <p className="font-medium truncate">
+                            {isScheduled && <span className="mr-1">⠿</span>}
+                            {format(new Date(s.session_date), 'HH:mm')} {clientName}
+                          </p>
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
+                            <span className="truncate">{loc}</span>
+                            {count && (
+                              <span className="ml-auto flex-shrink-0 font-medium text-primary">
+                                {count.used}/{count.total}
+                              </span>
+                            )}
                           </div>
-                        </Link>
+                        </div>
+                      );
+                      return isScheduled ? (
+                        <div key={s.id}>{inner}</div>
+                      ) : (
+                        <Link key={s.id} to={`/clients/${s.client_id}`}>{inner}</Link>
                       );
                     })}
                   </div>
