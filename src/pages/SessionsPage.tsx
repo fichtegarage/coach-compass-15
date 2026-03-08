@@ -204,13 +204,31 @@ const SessionsPage: React.FC = () => {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Kunde *</Label>
-                  <Select value={form.client_id} onValueChange={v => setForm(f => ({ ...f, client_id: v }))}>
+                  <Select value={form.client_id} onValueChange={v => {
+                    const clientPkgs = packages.filter(p => p.client_id === v);
+                    setForm(f => ({ ...f, client_id: v, package_id: clientPkgs.length === 1 ? clientPkgs[0].id : '' }));
+                  }}>
                     <SelectTrigger><SelectValue placeholder="Kunde wählen" /></SelectTrigger>
                     <SelectContent>
                       {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
+                {form.client_id && (() => {
+                  const clientPkgs = packages.filter(p => p.client_id === form.client_id);
+                  if (clientPkgs.length === 0) return null;
+                  return (
+                    <div className="space-y-2">
+                      <Label>Paket</Label>
+                      <Select value={form.package_id} onValueChange={v => setForm(f => ({ ...f, package_id: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Paket wählen (optional)" /></SelectTrigger>
+                        <SelectContent>
+                          {clientPkgs.map(p => <SelectItem key={p.id} value={p.id}>{p.package_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })()}
                 <div className="space-y-2">
                   <Label>Datum & Uhrzeit</Label>
                   <Input type="datetime-local" value={form.session_date} onChange={e => setForm(f => ({ ...f, session_date: e.target.value }))} />
