@@ -43,12 +43,18 @@ interface TimelineSession {
 }
 
 interface Reminder {
-  type: 'unpaid' | 'expiring';
+  type: 'unpaid' | 'expiring' | 'birthday';
   clientName: string;
   clientId: string;
   packageName: string;
   detail: string;
-  severity: 'warning' | 'destructive';
+  severity: 'warning' | 'destructive' | 'info';
+}
+
+interface BirthdayInfo {
+  clientName: string;
+  clientId: string;
+  date: Date;
 }
 
 const DashboardPage: React.FC = () => {
