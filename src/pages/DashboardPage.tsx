@@ -213,7 +213,22 @@ const DashboardPage: React.FC = () => {
                 </div>
 
                 {daySessions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground pl-[52px]">Keine Termine</p>
+                  <div className="pl-[52px] flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">Keine Termine</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
+                      onClick={() => {
+                        const d = new Date(day);
+                        d.setHours(10, 0, 0, 0);
+                        setBookPrefillDate(d.toISOString().slice(0, 16));
+                        setBookDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Buchen
+                    </Button>
+                  </div>
                 ) : (
                   <div className="space-y-1.5 pl-[52px]">
                     {daySessions.map(s => {
