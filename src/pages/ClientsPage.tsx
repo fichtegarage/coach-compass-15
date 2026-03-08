@@ -131,6 +131,13 @@ const ClientsPage: React.FC = () => {
     });
     setCheckinCounts(cMap);
 
+    // Count body metrics per client
+    const mMap: Record<string, number> = {};
+    (metricsRes.data || []).forEach((m: any) => {
+      mMap[m.client_id] = (mMap[m.client_id] || 0) + 1;
+    });
+    setMetricCounts(mMap);
+
     setLoading(false);
   };
 
