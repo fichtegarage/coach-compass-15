@@ -45,6 +45,7 @@ interface SessionCount {
 interface PackageFeature {
   label: string;
   key: 'erstgespraech' | 'sessions' | 'trainingsplan' | 'fortschrittsdoku' | 'checkin_calls' | 'ernaehrung' | 'fortschrittsfotos' | 'whatsapp_support' | 'prio_buchung' | 'gratis_einheit';
+  manual?: boolean; // can be toggled manually
 }
 
 const packageFeaturesMap: Record<string, PackageFeature[]> = {
