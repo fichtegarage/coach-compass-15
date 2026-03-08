@@ -48,6 +48,8 @@ const DashboardPage: React.FC = () => {
   const [timelineSessions, setTimelineSessions] = useState<TimelineSession[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookDialogOpen, setBookDialogOpen] = useState(false);
+  const [bookPrefillDate, setBookPrefillDate] = useState<string | undefined>();
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
 
