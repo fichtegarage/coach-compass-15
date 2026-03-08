@@ -121,11 +121,13 @@ const ClientDetailPage: React.FC = () => {
   
   // Session form
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
-  const [sessionForm, setSessionForm] = useState({
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const defaultSessionForm = {
     session_date: new Date().toISOString().slice(0, 16),
     duration_minutes: '60', session_type: 'In-Person Training',
     status: 'Completed', notes: '', package_id: '', late_cancellation: false, location: 'Gym',
-  });
+  };
+  const [sessionForm, setSessionForm] = useState(defaultSessionForm);
 
   // Package form
   const [packageDialogOpen, setPackageDialogOpen] = useState(false);
