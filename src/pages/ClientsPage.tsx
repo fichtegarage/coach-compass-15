@@ -211,28 +211,29 @@ const ClientsPage: React.FC = () => {
     setExpandedClient(prev => prev === clientId ? null : clientId);
   };
 
-  const getFeatureStatus = (key: string, pkg: PackageData, usedSessions: number, usedCheckins: number, hasMetrics: boolean): { done: boolean; detail?: string } => {
+  const getFeatureStatus = (key: string, pkg: PackageData, usedSessions: number, usedCheckins: number, hasMetrics: boolean): { done: boolean; detail?: string; manual?: boolean } => {
+    const manualDone = manualCompletions[pkg.id]?.has(key) || false;
     switch (key) {
       case 'erstgespraech':
-        return { done: usedSessions >= 1 };
+        return { done: manualDone, manual: true };
       case 'sessions':
         return { done: usedSessions >= pkg.sessions_included, detail: `${usedSessions} / ${pkg.sessions_included}` };
       case 'trainingsplan':
-        return { done: usedSessions >= 1 }; // assumed created after first session
+        return { done: manualDone, manual: true };
       case 'fortschrittsdoku':
         return { done: hasMetrics };
       case 'checkin_calls':
         return { done: usedCheckins >= pkg.checkin_calls_included, detail: `${usedCheckins} / ${pkg.checkin_calls_included}` };
       case 'ernaehrung':
-        return { done: usedSessions >= 2 }; // assumed after 2nd session
+        return { done: manualDone, manual: true };
       case 'fortschrittsfotos':
         return { done: hasMetrics };
       case 'whatsapp_support':
-        return { done: !!true }; // always active for Intensiv
+        return { done: true };
       case 'prio_buchung':
-        return { done: !!true }; // always active for Intensiv
+        return { done: true };
       case 'gratis_einheit':
-        return { done: false }; // manual tracking
+        return { done: manualDone, manual: true };
       default:
         return { done: false };
     }
