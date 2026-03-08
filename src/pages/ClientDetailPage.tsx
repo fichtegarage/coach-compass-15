@@ -564,15 +564,27 @@ const ClientDetailPage: React.FC = () => {
                       </Select>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={sessionForm.late_cancellation} onCheckedChange={v => setSessionForm(f => ({ ...f, late_cancellation: v }))} />
-                    <Label>Late Cancellation (&lt;24h)</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={sessionForm.late_cancellation} onCheckedChange={v => setSessionForm(f => ({ ...f, late_cancellation: v }))} />
+                      <Label>Kurzfristige Absage (&lt;24h)</Label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Ort</Label>
+                      <Select value={sessionForm.location} onValueChange={v => setSessionForm(f => ({ ...f, location: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Gym">Gym</SelectItem>
+                          <SelectItem value="Outdoor">Outdoor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Notes</Label>
+                    <Label>Notizen</Label>
                     <Textarea value={sessionForm.notes} onChange={e => setSessionForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
                   </div>
-                  <Button onClick={saveSession} className="w-full">Save Session</Button>
+                  <Button onClick={saveSession} className="w-full">Einheit speichern</Button>
                 </div>
               </DialogContent>
             </Dialog>
