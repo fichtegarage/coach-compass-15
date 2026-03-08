@@ -16,10 +16,10 @@ import { LayoutDashboard, Users, CalendarDays, Settings, Dumbbell, LogOut } from
 import { Button } from '@/components/ui/button';
 
 const navItems = [
-  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
-  { title: 'Clients', url: '/clients', icon: Users },
-  { title: 'Sessions', url: '/sessions', icon: CalendarDays },
-  { title: 'Settings', url: '/settings', icon: Settings },
+  { title: 'Übersicht', url: '/', icon: LayoutDashboard },
+  { title: 'Kunden', url: '/clients', icon: Users },
+  { title: 'Einheiten', url: '/sessions', icon: CalendarDays },
+  { title: 'Einstellungen', url: '/settings', icon: Settings },
 ];
 
 const AppSidebar: React.FC = () => {
@@ -70,7 +70,7 @@ const AppSidebar: React.FC = () => {
           onClick={signOut}
         >
           <LogOut className="w-5 h-5" />
-          <span className="group-data-[collapsible=icon]:hidden">Sign Out</span>
+          <span className="group-data-[collapsible=icon]:hidden">Abmelden</span>
         </Button>
       </SidebarFooter>
     </Sidebar>

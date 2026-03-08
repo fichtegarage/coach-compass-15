@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, CalendarDays, DollarSign, TrendingUp, AlertTriangle, Plus, Clock } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { de } from 'date-fns/locale';
 
 interface DashboardStats {
   activeClients: number;
@@ -18,6 +19,16 @@ interface DashboardStats {
   unpaidPackages: Array<{ clientName: string; packageName: string; paymentStatus: string; price: number }>;
   todaySessions: Array<{ clientName: string; sessionType: string; sessionDate: string; status: string }>;
 }
+
+const statusLabels: Record<string, string> = {
+  'Completed': 'Abgeschlossen',
+  'No-Show': 'Nicht erschienen',
+  'Cancelled by Client': 'Vom Kunden abgesagt',
+  'Cancelled by Trainer': 'Vom Trainer abgesagt',
+  'Unpaid': 'Unbezahlt',
+  'Partially paid': 'Teilweise bezahlt',
+  'Paid in full': 'Vollständig bezahlt',
+};
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -51,7 +62,6 @@ const DashboardPage: React.FC = () => {
 
     const packages = packagesRes.data || [];
     
-    // Calculate revenue and expiring packages
     const paidThisMonth = packages
       .filter(p => p.payment_status === 'Paid in full' && p.payment_date && p.payment_date >= thisMonthStart && p.payment_date <= thisMonthEnd)
       .reduce((sum, p) => sum + Number(p.is_deal && p.deal_discounted_price ? p.deal_discounted_price : p.package_price), 0);
@@ -60,7 +70,6 @@ const DashboardPage: React.FC = () => {
       .filter(p => p.payment_status !== 'Paid in full')
       .reduce((sum, p) => sum + Number(p.is_deal && p.deal_discounted_price ? p.deal_discounted_price : p.package_price), 0);
 
-    // For expiring packages, we need session counts
     const expiringPkgs: DashboardStats['expiringPackages'] = [];
     for (const pkg of packages.filter(p => p.payment_status !== 'Paid in full' || true)) {
       const { count } = await supabase.from('sessions').select('id', { count: 'exact', head: true })
@@ -70,7 +79,7 @@ const DashboardPage: React.FC = () => {
       const endingSoon = pkg.end_date && new Date(pkg.end_date) <= new Date(Date.now() + 14 * 86400000);
       if (remaining <= 2 || endingSoon) {
         expiringPkgs.push({
-          clientName: (pkg.clients as any)?.full_name || 'Unknown',
+          clientName: (pkg.clients as any)?.full_name || 'Unbekannt',
           packageName: pkg.package_name,
           sessionsRemaining: remaining,
           endDate: pkg.end_date,
@@ -81,14 +90,14 @@ const DashboardPage: React.FC = () => {
     const unpaidPkgs = packages
       .filter(p => p.payment_status !== 'Paid in full')
       .map(p => ({
-        clientName: (p.clients as any)?.full_name || 'Unknown',
+        clientName: (p.clients as any)?.full_name || 'Unbekannt',
         packageName: p.package_name,
         paymentStatus: p.payment_status,
         price: Number(p.is_deal && p.deal_discounted_price ? p.deal_discounted_price : p.package_price),
       }));
 
     const todaySess = (todaySessionsRes.data || []).map(s => ({
-      clientName: (s.clients as any)?.full_name || 'Unknown',
+      clientName: (s.clients as any)?.full_name || 'Unbekannt',
       sessionType: s.session_type,
       sessionDate: s.session_date,
       status: s.status,
@@ -117,17 +126,16 @@ const DashboardPage: React.FC = () => {
     <div className="space-y-6 max-w-7xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-display font-bold">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
+          <h1 className="text-2xl md:text-3xl font-display font-bold">Übersicht</h1>
+          <p className="text-muted-foreground text-sm">{format(new Date(), 'EEEE, d. MMMM yyyy', { locale: de })}</p>
         </div>
         <Link to="/sessions/new">
           <Button size="sm" className="gap-2">
-            <Plus className="w-4 h-4" /> Log Session
+            <Plus className="w-4 h-4" /> Einheit erfassen
           </Button>
         </Link>
       </div>
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="stat-glow">
           <CardContent className="p-4">
@@ -135,7 +143,7 @@ const DashboardPage: React.FC = () => {
               <div className="p-2 rounded-lg bg-primary/10"><Users className="w-5 h-5 text-primary" /></div>
               <div>
                 <p className="text-2xl font-display font-bold">{stats.activeClients}</p>
-                <p className="text-xs text-muted-foreground">Active Clients</p>
+                <p className="text-xs text-muted-foreground">Aktive Kunden</p>
               </div>
             </div>
           </CardContent>
@@ -147,7 +155,7 @@ const DashboardPage: React.FC = () => {
               <div>
                 <p className="text-2xl font-display font-bold">{stats.sessionsThisMonth}</p>
                 <p className="text-xs text-muted-foreground">
-                  Sessions this month
+                  Einheiten diesen Monat
                   {sessionDelta !== 0 && (
                     <span className={sessionDelta > 0 ? 'text-success ml-1' : 'text-destructive ml-1'}>
                       ({sessionDelta > 0 ? '+' : ''}{sessionDelta})
@@ -164,7 +172,7 @@ const DashboardPage: React.FC = () => {
               <div className="p-2 rounded-lg bg-success/10"><DollarSign className="w-5 h-5 text-success" /></div>
               <div>
                 <p className="text-2xl font-display font-bold">€{stats.revenueThisMonth.toFixed(0)}</p>
-                <p className="text-xs text-muted-foreground">Revenue this month</p>
+                <p className="text-xs text-muted-foreground">Umsatz diesen Monat</p>
               </div>
             </div>
           </CardContent>
@@ -175,7 +183,7 @@ const DashboardPage: React.FC = () => {
               <div className="p-2 rounded-lg bg-warning/10"><TrendingUp className="w-5 h-5 text-warning" /></div>
               <div>
                 <p className="text-2xl font-display font-bold">€{stats.outstandingAmount.toFixed(0)}</p>
-                <p className="text-xs text-muted-foreground">Outstanding</p>
+                <p className="text-xs text-muted-foreground">Ausstehend</p>
               </div>
             </div>
           </CardContent>
@@ -183,16 +191,15 @@ const DashboardPage: React.FC = () => {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Today's Sessions */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-display flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" /> Today's Sessions
+              <Clock className="w-4 h-4 text-primary" /> Heutige Einheiten
             </CardTitle>
           </CardHeader>
           <CardContent>
             {stats.todaySessions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No sessions scheduled for today.</p>
+              <p className="text-sm text-muted-foreground">Keine Einheiten für heute geplant.</p>
             ) : (
               <div className="space-y-2">
                 {stats.todaySessions.map((s, i) => (
@@ -201,7 +208,7 @@ const DashboardPage: React.FC = () => {
                       <p className="text-sm font-medium">{s.clientName}</p>
                       <p className="text-xs text-muted-foreground">{s.sessionType} · {format(new Date(s.sessionDate), 'HH:mm')}</p>
                     </div>
-                    <Badge variant={s.status === 'Completed' ? 'default' : 'secondary'}>{s.status}</Badge>
+                    <Badge variant={s.status === 'Completed' ? 'default' : 'secondary'}>{statusLabels[s.status] || s.status}</Badge>
                   </div>
                 ))}
               </div>
@@ -209,16 +216,15 @@ const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Expiring Packages */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-display flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-warning" /> Expiring Packages
+              <AlertTriangle className="w-4 h-4 text-warning" /> Auslaufende Pakete
             </CardTitle>
           </CardHeader>
           <CardContent>
             {stats.expiringPackages.length === 0 ? (
-              <p className="text-sm text-muted-foreground">All packages are in good standing.</p>
+              <p className="text-sm text-muted-foreground">Alle Pakete sind im grünen Bereich.</p>
             ) : (
               <div className="space-y-2">
                 {stats.expiringPackages.map((p, i) => (
@@ -227,7 +233,7 @@ const DashboardPage: React.FC = () => {
                       <p className="text-sm font-medium">{p.clientName}</p>
                       <p className="text-xs text-muted-foreground">{p.packageName}</p>
                     </div>
-                    <Badge variant="outline" className="text-warning border-warning/30">{p.sessionsRemaining} left</Badge>
+                    <Badge variant="outline" className="text-warning border-warning/30">{p.sessionsRemaining} übrig</Badge>
                   </div>
                 ))}
               </div>
@@ -235,16 +241,15 @@ const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Unpaid Packages */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-display flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-destructive" /> Unpaid / Partially Paid
+              <DollarSign className="w-4 h-4 text-destructive" /> Unbezahlt / Teilweise bezahlt
             </CardTitle>
           </CardHeader>
           <CardContent>
             {stats.unpaidPackages.length === 0 ? (
-              <p className="text-sm text-muted-foreground">All packages are paid in full.</p>
+              <p className="text-sm text-muted-foreground">Alle Pakete sind vollständig bezahlt.</p>
             ) : (
               <div className="grid sm:grid-cols-2 gap-2">
                 {stats.unpaidPackages.map((p, i) => (
@@ -253,7 +258,7 @@ const DashboardPage: React.FC = () => {
                       <p className="text-sm font-medium">{p.clientName}</p>
                       <p className="text-xs text-muted-foreground">{p.packageName} · €{p.price}</p>
                     </div>
-                    <Badge variant="outline" className="text-destructive border-destructive/30">{p.paymentStatus}</Badge>
+                    <Badge variant="outline" className="text-destructive border-destructive/30">{statusLabels[p.paymentStatus] || p.paymentStatus}</Badge>
                   </div>
                 ))}
               </div>

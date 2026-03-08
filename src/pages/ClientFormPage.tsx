@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const fitnessGoals = ['Weight Loss', 'Muscle Gain', 'Endurance', 'Rehab', 'General Fitness', 'Competition Prep'];
-const acquisitionSources = ['Referral', 'Instagram', 'Website', 'Google', 'Walk-in', 'Other'];
+const fitnessGoals = ['Abnehmen', 'Muskelaufbau', 'Ausdauer', 'Reha', 'Allgemeine Fitness', 'Wettkampfvorbereitung'];
+const acquisitionSources = ['Empfehlung', 'Instagram', 'Website', 'Google', 'Laufkundschaft', 'Sonstiges'];
 
 const ClientFormPage: React.FC = () => {
   const { user } = useAuth();
@@ -39,9 +39,9 @@ const ClientFormPage: React.FC = () => {
       whatsapp_link: form.phone ? `https://wa.me/${form.phone.replace(/\D/g, '')}` : null,
     });
     if (error) {
-      toast.error('Failed to create client');
+      toast.error('Kunde konnte nicht erstellt werden');
     } else {
-      toast.success('Client created');
+      toast.success('Kunde erstellt');
       navigate('/clients');
     }
     setSaving(false);
@@ -50,30 +50,30 @@ const ClientFormPage: React.FC = () => {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2">
-        <ArrowLeft className="w-4 h-4" /> Back
+        <ArrowLeft className="w-4 h-4" /> Zurück
       </Button>
-      <h1 className="text-2xl font-display font-bold">New Client</h1>
+      <h1 className="text-2xl font-display font-bold">Neuer Kunde</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
-          <CardHeader><CardTitle className="text-base font-display">Personal Info</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-display">Persönliche Daten</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Full Name *</Label>
+                <Label>Vollständiger Name *</Label>
                 <Input value={form.full_name} onChange={e => update('full_name', e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label>Date of Birth</Label>
+                <Label>Geburtsdatum</Label>
                 <Input type="date" value={form.date_of_birth} onChange={e => update('date_of_birth', e.target.value)} />
               </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label>E-Mail</Label>
                 <Input type="email" value={form.email} onChange={e => update('email', e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Phone (with country code)</Label>
+                <Label>Telefon (mit Vorwahl)</Label>
                 <Input value={form.phone} onChange={e => update('phone', e.target.value)} placeholder="+49..." />
               </div>
             </div>
@@ -81,43 +81,43 @@ const ClientFormPage: React.FC = () => {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base font-display">Emergency Contact</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-display">Notfallkontakt</CardTitle></CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Name</Label>
               <Input value={form.emergency_contact_name} onChange={e => update('emergency_contact_name', e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Phone</Label>
+              <Label>Telefon</Label>
               <Input value={form.emergency_contact_phone} onChange={e => update('emergency_contact_phone', e.target.value)} />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base font-display">Training Details</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-display">Trainingsdetails</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Fitness Goal</Label>
+                <Label>Fitnessziel</Label>
                 <Select value={form.fitness_goal} onValueChange={v => update('fitness_goal', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select goal" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Ziel wählen" /></SelectTrigger>
                   <SelectContent>
                     {fitnessGoals.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Starting Date</Label>
+                <Label>Startdatum</Label>
                 <Input type="date" value={form.starting_date} onChange={e => update('starting_date', e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Goal Details (free text)</Label>
+              <Label>Ziel-Details (Freitext)</Label>
               <Textarea value={form.fitness_goal_text} onChange={e => update('fitness_goal_text', e.target.value)} rows={2} />
             </div>
             <div className="space-y-2">
-              <Label>Health Notes (injuries, conditions, contraindications)</Label>
+              <Label>Gesundheitsnotizen (Verletzungen, Vorerkrankungen, Kontraindikationen)</Label>
               <Textarea value={form.health_notes} onChange={e => update('health_notes', e.target.value)} rows={3} />
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
@@ -126,16 +126,16 @@ const ClientFormPage: React.FC = () => {
                 <Select value={form.status} onValueChange={v => update('status', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Paused">Paused</SelectItem>
-                    <SelectItem value="Churned">Churned</SelectItem>
+                    <SelectItem value="Active">Aktiv</SelectItem>
+                    <SelectItem value="Paused">Pausiert</SelectItem>
+                    <SelectItem value="Churned">Abgemeldet</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>How they found me</Label>
+                <Label>Wie hat er/sie mich gefunden?</Label>
                 <Select value={form.acquisition_source} onValueChange={v => update('acquisition_source', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Quelle wählen" /></SelectTrigger>
                   <SelectContent>
                     {acquisitionSources.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
@@ -148,7 +148,7 @@ const ClientFormPage: React.FC = () => {
         <div className="flex justify-end">
           <Button type="submit" disabled={saving} className="gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Create Client
+            Kunde erstellen
           </Button>
         </div>
       </form>
