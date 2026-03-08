@@ -35,7 +35,7 @@ const packageTemplates: Record<string, { sessions_included: string; checkin_call
     description: '20 Einheiten à 60 Min. • gültig 12 Monate',
   },
 };
-
+const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
 
 const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
 
