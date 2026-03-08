@@ -118,11 +118,23 @@ const ClientsPage: React.FC = () => {
     setLoading(false);
   };
 
+  const sortByFirstName = (a: Client, b: Client) => a.full_name.localeCompare(b.full_name, 'de');
+
   const filtered = clients.filter(c => {
     const matchesSearch = c.full_name.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Active = has an active package AND status is Active
+  const activeClients = filtered
+    .filter(c => c.status === 'Active' && packages[c.id])
+    .sort(sortByFirstName);
+
+  // Archived = Churned, Paused, or no active package
+  const archivedClients = filtered
+    .filter(c => c.status !== 'Active' || !packages[c.id])
+    .sort(sortByFirstName);
 
   const statusColor = (s: string) => {
     if (s === 'Active') return 'bg-success/10 text-success border-success/20';
