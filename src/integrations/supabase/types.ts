@@ -168,6 +168,38 @@ export type Database = {
           },
         ]
       }
+      package_feature_completions: {
+        Row: {
+          completed_at: string
+          feature_key: string
+          id: string
+          package_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          feature_key: string
+          id?: string
+          package_id: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          feature_key?: string
+          id?: string
+          package_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_feature_completions_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       packages: {
         Row: {
           checkin_calls_included: number
