@@ -1,0 +1,727 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import {
+  ArrowLeft, User, MessageCircle, Pin, Plus, CalendarDays, Package, TrendingUp,
+  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText
+} from 'lucide-react';
+import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
+import { toast } from 'sonner';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
+const sessionStatuses = ['Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
+
+const ClientDetailPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [client, setClient] = useState<any>(null);
+  const [packages, setPackages] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any[]>([]);
+  const [benchmarks, setBenchmarks] = useState<any[]>([]);
+  const [quickLogs, setQuickLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [quickLogText, setQuickLogText] = useState('');
+  const [editingPinned, setEditingPinned] = useState(false);
+  const [pinnedText, setPinnedText] = useState('');
+  
+  // Session form
+  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  const [sessionForm, setSessionForm] = useState({
+    session_date: new Date().toISOString().slice(0, 16),
+    duration_minutes: '60', session_type: 'In-Person Training',
+    status: 'Completed', notes: '', package_id: '', late_cancellation: false,
+  });
+
+  // Package form
+  const [packageDialogOpen, setPackageDialogOpen] = useState(false);
+  const [packageForm, setPackageForm] = useState({
+    package_name: '', sessions_included: '10', checkin_calls_included: '0',
+    package_price: '', start_date: new Date().toISOString().split('T')[0],
+    duration_weeks: '', is_deal: false, deal_reason: '', deal_discounted_price: '',
+    deal_adjusted_terms: '', payment_status: 'Unpaid', payment_date: '',
+  });
+
+  // Metric form
+  const [metricDialogOpen, setMetricDialogOpen] = useState(false);
+  const [metricForm, setMetricForm] = useState({
+    measured_at: new Date().toISOString().split('T')[0],
+    weight_kg: '', body_fat_pct: '', waist_cm: '', hip_cm: '', chest_cm: '',
+  });
+
+  // Benchmark form
+  const [benchmarkDialogOpen, setBenchmarkDialogOpen] = useState(false);
+  const [benchmarkForm, setBenchmarkForm] = useState({
+    label: '', value: '', measured_at: new Date().toISOString().split('T')[0],
+  });
+
+  const loadAll = useCallback(async () => {
+    if (!id || !user) return;
+    const [cRes, pRes, sRes, mRes, bRes, qlRes] = await Promise.all([
+      supabase.from('clients').select('*').eq('id', id).single(),
+      supabase.from('packages').select('*').eq('client_id', id).order('start_date', { ascending: false }),
+      supabase.from('sessions').select('*').eq('client_id', id).order('session_date', { ascending: false }),
+      supabase.from('body_metrics').select('*').eq('client_id', id).order('measured_at'),
+      supabase.from('fitness_benchmarks').select('*').eq('client_id', id).order('measured_at', { ascending: false }),
+      supabase.from('quick_logs').select('*').eq('client_id', id).order('created_at', { ascending: false }),
+    ]);
+    setClient(cRes.data);
+    setPinnedText(cRes.data?.pinned_note || '');
+    setPackages(pRes.data || []);
+    setSessions(sRes.data || []);
+    setMetrics(mRes.data || []);
+    setBenchmarks(bRes.data || []);
+    setQuickLogs(qlRes.data || []);
+    setLoading(false);
+  }, [id, user]);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  const addQuickLog = async () => {
+    if (!quickLogText.trim() || !user || !id) return;
+    await supabase.from('quick_logs').insert({ client_id: id, user_id: user.id, content: quickLogText });
+    setQuickLogText('');
+    loadAll();
+  };
+
+  const savePinnedNote = async () => {
+    await supabase.from('clients').update({ pinned_note: pinnedText }).eq('id', id);
+    setEditingPinned(false);
+    loadAll();
+    toast.success('Pinned note updated');
+  };
+
+  const saveSession = async () => {
+    if (!user || !id) return;
+    const endDate = packageForm.start_date && packageForm.duration_weeks
+      ? new Date(new Date(packageForm.start_date).getTime() + Number(packageForm.duration_weeks) * 7 * 86400000).toISOString().split('T')[0]
+      : null;
+    await supabase.from('sessions').insert({
+      client_id: id, user_id: user.id,
+      session_date: sessionForm.session_date,
+      duration_minutes: Number(sessionForm.duration_minutes),
+      session_type: sessionForm.session_type,
+      status: sessionForm.status,
+      notes: sessionForm.notes || null,
+      package_id: sessionForm.package_id || null,
+      late_cancellation: sessionForm.late_cancellation,
+    });
+    setSessionDialogOpen(false);
+    toast.success('Session logged');
+    loadAll();
+  };
+
+  const savePackage = async () => {
+    if (!user || !id) return;
+    const endDate = packageForm.start_date && packageForm.duration_weeks
+      ? new Date(new Date(packageForm.start_date).getTime() + Number(packageForm.duration_weeks) * 7 * 86400000).toISOString().split('T')[0]
+      : null;
+    await supabase.from('packages').insert({
+      client_id: id, user_id: user.id,
+      package_name: packageForm.package_name,
+      sessions_included: Number(packageForm.sessions_included),
+      checkin_calls_included: Number(packageForm.checkin_calls_included),
+      package_price: Number(packageForm.package_price),
+      start_date: packageForm.start_date,
+      end_date: endDate,
+      duration_weeks: packageForm.duration_weeks ? Number(packageForm.duration_weeks) : null,
+      is_deal: packageForm.is_deal,
+      deal_reason: packageForm.is_deal ? packageForm.deal_reason : null,
+      deal_discounted_price: packageForm.is_deal && packageForm.deal_discounted_price ? Number(packageForm.deal_discounted_price) : null,
+      deal_adjusted_terms: packageForm.is_deal ? packageForm.deal_adjusted_terms : null,
+      payment_status: packageForm.payment_status,
+      payment_date: packageForm.payment_date || null,
+    });
+    setPackageDialogOpen(false);
+    toast.success('Package added');
+    loadAll();
+  };
+
+  const saveMetric = async () => {
+    if (!user || !id) return;
+    await supabase.from('body_metrics').insert({
+      client_id: id, user_id: user.id,
+      measured_at: metricForm.measured_at,
+      weight_kg: metricForm.weight_kg ? Number(metricForm.weight_kg) : null,
+      body_fat_pct: metricForm.body_fat_pct ? Number(metricForm.body_fat_pct) : null,
+      waist_cm: metricForm.waist_cm ? Number(metricForm.waist_cm) : null,
+      hip_cm: metricForm.hip_cm ? Number(metricForm.hip_cm) : null,
+      chest_cm: metricForm.chest_cm ? Number(metricForm.chest_cm) : null,
+    });
+    setMetricDialogOpen(false);
+    toast.success('Metrics saved');
+    loadAll();
+  };
+
+  const saveBenchmark = async () => {
+    if (!user || !id) return;
+    await supabase.from('fitness_benchmarks').insert({
+      client_id: id, user_id: user.id,
+      label: benchmarkForm.label, value: benchmarkForm.value, measured_at: benchmarkForm.measured_at,
+    });
+    setBenchmarkDialogOpen(false);
+    toast.success('Benchmark saved');
+    loadAll();
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+  }
+
+  if (!client) {
+    return <div className="text-center py-12"><p className="text-muted-foreground">Client not found</p></div>;
+  }
+
+  // Calculations
+  const activePackage = packages.find(p => {
+    const sessionsUsed = sessions.filter(s => s.package_id === p.id && ['Completed', 'No-Show'].includes(s.status)).length;
+    return sessionsUsed < p.sessions_included;
+  });
+
+  const getSessionsUsed = (pkgId: string) =>
+    sessions.filter(s => s.package_id === pkgId && ['Completed', 'No-Show'].includes(s.status)).length;
+
+  const totalSessions = sessions.filter(s => s.status === 'Completed').length;
+  const noShows = sessions.filter(s => s.status === 'No-Show').length;
+  const noShowRate = sessions.length > 0 ? ((noShows / sessions.length) * 100).toFixed(1) : '0';
+
+  const streakWeeks = (() => {
+    if (sessions.length === 0) return 0;
+    const completedDates = sessions
+      .filter(s => s.status === 'Completed')
+      .map(s => new Date(s.session_date))
+      .sort((a, b) => b.getTime() - a.getTime());
+    if (completedDates.length === 0) return 0;
+    let streak = 1;
+    const now = new Date();
+    const weeksSinceLastSession = differenceInWeeks(now, completedDates[0]);
+    if (weeksSinceLastSession > 1) return 0;
+    for (let i = 0; i < completedDates.length - 1; i++) {
+      const weekDiff = differenceInWeeks(completedDates[i], completedDates[i + 1]);
+      if (weekDiff <= 1) streak++;
+      else break;
+    }
+    return streak;
+  })();
+
+  const clientSinceDuration = client.starting_date
+    ? formatDistanceToNow(new Date(client.starting_date))
+    : null;
+
+  const statusColor = (s: string) => {
+    if (s === 'Active') return 'bg-success/10 text-success border-success/20';
+    if (s === 'Paused') return 'bg-warning/10 text-warning border-warning/20';
+    return 'bg-muted text-muted-foreground';
+  };
+
+  const paymentColor = (s: string) => {
+    if (s === 'Paid in full') return 'bg-success/10 text-success border-success/20';
+    if (s === 'Partially paid') return 'bg-warning/10 text-warning border-warning/20';
+    return 'bg-destructive/10 text-destructive border-destructive/20';
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
+      <Button variant="ghost" onClick={() => navigate('/clients')} className="gap-2">
+        <ArrowLeft className="w-4 h-4" /> Clients
+      </Button>
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+          {client.profile_photo_url ? (
+            <img src={client.profile_photo_url} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <User className="w-8 h-8 text-primary" />
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-display font-bold">{client.full_name}</h1>
+            <Badge variant="outline" className={statusColor(client.status)}>{client.status}</Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
+            {clientSinceDuration && <span>Client for {clientSinceDuration}</span>}
+            {client.fitness_goal && <span>· {client.fitness_goal}</span>}
+            <span>· {streakWeeks}🔥 week streak</span>
+            <span>· {noShowRate}% no-show</span>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          {client.phone && (
+            <Button variant="outline" size="sm" className="gap-2 text-success border-success/30" asChild>
+              <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(client.full_name.split(' ')[0])}%2C%20just%20a%20reminder%20about%20your%20upcoming%20session!`} target="_blank" rel="noopener">
+                <MessageCircle className="w-4 h-4" /> WhatsApp
+              </a>
+            </Button>
+          )}
+          <Link to={`/clients/${id}/edit`}>
+            <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Edit</Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Pinned Note */}
+      {(client.pinned_note || editingPinned) && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-3 flex items-start gap-2">
+            <Pin className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+            {editingPinned ? (
+              <div className="flex-1 flex gap-2">
+                <Input value={pinnedText} onChange={e => setPinnedText(e.target.value)} className="flex-1" />
+                <Button size="sm" onClick={savePinnedNote}>Save</Button>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-between">
+                <p className="text-sm">{client.pinned_note}</p>
+                <Button variant="ghost" size="sm" onClick={() => setEditingPinned(true)}>Edit</Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      {!client.pinned_note && !editingPinned && (
+        <Button variant="ghost" size="sm" onClick={() => setEditingPinned(true)} className="text-muted-foreground gap-2">
+          <Pin className="w-3 h-3" /> Add pinned note
+        </Button>
+      )}
+
+      {/* Tabs */}
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="bg-muted/50 w-full justify-start overflow-x-auto">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="packages">Packages</TabsTrigger>
+          <TabsTrigger value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger value="progress">Progress</TabsTrigger>
+          <TabsTrigger value="notes">Notes</TabsTrigger>
+        </TabsList>
+
+        {/* OVERVIEW TAB */}
+        <TabsContent value="overview" className="space-y-4 mt-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Contact</CardTitle></CardHeader>
+              <CardContent className="text-sm space-y-1">
+                {client.email && <p>{client.email}</p>}
+                {client.phone && <p>{client.phone}</p>}
+                {client.date_of_birth && <p>DOB: {format(new Date(client.date_of_birth), 'MMM d, yyyy')}</p>}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Emergency Contact</CardTitle></CardHeader>
+              <CardContent className="text-sm space-y-1">
+                <p>{client.emergency_contact_name || 'Not set'}</p>
+                <p>{client.emergency_contact_phone || ''}</p>
+              </CardContent>
+            </Card>
+          </div>
+          {client.health_notes && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display text-destructive">Health Notes</CardTitle></CardHeader>
+              <CardContent className="text-sm whitespace-pre-wrap">{client.health_notes}</CardContent>
+            </Card>
+          )}
+          {activePackage && (
+            <Card className="stat-glow">
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Active Package</CardTitle></CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{activePackage.package_name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {getSessionsUsed(activePackage.id)} / {activePackage.sessions_included} sessions used
+                    </p>
+                  </div>
+                  {activePackage.sessions_included - getSessionsUsed(activePackage.id) <= 2 && (
+                    <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
+                      <AlertTriangle className="w-3 h-3 mr-1" /> Low
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <div className="grid grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-display font-bold">{totalSessions}</p>
+                <p className="text-xs text-muted-foreground">Total Sessions</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-display font-bold flex items-center justify-center gap-1">
+                  {streakWeeks} <Flame className="w-5 h-5 text-primary" />
+                </p>
+                <p className="text-xs text-muted-foreground">Week Streak</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-display font-bold">{noShowRate}%</p>
+                <p className="text-xs text-muted-foreground">No-Show Rate</p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* PACKAGES TAB */}
+        <TabsContent value="packages" className="space-y-4 mt-4">
+          <div className="flex justify-end">
+            <Dialog open={packageDialogOpen} onOpenChange={setPackageDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Add Package</Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[85vh] overflow-y-auto">
+                <DialogHeader><DialogTitle className="font-display">New Package</DialogTitle></DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Package Name *</Label>
+                    <Input value={packageForm.package_name} onChange={e => setPackageForm(f => ({ ...f, package_name: e.target.value }))} placeholder="e.g. 10er-Karte" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Sessions Included</Label>
+                      <Input type="number" value={packageForm.sessions_included} onChange={e => setPackageForm(f => ({ ...f, sessions_included: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Check-in Calls</Label>
+                      <Input type="number" value={packageForm.checkin_calls_included} onChange={e => setPackageForm(f => ({ ...f, checkin_calls_included: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Package Price (€)</Label>
+                      <Input type="number" value={packageForm.package_price} onChange={e => setPackageForm(f => ({ ...f, package_price: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Price per Session</Label>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {packageForm.package_price && Number(packageForm.sessions_included) > 0
+                          ? `€${(Number(packageForm.package_price) / Number(packageForm.sessions_included)).toFixed(2)}`
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Start Date</Label>
+                      <Input type="date" value={packageForm.start_date} onChange={e => setPackageForm(f => ({ ...f, start_date: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Duration (weeks)</Label>
+                      <Input type="number" value={packageForm.duration_weeks} onChange={e => setPackageForm(f => ({ ...f, duration_weeks: e.target.value }))} placeholder="Auto-calculates end date" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={packageForm.is_deal} onCheckedChange={v => setPackageForm(f => ({ ...f, is_deal: v }))} />
+                    <Label>Special Deal / Offer</Label>
+                  </div>
+                  {packageForm.is_deal && (
+                    <div className="space-y-4 pl-4 border-l-2 border-primary/30">
+                      <div className="space-y-2">
+                        <Label>Discount Reason</Label>
+                        <Input value={packageForm.deal_reason} onChange={e => setPackageForm(f => ({ ...f, deal_reason: e.target.value }))} placeholder="e.g. Freundin von Stammkunde – 15% Rabatt" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Discounted Price (€)</Label>
+                        <Input type="number" value={packageForm.deal_discounted_price} onChange={e => setPackageForm(f => ({ ...f, deal_discounted_price: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Adjusted Terms</Label>
+                        <Input value={packageForm.deal_adjusted_terms} onChange={e => setPackageForm(f => ({ ...f, deal_adjusted_terms: e.target.value }))} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Payment Status</Label>
+                      <Select value={packageForm.payment_status} onValueChange={v => setPackageForm(f => ({ ...f, payment_status: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Unpaid">Unpaid</SelectItem>
+                          <SelectItem value="Partially paid">Partially paid</SelectItem>
+                          <SelectItem value="Paid in full">Paid in full</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Payment Date</Label>
+                      <Input type="date" value={packageForm.payment_date} onChange={e => setPackageForm(f => ({ ...f, payment_date: e.target.value }))} />
+                    </div>
+                  </div>
+                  <Button onClick={savePackage} className="w-full">Save Package</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {packages.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No packages yet</p>
+          ) : (
+            <div className="space-y-3">
+              {packages.map(pkg => {
+                const used = getSessionsUsed(pkg.id);
+                const remaining = pkg.sessions_included - used;
+                const hasFollowUp = packages.some(p => p.id !== pkg.id && new Date(p.start_date) > new Date(pkg.start_date));
+                return (
+                  <Card key={pkg.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{pkg.package_name}</p>
+                            {pkg.is_deal && <Badge variant="outline" className="text-primary border-primary/30">Deal</Badge>}
+                            <Badge variant="outline" className={paymentColor(pkg.payment_status)}>{pkg.payment_status}</Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {used}/{pkg.sessions_included} sessions · €{pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price}
+                            {pkg.start_date && ` · ${format(new Date(pkg.start_date), 'MMM d, yyyy')}`}
+                            {pkg.end_date && ` → ${format(new Date(pkg.end_date), 'MMM d, yyyy')}`}
+                          </p>
+                          {pkg.deal_reason && <p className="text-xs text-primary mt-1">{pkg.deal_reason}</p>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {remaining <= 2 && remaining > 0 && (
+                            <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
+                              {remaining} left
+                            </Badge>
+                          )}
+                          {remaining <= 0 && !hasFollowUp && (
+                            <Badge className="bg-destructive/10 text-destructive border-destructive/20" variant="outline">
+                              Needs renewal
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* SESSIONS TAB */}
+        <TabsContent value="sessions" className="space-y-4 mt-4">
+          <div className="flex justify-end">
+            <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Log Session</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle className="font-display">Log Session</DialogTitle></DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Date & Time</Label>
+                    <Input type="datetime-local" value={sessionForm.session_date} onChange={e => setSessionForm(f => ({ ...f, session_date: e.target.value }))} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Duration (min)</Label>
+                      <Input type="number" value={sessionForm.duration_minutes} onChange={e => setSessionForm(f => ({ ...f, duration_minutes: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Type</Label>
+                      <Select value={sessionForm.session_type} onValueChange={v => setSessionForm(f => ({ ...f, session_type: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {sessionTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select value={sessionForm.status} onValueChange={v => setSessionForm(f => ({ ...f, status: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {sessionStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Package</Label>
+                      <Select value={sessionForm.package_id} onValueChange={v => setSessionForm(f => ({ ...f, package_id: v }))}>
+                        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                        <SelectContent>
+                          {packages.map(p => <SelectItem key={p.id} value={p.id}>{p.package_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={sessionForm.late_cancellation} onCheckedChange={v => setSessionForm(f => ({ ...f, late_cancellation: v }))} />
+                    <Label>Late Cancellation (&lt;24h)</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Notes</Label>
+                    <Textarea value={sessionForm.notes} onChange={e => setSessionForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
+                  </div>
+                  <Button onClick={saveSession} className="w-full">Save Session</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {sessions.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No sessions yet</p>
+          ) : (
+            <div className="space-y-2">
+              {sessions.map(s => (
+                <Card key={s.id}>
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{format(new Date(s.session_date), 'MMM d, yyyy · HH:mm')}</p>
+                      <p className="text-xs text-muted-foreground">{s.session_type} · {s.duration_minutes}min</p>
+                      {s.notes && <p className="text-xs text-muted-foreground mt-1">{s.notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {s.late_cancellation && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">Late Cancel</Badge>}
+                      <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'No-Show' ? 'destructive' : 'secondary'}>{s.status}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* PROGRESS TAB */}
+        <TabsContent value="progress" className="space-y-6 mt-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display font-semibold">Body Metrics</h3>
+            <Dialog open={metricDialogOpen} onOpenChange={setMetricDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-2"><Plus className="w-4 h-4" /> Add Metric</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle className="font-display">Log Body Metrics</DialogTitle></DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2"><Label>Date</Label><Input type="date" value={metricForm.measured_at} onChange={e => setMetricForm(f => ({ ...f, measured_at: e.target.value }))} /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>Weight (kg)</Label><Input type="number" step="0.1" value={metricForm.weight_kg} onChange={e => setMetricForm(f => ({ ...f, weight_kg: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Body Fat (%)</Label><Input type="number" step="0.1" value={metricForm.body_fat_pct} onChange={e => setMetricForm(f => ({ ...f, body_fat_pct: e.target.value }))} /></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2"><Label>Waist (cm)</Label><Input type="number" step="0.1" value={metricForm.waist_cm} onChange={e => setMetricForm(f => ({ ...f, waist_cm: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Hip (cm)</Label><Input type="number" step="0.1" value={metricForm.hip_cm} onChange={e => setMetricForm(f => ({ ...f, hip_cm: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Chest (cm)</Label><Input type="number" step="0.1" value={metricForm.chest_cm} onChange={e => setMetricForm(f => ({ ...f, chest_cm: e.target.value }))} /></div>
+                  </div>
+                  <Button onClick={saveMetric} className="w-full">Save Metrics</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {metrics.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={metrics}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 14% 18%)" />
+                    <XAxis dataKey="measured_at" tick={{ fontSize: 12, fill: 'hsl(215 15% 55%)' }} />
+                    <YAxis tick={{ fontSize: 12, fill: 'hsl(215 15% 55%)' }} />
+                    <Tooltip contentStyle={{ background: 'hsl(220 18% 10%)', border: '1px solid hsl(220 14% 18%)', borderRadius: '8px', color: 'hsl(210 20% 92%)' }} />
+                    <Line type="monotone" dataKey="weight_kg" name="Weight (kg)" stroke="hsl(84 81% 44%)" strokeWidth={2} dot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="body_fat_pct" name="Body Fat (%)" stroke="hsl(217 91% 60%)" strokeWidth={2} dot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex items-center justify-between">
+            <h3 className="font-display font-semibold">Fitness Benchmarks</h3>
+            <Dialog open={benchmarkDialogOpen} onOpenChange={setBenchmarkDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-2"><Plus className="w-4 h-4" /> Add Benchmark</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle className="font-display">Log Benchmark</DialogTitle></DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2"><Label>Label (e.g. Max Push-ups, Plank Time)</Label><Input value={benchmarkForm.label} onChange={e => setBenchmarkForm(f => ({ ...f, label: e.target.value }))} /></div>
+                  <div className="space-y-2"><Label>Value</Label><Input value={benchmarkForm.value} onChange={e => setBenchmarkForm(f => ({ ...f, value: e.target.value }))} /></div>
+                  <div className="space-y-2"><Label>Date</Label><Input type="date" value={benchmarkForm.measured_at} onChange={e => setBenchmarkForm(f => ({ ...f, measured_at: e.target.value }))} /></div>
+                  <Button onClick={saveBenchmark} className="w-full">Save Benchmark</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {benchmarks.length > 0 && (
+            <div className="space-y-2">
+              {benchmarks.map(b => (
+                <Card key={b.id}>
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{b.label}</p>
+                      <p className="text-xs text-muted-foreground">{format(new Date(b.measured_at), 'MMM d, yyyy')}</p>
+                    </div>
+                    <p className="text-sm font-display font-bold text-primary">{b.value}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* NOTES TAB */}
+        <TabsContent value="notes" className="space-y-4 mt-4">
+          {/* Quick Log */}
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Quick Log</CardTitle></CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <Input
+                  value={quickLogText}
+                  onChange={e => setQuickLogText(e.target.value)}
+                  placeholder="Quick note..."
+                  onKeyDown={e => e.key === 'Enter' && addQuickLog()}
+                />
+                <Button size="sm" onClick={addQuickLog}>Add</Button>
+              </div>
+              {quickLogs.length > 0 && (
+                <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                  {quickLogs.map(ql => (
+                    <div key={ql.id} className="text-sm p-2 rounded bg-muted/50">
+                      <p>{ql.content}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{format(new Date(ql.created_at), 'MMM d, yyyy · HH:mm')}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* General Notes */}
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-display">General Notes</CardTitle></CardHeader>
+            <CardContent>
+              <Textarea
+                defaultValue={client.general_notes || ''}
+                onBlur={async (e) => {
+                  await supabase.from('clients').update({ general_notes: e.target.value }).eq('id', id);
+                }}
+                rows={6}
+                placeholder="General notes about this client..."
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+export default ClientDetailPage;
