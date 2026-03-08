@@ -153,6 +153,7 @@ const ClientDetailPage: React.FC = () => {
   const [benchmarkForm, setBenchmarkForm] = useState({
     label: '', value: '', measured_at: new Date().toISOString().split('T')[0],
   });
+  const [bookDialogOpen, setBookDialogOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
     if (!id || !user) return;
