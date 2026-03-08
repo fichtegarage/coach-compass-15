@@ -20,6 +20,43 @@ import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Checkbox } from '@/components/ui/checkbox';
+
+interface PackageFeature {
+  label: string;
+  key: string;
+  manual?: boolean;
+}
+
+const packageFeaturesMap: Record<string, PackageFeature[]> = {
+  'Starter': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+  ],
+  'Transformation': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
+  ],
+  'Intensiv': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
+    { label: 'WhatsApp-Support zwischen den Einheiten', key: 'whatsapp_support' },
+    { label: 'Priorisierte Terminbuchung', key: 'prio_buchung' },
+    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit', manual: true },
+  ],
+};
 
 const packageTemplates: Record<string, { sessions_included: string; checkin_calls_included: string; package_price: string; duration_weeks: string; description: string }> = {
   'Starter': {
