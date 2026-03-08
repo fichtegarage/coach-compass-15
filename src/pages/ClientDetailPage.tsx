@@ -740,12 +740,10 @@ const ClientDetailPage: React.FC = () => {
         {/* SESSIONS TAB */}
         <TabsContent value="sessions" className="space-y-4 mt-4">
           <div className="flex justify-end">
-            <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Einheit erfassen</Button>
-              </DialogTrigger>
+            <Button size="sm" className="gap-2" onClick={openNewSession}><Plus className="w-4 h-4" /> Einheit erfassen</Button>
+            <Dialog open={sessionDialogOpen} onOpenChange={(open) => { setSessionDialogOpen(open); if (!open) setEditingSessionId(null); }}>
               <DialogContent>
-                <DialogHeader><DialogTitle className="font-display">Einheit erfassen</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="font-display">{editingSessionId ? 'Einheit bearbeiten' : 'Einheit erfassen'}</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Datum & Uhrzeit</Label>
