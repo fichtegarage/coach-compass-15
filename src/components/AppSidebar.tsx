@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Sidebar,
   SidebarContent,
@@ -12,18 +13,40 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, Users, CalendarDays, Settings, Dumbbell, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, Settings, Dumbbell, LogOut, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-const navItems = [
-  { title: 'Übersicht', url: '/', icon: LayoutDashboard },
-  { title: 'Kunden', url: '/clients', icon: Users },
-  { title: 'Einheiten', url: '/sessions', icon: CalendarDays },
-  { title: 'Einstellungen', url: '/settings', icon: Settings },
-];
 
 const AppSidebar: React.FC = () => {
   const { signOut } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    const fetchPending = async () => {
+      const { count } = await supabase
+        .from('booking_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      setPendingCount(count || 0);
+    };
+    fetchPending();
+
+    const channel = supabase
+      .channel('sidebar-booking-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'booking_requests' }, () => {
+        fetchPending();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const navItems = [
+    { title: 'Übersicht', url: '/', icon: LayoutDashboard },
+    { title: 'Kunden', url: '/clients', icon: Users },
+    { title: 'Einheiten', url: '/sessions', icon: CalendarDays },
+    { title: 'Buchungen', url: '/bookings', icon: CalendarCheck, badge: pendingCount },
+    { title: 'Einstellungen', url: '/settings', icon: Settings },
+  ];
 
   return (
     <Sidebar collapsible="icon">
@@ -54,7 +77,12 @@ const AppSidebar: React.FC = () => {
                       }
                     >
                       <item.icon className="w-5 h-5" />
-                      <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
+                      <span className="group-data-[collapsible=icon]:hidden flex-1">{item.title}</span>
+                      {item.badge && item.badge > 0 && (
+                        <span className="group-data-[collapsible=icon]:hidden inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-destructive text-destructive-foreground">
+                          {item.badge}
+                        </span>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

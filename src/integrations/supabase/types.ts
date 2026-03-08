@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      availability_slots: {
+        Row: {
+          created_at: string
+          end_time: string
+          id: string
+          is_bookable: boolean
+          max_bookings: number
+          notes: string | null
+          slot_type: string
+          start_time: string
+          trainer_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_time: string
+          id?: string
+          is_bookable?: boolean
+          max_bookings?: number
+          notes?: string | null
+          slot_type?: string
+          start_time: string
+          trainer_id: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string
+          id?: string
+          is_bookable?: boolean
+          max_bookings?: number
+          notes?: string | null
+          slot_type?: string
+          start_time?: string
+          trainer_id?: string
+        }
+        Relationships: []
+      }
       body_metrics: {
         Row: {
           body_fat_pct: number | null
@@ -61,9 +97,59 @@ export type Database = {
           },
         ]
       }
+      booking_requests: {
+        Row: {
+          client_id: string
+          client_message: string | null
+          id: string
+          requested_at: string
+          responded_at: string | null
+          slot_id: string
+          status: string
+          trainer_note: string | null
+        }
+        Insert: {
+          client_id: string
+          client_message?: string | null
+          id?: string
+          requested_at?: string
+          responded_at?: string | null
+          slot_id: string
+          status?: string
+          trainer_note?: string | null
+        }
+        Update: {
+          client_id?: string
+          client_message?: string | null
+          id?: string
+          requested_at?: string
+          responded_at?: string | null
+          slot_id?: string
+          status?: string
+          trainer_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_requests_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "availability_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           acquisition_source: string | null
+          booking_code: string | null
+          booking_code_active: boolean
           created_at: string
           date_of_birth: string | null
           email: string | null
@@ -86,6 +172,8 @@ export type Database = {
         }
         Insert: {
           acquisition_source?: string | null
+          booking_code?: string | null
+          booking_code_active?: boolean
           created_at?: string
           date_of_birth?: string | null
           email?: string | null
@@ -108,6 +196,8 @@ export type Database = {
         }
         Update: {
           acquisition_source?: string | null
+          booking_code?: string | null
+          booking_code_active?: boolean
           created_at?: string
           date_of_birth?: string | null
           email?: string | null

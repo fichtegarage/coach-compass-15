@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp,
-  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2, Camera
+  StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2, Camera,
+  Key, Copy, RefreshCw, CalendarCheck
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -104,6 +105,79 @@ const statusLabelsDE: Record<string, string> = {
   'Active': 'Aktiv',
   'Paused': 'Pausiert',
   'Churned': 'Abgemeldet',
+};
+
+const generateBookingCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'PT-';
+  for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+  return code;
+};
+
+const BookingCodeCard: React.FC<{ client: any; clientId: string; onUpdate: () => void }> = ({ client, clientId, onUpdate }) => {
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    const code = generateBookingCode();
+    await supabase.from('clients').update({ booking_code: code, booking_code_active: true }).eq('id', clientId);
+    toast.success('Buchungscode erstellt');
+    setGenerating(false);
+    onUpdate();
+  };
+
+  const handleToggle = async (active: boolean) => {
+    await supabase.from('clients').update({ booking_code_active: active }).eq('id', clientId);
+    toast.success(active ? 'Buchungszugang aktiviert' : 'Buchungszugang deaktiviert');
+    onUpdate();
+  };
+
+  const handleCopy = () => {
+    if (client.booking_code) {
+      navigator.clipboard.writeText(client.booking_code);
+      toast.success('Code kopiert');
+    }
+  };
+
+  return (
+    <Card className="col-span-full">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-display flex items-center gap-2">
+          <Key className="w-4 h-4" /> Buchungszugang
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {client.booking_code ? (
+          <>
+            <div className="flex items-center gap-2">
+              <code className="bg-muted px-3 py-1.5 rounded-lg text-sm font-mono font-bold tracking-wider">
+                {client.booking_code}
+              </code>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCopy}>
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleGenerate} disabled={generating}>
+                <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={client.booking_code_active}
+                onCheckedChange={handleToggle}
+              />
+              <span className="text-sm text-muted-foreground">
+                {client.booking_code_active ? 'Aktiv' : 'Deaktiviert'}
+              </span>
+            </div>
+          </>
+        ) : (
+          <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-2">
+            <Key className="w-3.5 h-3.5" /> Code generieren
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
 };
 
 const ClientDetailPage: React.FC = () => {
@@ -513,6 +587,7 @@ const ClientDetailPage: React.FC = () => {
                 <p>{client.emergency_contact_phone || ''}</p>
               </CardContent>
             </Card>
+            <BookingCodeCard client={client} clientId={id!} onUpdate={loadAll} />
           </div>
           {client.health_notes && (
             <Card>

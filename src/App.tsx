@@ -12,6 +12,8 @@ import ClientFormPage from "./pages/ClientFormPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
 import SessionsPage from "./pages/SessionsPage";
 import SettingsPage from "./pages/SettingsPage";
+import BookingsPage from "./pages/BookingsPage";
+import BookingPage from "./pages/BookingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +32,7 @@ const AppRoutes = () => {
 
   return (
     <Routes>
+      <Route path="/book" element={<BookingPage />} />
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/" element={<DashboardPage />} />
@@ -38,6 +41,7 @@ const AppRoutes = () => {
         <Route path="/clients/:id" element={<ClientDetailPage />} />
         <Route path="/clients/:id/edit" element={<ClientFormPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
+        <Route path="/bookings" element={<BookingsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
