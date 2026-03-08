@@ -416,9 +416,9 @@ const ClientDetailPage: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
-          {client.phone && (
+          {client.whatsapp_link && (
             <Button variant="outline" size="sm" className="gap-2 text-success border-success/30" asChild>
-              <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(client.full_name.split(' ')[0])}%2C%20kurze%20Erinnerung%20an%20deine%20n%C3%A4chste%20Einheit!`} target="_blank" rel="noopener">
+              <a href={client.whatsapp_link} target="_blank" rel="noopener noreferrer">
                 <MessageCircle className="w-4 h-4" /> WhatsApp
               </a>
             </Button>
