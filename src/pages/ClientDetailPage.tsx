@@ -460,26 +460,71 @@ const ClientDetailPage: React.FC = () => {
               <CardContent className="text-sm whitespace-pre-wrap">{client.health_notes}</CardContent>
             </Card>
           )}
-          {activePackage && (
-            <Card className="stat-glow">
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Aktives Paket</CardTitle></CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{activePackage.package_name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {getSessionsUsed(activePackage.id)} / {activePackage.sessions_included} Einheiten genutzt
-                    </p>
+          {activePackage && (() => {
+            const features = packageFeaturesMap[activePackage.package_name] || [];
+            const usedSessions = getSessionsUsed(activePackage.id);
+            const checkinCount = sessions.filter(s => s.package_id === activePackage.id && s.session_type === 'Check-In Call' && s.status === 'Completed').length;
+            const hasMetrics = metrics.length > 0;
+            return (
+              <Card className="stat-glow">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Aktives Paket</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{activePackage.package_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {usedSessions} / {activePackage.sessions_included} Einheiten genutzt
+                      </p>
+                    </div>
+                    {activePackage.sessions_included - usedSessions <= 2 && (
+                      <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
+                        <AlertTriangle className="w-3 h-3 mr-1" /> Wenig übrig
+                      </Badge>
+                    )}
                   </div>
-                  {activePackage.sessions_included - getSessionsUsed(activePackage.id) <= 2 && (
-                    <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
-                      <AlertTriangle className="w-3 h-3 mr-1" /> Wenig übrig
-                    </Badge>
+                  {features.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Paketinhalte</p>
+                      <ul className="space-y-1.5">
+                        {features.map((feat, i) => {
+                          const status = getFeatureStatusDetail(feat.key, activePackage, usedSessions, checkinCount, hasMetrics);
+                          const isManual = feat.manual === true;
+                          return (
+                            <li
+                              key={i}
+                              className={`flex items-center gap-2.5 text-sm ${isManual ? 'cursor-pointer hover:bg-accent/50 -mx-1 px-1 rounded' : ''}`}
+                              onClick={isManual ? () => toggleManualCompletion(activePackage.id, feat.key, status.done) : undefined}
+                            >
+                              {isManual ? (
+                                <Checkbox
+                                  checked={status.done}
+                                  className="flex-shrink-0"
+                                  onCheckedChange={() => toggleManualCompletion(activePackage.id, feat.key, status.done)}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              ) : status.done ? (
+                                <Check className="w-4 h-4 flex-shrink-0 text-success" />
+                              ) : (
+                                <Circle className="w-4 h-4 flex-shrink-0 text-muted-foreground/30" />
+                              )}
+                              <span className={status.done ? 'text-foreground' : 'text-muted-foreground'}>
+                                {feat.label}
+                              </span>
+                              {status.detail && (
+                                <span className={`ml-auto text-xs font-medium ${status.done ? 'text-success' : 'text-muted-foreground'}`}>
+                                  {status.detail}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            );
+          })()}
           <div className="grid grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-4 text-center">
