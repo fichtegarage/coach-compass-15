@@ -154,6 +154,20 @@ const ClientDetailPage: React.FC = () => {
     label: '', value: '', measured_at: new Date().toISOString().split('T')[0],
   });
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
+  const profilePhotoRef = useRef<HTMLInputElement>(null);
+
+  const handleProfilePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !id) return;
+    const ext = file.name.split('.').pop();
+    const filePath = `${user.id}/${id}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('client-photos').upload(filePath, file, { upsert: true });
+    if (error) { toast.error('Upload fehlgeschlagen'); return; }
+    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
+    await supabase.from('clients').update({ profile_photo_url: urlData.publicUrl }).eq('id', id);
+    toast.success('Profilbild aktualisiert');
+    loadAll();
+  };
 
   const loadAll = useCallback(async () => {
     if (!id || !user) return;
