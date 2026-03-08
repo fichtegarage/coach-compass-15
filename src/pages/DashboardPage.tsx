@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   CalendarDays, AlertTriangle, DollarSign, Plus, Clock,
-  ChevronRight, Package,
+  ChevronRight, Package, Cake,
 } from 'lucide-react';
 import BookSessionDialog from '@/components/BookSessionDialog';
 import {
