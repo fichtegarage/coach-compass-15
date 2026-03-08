@@ -148,9 +148,34 @@ const SessionsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h1 className="text-2xl md:text-3xl font-display font-bold">Einheiten</h1>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={generateICal} className="gap-2">
-            <Download className="w-4 h-4" /> iCal Export
-          </Button>
+          <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <RefreshCw className="w-4 h-4" /> Kalender-Sync
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="font-display">Kalender synchronisieren</DialogTitle>
+                <DialogDescription>
+                  Füge diese URL als Kalender-Abonnement in deiner Kalender-App hinzu (Apple Kalender, Google Calendar, Outlook). Der Kalender aktualisiert sich automatisch.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Input readOnly value={calendarFeedUrl} className="text-xs font-mono" />
+                  <Button size="icon" variant="outline" onClick={copyFeedUrl}>
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p><strong>Apple Kalender:</strong> Ablage → Neues Kalenderabonnement → URL einfügen</p>
+                  <p><strong>Google Calendar:</strong> Andere Kalender → Per URL hinzufügen</p>
+                  <p><strong>Outlook:</strong> Kalender hinzufügen → Aus dem Internet abonnieren</p>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <div className="flex border border-border rounded-lg overflow-hidden">
             <Button
               variant={view === 'calendar' ? 'default' : 'ghost'}
