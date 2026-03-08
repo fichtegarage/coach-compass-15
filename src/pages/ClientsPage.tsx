@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, User, MessageCircle, ChevronDown, ChevronUp, CalendarDays, Check, Circle, Phone } from 'lucide-react';
+import { Plus, Search, User, ChevronDown, ChevronUp, CalendarDays, Check, Circle } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
 

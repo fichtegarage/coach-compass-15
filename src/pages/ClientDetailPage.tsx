@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import {
-  ArrowLeft, User, MessageCircle, Pin, Plus, CalendarDays, Package, TrendingUp,
+  ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp,
   StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
