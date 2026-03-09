@@ -448,3 +448,167 @@ const BookingPage: React.FC = () => {
                             <button
                               key={slot.id}
                               disabled={isPast |
+autoFocus
+              />
+            </div>
+            {codeError && <p className="text-sm text-red-600">{codeError}</p>}
+            <Button
+              type="submit"
+              disabled={codeLoading || !codeInput.trim()}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {codeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Weiter'}
+            </Button>
+          </form>
+        </div>
+        <LegalFooter />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col">
+      <meta name="robots" content="noindex" />
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold text-slate-900" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Jakob Neumann</h1>
+            <p className="text-xs text-slate-500">Hallo, {clientName}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowRequests(!showRequests)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+              {showRequests ? 'Kalender' : 'Meine Anfragen'}
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleLogout} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+      {notifications.length > 0 && !showRequests && (
+        <div className="max-w-4xl mx-auto px-4 mt-3 space-y-2 w-full">
+          {notifications.map(n => (
+            <div key={n.id} className={`rounded-lg px-4 py-2 text-sm border ${n.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+              Deine Anfrage für {n.availability_slots ? format(new Date(n.availability_slots.start_time), "d. MMM, HH:mm", { locale: de }) : '—'} wurde{' '}
+              <strong>{n.status === 'confirmed' ? 'bestätigt' : 'abgelehnt'}</strong>.
+              {n.trainer_note && ` Hinweis: ${n.trainer_note}`}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
+        {showRequests ? (
+          <div className="space-y-3">
+            <h2 className="text-lg font-bold text-slate-900">Meine Buchungsanfragen</h2>
+            {bookings.length === 0 ? (
+              <p className="text-slate-500 text-sm py-8 text-center">Noch keine Anfragen</p>
+            ) : (
+              bookings.map((b: any) => (
+                <Card key={b.id} className="bg-white border-slate-200 shadow-sm">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">
+                        {b.availability_slots ? `${format(new Date(b.availability_slots.start_time), "EEEE, d. MMM · HH:mm", { locale: de })} – ${format(new Date(b.availability_slots.end_time), "HH:mm", { locale: de })}` : 'Slot entfernt'}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {b.availability_slots && <span className="text-xs text-slate-500 flex items-center gap-1">{slotTypeIcons[b.availability_slots.slot_type]}{slotTypeLabels[b.availability_slots.slot_type]}</span>}
+                        <span className="text-xs text-slate-400">Angefragt {format(new Date(b.requested_at), "d. MMM, HH:mm", { locale: de })}</span>
+                      </div>
+                      {b.client_message && <p className="text-xs text-slate-500 mt-1">„{b.client_message}"</p>}
+                      {b.trainer_note && <p className="text-xs text-slate-500 mt-1 italic">Trainer: {b.trainer_note}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={statusColors[b.status]}>{statusLabels[b.status]}</Badge>
+                      {b.status === 'pending' && (
+                        <Button variant="ghost" size="sm" onClick={() => handleCancelRequest(b.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs">Stornieren</Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200"><ChevronLeft className="w-5 h-5" /></Button>
+              <h2 className="text-base font-semibold text-slate-900">{format(weekStart, "d. MMM", { locale: de })} – {format(addDays(weekStart, 6), "d. MMM yyyy", { locale: de })}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setWeekStart(addWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200"><ChevronRight className="w-5 h-5" /></Button>
+            </div>
+            <div className="space-y-2">
+              {weekDays.map(day => {
+                const key = format(day, 'yyyy-MM-dd');
+                const daySlots = slotsByDay[key] || [];
+                const isPast = isBefore(day, startOfDay(new Date())) && !isSameDay(day, new Date());
+                return (
+                  <div key={key} className={`rounded-xl border bg-white ${isPast ? 'opacity-50' : 'border-slate-200'}`}>
+                    <div className="px-4 py-2 border-b border-slate-100">
+                      <p className={`text-sm font-semibold ${isSameDay(day, new Date()) ? 'text-emerald-600' : 'text-slate-700'}`}>
+                        {format(day, 'EEEE, d. MMMM', { locale: de })}
+                        {isSameDay(day, new Date()) && <span className="ml-2 text-xs font-normal text-emerald-500">Heute</span>}
+                      </p>
+                    </div>
+                    <div className="p-3 space-y-2">
+                      {daySlots.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-2">Keine verfügbaren Slots</p>
+                      ) : (
+                        daySlots.map(slot => {
+                          const isMyBooking = myBookingSlotIds.has(slot.id);
+                          const myBooking = bookings.find((b: any) => b.slot_id === slot.id && (b.status === 'pending' || b.status === 'confirmed'));
+                          const totalBooked = allSlotBookings[slot.id] || 0;
+                          const isFull = totalBooked >= slot.max_bookings && !isMyBooking;
+                          const slotPast = isBefore(new Date(slot.start_time), new Date());
+                          return (
+                            <button key={slot.id} disabled={isPast || slotPast || isFull}
+                              onClick={() => { if (isMyBooking) return; setSelectedSlot(slot); }}
+                              className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${isMyBooking ? 'bg-emerald-50 border-emerald-200' : isFull || slotPast ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm cursor-pointer'}`}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span className="text-sm font-medium text-slate-900">{format(new Date(slot.start_time), 'HH:mm')} – {format(new Date(slot.end_time), 'HH:mm')}</span>
+                                  <span className="text-xs text-slate-500 flex items-center gap-1">{slotTypeIcons[slot.slot_type]}{slotTypeLabels[slot.slot_type]}</span>
+                                </div>
+                                {isMyBooking && myBooking && <Badge variant="outline" className={statusColors[myBooking.status]}>{statusLabels[myBooking.status]}</Badge>}
+                                {isFull && !isMyBooking && <span className="text-xs text-slate-400">Ausgebucht</span>}
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+      <LegalFooter />
+      <Dialog open={!!selectedSlot} onOpenChange={open => { if (!open) setSelectedSlot(null); }}>
+        <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900">Termin anfragen</DialogTitle>
+          </DialogHeader>
+          {selectedSlot && (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-slate-50 p-3 space-y-1">
+                <p className="text-sm font-medium text-slate-900">{format(new Date(selectedSlot.start_time), "EEEE, d. MMMM yyyy", { locale: de })}</p>
+                <p className="text-sm text-slate-600">{format(new Date(selectedSlot.start_time), 'HH:mm')} – {format(new Date(selectedSlot.end_time), 'HH:mm')} Uhr</p>
+                <p className="text-xs text-slate-500 flex items-center gap-1">{slotTypeIcons[selectedSlot.slot_type]} {slotTypeLabels[selectedSlot.slot_type]}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Nachricht an den Trainer (optional)</label>
+                <Textarea value={bookingMessage} onChange={e => setBookingMessage(e.target.value)} placeholder="z.B. Schwerpunkt Oberkörper gewünscht..." className="bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400" rows={3} />
+              </div>
+              <Button onClick={handleBookSlot} disabled={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Termin anfragen'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default BookingPage;
