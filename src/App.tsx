@@ -35,6 +35,7 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/book" element={<BookingPage />} />
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/clients" element={<ClientsPage />} />
