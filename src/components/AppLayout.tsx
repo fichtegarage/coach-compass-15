@@ -11,8 +11,8 @@ Milchberg 8
 Deutschland
 
 Kontakt
-Telefon: 015154823993
-E-Mail: jakob.neumann@posteo.de
+Telefon: 015154823993 
+E-Mail: jakob.neumann@postoe.de
 Website: buchung.jakob-neumann.net`;
 
 const datenschutzText = `Diese Datenschutzerklärung gilt für die Webanwendung unter buchung.jakob-neumann.net.
@@ -48,4 +48,55 @@ const Modal: React.FC<{ title: string; content: string; onClose: () => void }> =
       onClick={e => e.stopPropagation()}
     >
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <h2 className="
+        <h2 className="font-semibold text-lg">{title}</h2>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">✕</button>
+      </div>
+      <div className="overflow-y-auto p-4">
+        <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{content}</p>
+      </div>
+    </div>
+  </div>
+);
+
+const AppLayout: React.FC = () => {
+  const [modal, setModal] = useState<'impressum' | 'datenschutz' | null>(null);
+
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <AppSidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="h-14 flex items-center border-b border-border px-4 lg:hidden">
+            <SidebarTrigger />
+          </header>
+          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+            <Outlet />
+          </main>
+          <footer className="border-t border-border px-4 py-3 flex gap-4 justify-center">
+            <button
+              onClick={() => setModal('impressum')}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Impressum
+            </button>
+            <button
+              onClick={() => setModal('datenschutz')}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Datenschutz
+            </button>
+          </footer>
+        </div>
+      </div>
+
+      {modal === 'impressum' && (
+        <Modal title="Impressum" content={impressumText} onClose={() => setModal(null)} />
+      )}
+      {modal === 'datenschutz' && (
+        <Modal title="Datenschutzerklärung" content={datenschutzText} onClose={() => setModal(null)} />
+      )}
+    </SidebarProvider>
+  );
+};
+
+export default AppLayout;
