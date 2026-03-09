@@ -11,6 +11,9 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +24,25 @@ const LoginPage: React.FC = () => {
       setError('Ungültige Anmeldedaten');
     }
     setLoading(false);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError('Bitte gib deine E-Mail-Adresse ein');
+      return;
+    }
+    setForgotLoading(true);
+    setError('');
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      setError('Fehler beim Senden der E-Mail');
+    } else {
+      setForgotSent(true);
+    }
+    setForgotLoading(false);
   };
 
   return (
