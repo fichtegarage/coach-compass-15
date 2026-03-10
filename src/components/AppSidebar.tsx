@@ -41,7 +41,7 @@ const AppSidebar: React.FC = () => {
   }, []);
 
   const navItems = [
-    { title: 'Übersicht', url: '/', icon: LayoutDashboard },
+    { title: 'Übersicht', url: '/dashboard', icon: LayoutDashboard },
     { title: 'Kunden', url: '/clients', icon: Users },
     { title: 'Einheiten', url: '/sessions', icon: CalendarDays },
     { title: 'Buchungen', url: '/bookings', icon: CalendarCheck, badge: pendingCount },
@@ -51,7 +51,7 @@ const AppSidebar: React.FC = () => {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
-        <NavLink to="/" className="flex items-center gap-2">
+        <NavLink to="/dashboard" className="flex items-center gap-2">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
             <Dumbbell className="w-5 h-5 text-primary" />
           </div>
@@ -67,7 +67,7 @@ const AppSidebar: React.FC = () => {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      end={item.url === '/'}
+                      end={item.url === '/dashboard'}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                           isActive
