@@ -100,7 +100,7 @@ const SessionsPage: React.FC = () => {
 
   const save = async () => {
     if (!user || !form.client_id) return;
-    await supabase.from('sessions').insert({
+    const { error } = await supabase.from('sessions').insert({
       client_id: form.client_id, user_id: user.id,
       session_date: form.session_date,
       duration_minutes: Number(form.duration_minutes),
@@ -111,6 +111,10 @@ const SessionsPage: React.FC = () => {
       location: form.location,
       package_id: form.package_id || null,
     });
+    if (error) {
+      toast.error('Fehler: ' + error.message);
+      return;
+    }
     setDialogOpen(false);
     toast.success('Einheit erfasst');
     loadData();
