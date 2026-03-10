@@ -38,6 +38,7 @@ const AppRoutes = () => {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/" element={<Navigate to="/book" replace />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/clients/new" element={<ClientFormPage />} />
         <Route path="/clients/:id" element={<ClientDetailPage />} />
