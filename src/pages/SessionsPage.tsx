@@ -60,6 +60,7 @@ const SessionsPage: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<any | null>(null);
   const [form, setForm] = useState({
     client_id: '', package_id: '', session_date: new Date().toISOString().slice(0, 16),
     duration_minutes: '60', session_type: 'Präsenz-Training',
@@ -412,10 +413,10 @@ const deleteSession = async (sessionId: string) => {
                           </div>
                         </div>
                       );
-                      return isScheduled ? (
-                        <div key={s.id}>{inner}</div>
-                      ) : (
-                        <Link key={s.id} to={`/clients/${s.client_id}`}>{inner}</Link>
+                      return (
+                        <div key={s.id} onClick={() => !isScheduled && setSelectedSession(s)}>
+                          {inner}
+                        </div>
                       );
                     })}
                   </div>
@@ -469,6 +470,67 @@ const deleteSession = async (sessionId: string) => {
         </>
       )}
     </div>
+
+      {/* Session Detail Dialog */}
+      <Dialog open={!!selectedSession} onOpenChange={open => { if (!open) setSelectedSession(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Einheit Details</DialogTitle>
+          </DialogHeader>
+          {selectedSession && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Kunde</p>
+                  <p className="text-sm font-medium">{(selectedSession.clients as any)?.full_name}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Status</p>
+                  <Badge variant={selectedSession.status === 'Completed' ? 'default' : selectedSession.status === 'No-Show' ? 'destructive' : 'secondary'}>
+                    {statusLabels[selectedSession.status] || selectedSession.status}
+                  </Badge>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Datum & Uhrzeit</p>
+                  <p className="text-sm font-medium">{format(new Date(selectedSession.session_date), "d. MMM yyyy · HH:mm", { locale: de })} Uhr</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Dauer</p>
+                  <p className="text-sm font-medium">{selectedSession.duration_minutes} Minuten</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Art</p>
+                  <p className="text-sm font-medium">{sessionTypeLabels[selectedSession.session_type] || selectedSession.session_type}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Ort</p>
+                  <p className="text-sm font-medium">{selectedSession.location || 'Gym'}</p>
+                </div>
+              </div>
+              {selectedSession.notes && (
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Notizen</p>
+                  <p className="text-sm">{selectedSession.notes}</p>
+                </div>
+              )}
+              {selectedSession.late_cancellation && (
+                <Badge variant="outline" className="text-destructive border-destructive/30">Kurzfristige Absage</Badge>
+              )}
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" asChild>
+                  <Link to={`/clients/${selectedSession.client_id}`}>Zum Kundenprofil</Link>
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => { deleteSession(selectedSession.id); setSelectedSession(null); }}
+                >
+                  Löschen
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
   );
 };
 
