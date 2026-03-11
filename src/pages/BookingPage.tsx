@@ -379,14 +379,7 @@ const BookingPage: React.FC = () => {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* Logo Placeholder – wird im nächsten Schritt ersetzt */}
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">JN</span>
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-slate-900 leading-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Jakob Neumann</h1>
-              <p className="text-xs text-slate-400 leading-tight">Personal Training</p>
-            </div>
+            <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-8 w-auto" />
           </div>
           <div className="text-right">
             <p className="text-base font-semibold text-slate-900">Hallo, {clientName} 👋</p>
