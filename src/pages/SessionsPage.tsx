@@ -396,7 +396,7 @@ const SessionsPage: React.FC = () => {
                         </div>
                       );
                       return (
-                        <div key={s.id} onClick={() => !isScheduled && setSelectedSession(s)}>
+                        <div key={s.id} onClick={() => setSelectedSession(s)}>
                           {inner}
                         </div>
                       );
