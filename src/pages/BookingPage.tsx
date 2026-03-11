@@ -153,36 +153,7 @@ const generateIcs = (booking: any) => {
   a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
   a.click();
   URL.revokeObjectURL(url);
-};{b.status === 'pending' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCancelRequest(b.id)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs"
-                        >
-                          Stornieren
-                        </Button>
-                      )}
-                      {b.status === 'confirmed' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => generateIcs(b)}
-                          className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs"
-                        >
-                          + Kalender
-                        </Button>
-                      )}
-                      {b.status === 'confirmed' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => generateIcs(b)}
-                          className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs"
-                        >
-                          + Kalender
-                        </Button>
-                      )}sto
+};
 
 const BookingPage: React.FC = () => {
   const [clientId, setClientId] = useState<string | null>(() => sessionStorage.getItem('booking_client_id'));
@@ -429,6 +400,9 @@ const BookingPage: React.FC = () => {
                       <Badge variant="outline" className={statusColors[b.status]}>{statusLabels[b.status]}</Badge>
                       {b.status === 'pending' && (
                         <Button variant="ghost" size="sm" onClick={() => handleCancelRequest(b.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs">Stornieren</Button>
+                      )}
+                      {b.status === 'confirmed' && (
+                        <Button variant="ghost" size="sm" onClick={() => generateIcs(b)} className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs">+ Kalender</Button>
                       )}
                     </div>
                   </CardContent>
