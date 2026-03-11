@@ -210,7 +210,30 @@ const BookingsPage: React.FC = () => {
     }
 
     await supabase.from('booking_requests').update(updates).eq('id', respondDialog.id);
-    toast.success(status === 'confirmed' ? 'Buchung bestätigt' : 'Buchung abgelehnt');
+
+    // Bei Bestätigung automatisch eine Session erstellen
+    if (status === 'confirmed' && respondDialog.availability_slots) {
+      const slotTypeMap: Record<string, string> = {
+        'in-person': 'In-Person Training',
+        'online': 'Online Training',
+        'call': 'Phone Call',
+      };
+      const start = new Date(respondDialog.availability_slots.start_time);
+      const end = new Date(respondDialog.availability_slots.end_time);
+      const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
+      await supabase.from('sessions').insert({
+        client_id: respondDialog.client_id,
+        user_id: user!.id,
+        session_date: respondDialog.availability_slots.start_time,
+        duration_minutes: durationMinutes,
+        session_type: slotTypeMap[respondDialog.availability_slots.slot_type] || 'In-Person Training',
+        status: 'Scheduled',
+        notes: respondDialog.client_message || null,
+        location: 'Gym',
+      });
+    }
+
+    toast.success(status === 'confirmed' ? 'Buchung bestätigt & Session erstellt' : 'Buchung abgelehnt');
     setRespondDialog(null);
     setTrainerNote('');
     setResponding(false);
