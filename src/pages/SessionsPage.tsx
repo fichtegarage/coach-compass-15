@@ -465,7 +465,12 @@ const deleteSession = async (sessionId: string) => {
                   </Link>
                 );
               })}
-            {/* Session Detail Dialog */}
+            {</div>
+          </>
+        )}
+      </div>
+
+      {/* Session Detail Dialog */}
       <Dialog open={!!selectedSession} onOpenChange={open => { if (!open) setSelectedSession(null); }}>
         <DialogContent>
           <DialogHeader>
