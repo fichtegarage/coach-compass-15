@@ -172,7 +172,7 @@ const BookingPage: React.FC = () => {
   const [showRequests, setShowRequests] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
-
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = codeInput.trim();
