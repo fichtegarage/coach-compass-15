@@ -177,6 +177,7 @@ const BookingPage: React.FC = () => {
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
   const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; used: number } | null>(null);
+
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = codeInput.trim();
@@ -235,7 +236,6 @@ const BookingPage: React.FC = () => {
     );
     setNotifications(recentResponses.slice(0, 3));
 
-    // Paket und genutzte Einheiten laden
     const { data: clientData } = await supabase
       .from('clients')
       .select('*, packages(id, package_name, sessions_included)')
@@ -335,16 +335,11 @@ const BookingPage: React.FC = () => {
   // Access gate
   if (!clientId) {
     return (
-<div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col items-center justify-center px-4" style={{ fontFamily: "'Montserrat', sans-serif" }}>        
-  <meta name="robots" content="noindex" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col items-center justify-center px-4" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+        <meta name="robots" content="noindex" />
         <div className="w-full max-w-md flex-1 flex flex-col items-center justify-center">
           <div className="text-center mb-8">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-600 flex items-center justify-center mx-auto mb-4">
-              <CalendarDays className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              Jakob Neumann
-            </h1>
+            <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-12 w-auto mx-auto mb-4" />
             <p className="text-slate-500 mt-1">Personal Training – Terminbuchung</p>
           </div>
           <form onSubmit={handleCodeSubmit} className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 space-y-4 w-full">
@@ -374,7 +369,7 @@ const BookingPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen<div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col" style={{ fontFamily: "'Montserrat', sans-serif" }}>
       <meta name="robots" content="noindex" />
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -410,10 +405,10 @@ const BookingPage: React.FC = () => {
               </span>
               <button
                 onClick={() => setDismissedNotifications(prev => {
-  const updated = new Set([...prev, n.id]);
-  sessionStorage.setItem('dismissed_notifications', JSON.stringify([...updated]));
-  return updated;
-})}
+                  const updated = new Set([...prev, n.id]);
+                  sessionStorage.setItem('dismissed_notifications', JSON.stringify([...updated]));
+                  return updated;
+                })}
                 className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
               >✕</button>
             </div>
