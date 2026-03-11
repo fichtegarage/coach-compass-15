@@ -364,13 +364,19 @@ const BookingPage: React.FC = () => {
           </div>
         </div>
       </header>
-      {notifications.length > 0 && !showRequests && (
+      {notifications.filter(n => !dismissedNotifications.has(n.id)).length > 0 && !showRequests && (
         <div className="max-w-4xl mx-auto px-4 mt-3 space-y-2 w-full">
-          {notifications.map(n => (
-            <div key={n.id} className={`rounded-lg px-4 py-2 text-sm border ${n.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-              Deine Anfrage für {n.availability_slots ? format(new Date(n.availability_slots.start_time), "d. MMM, HH:mm", { locale: de }) : '—'} wurde{' '}
-              <strong>{n.status === 'confirmed' ? 'bestätigt' : 'abgelehnt'}</strong>.
-              {n.trainer_note && ` Hinweis: ${n.trainer_note}`}
+          {notifications.filter(n => !dismissedNotifications.has(n.id)).map(n => (
+            <div key={n.id} className={`rounded-lg px-4 py-2 text-sm border flex items-center justify-between gap-2 ${n.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+              <span>
+                Deine Anfrage für {n.availability_slots ? format(new Date(n.availability_slots.start_time), "d. MMM, HH:mm", { locale: de }) : '—'} wurde{' '}
+                <strong>{n.status === 'confirmed' ? 'bestätigt' : 'abgelehnt'}</strong>.
+                {n.trainer_note && ` Hinweis: ${n.trainer_note}`}
+              </span>
+              <button
+                onClick={() => setDismissedNotifications(prev => new Set([...prev, n.id]))}
+                className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+              >✕</button>
             </div>
           ))}
         </div>
