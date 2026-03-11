@@ -465,13 +465,7 @@ const deleteSession = async (sessionId: string) => {
                   </Link>
                 );
               })}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-
-      {/* Session Detail Dialog */}
+            {/* Session Detail Dialog */}
       <Dialog open={!!selectedSession} onOpenChange={open => { if (!open) setSelectedSession(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -531,7 +525,7 @@ const deleteSession = async (sessionId: string) => {
           )}
         </DialogContent>
       </Dialog>
+    </div>
   );
 };
-
 export default SessionsPage;
