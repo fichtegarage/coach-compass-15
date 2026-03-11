@@ -74,25 +74,15 @@ const LegalFooter: React.FC = () => {
   return (
     <>
       <footer className="py-4 flex gap-4 justify-center">
-        <button
-          onClick={() => setModal('impressum')}
-          className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-        >
+        <button onClick={() => setModal('impressum')} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
           Impressum
         </button>
-        <button
-          onClick={() => setModal('datenschutz')}
-          className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-        >
+        <button onClick={() => setModal('datenschutz')} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
           Datenschutz
         </button>
       </footer>
-      {modal === 'impressum' && (
-        <LegalModal title="Impressum" content={impressumText} onClose={() => setModal(null)} />
-      )}
-      {modal === 'datenschutz' && (
-        <LegalModal title="Datenschutzerklärung" content={datenschutzText} onClose={() => setModal(null)} />
-      )}
+      {modal === 'impressum' && <LegalModal title="Impressum" content={impressumText} onClose={() => setModal(null)} />}
+      {modal === 'datenschutz' && <LegalModal title="Datenschutzerklärung" content={datenschutzText} onClose={() => setModal(null)} />}
     </>
   );
 };
@@ -102,6 +92,14 @@ const slotTypeLabels: Record<string, string> = {
   'in-person': 'Vor Ort',
   'online': 'Online',
   'call': 'Telefonat',
+};
+
+const sessionTypeLabels: Record<string, string> = {
+  'In-Person Training': 'Vor Ort',
+  'Online Training': 'Online',
+  'Phone Call': 'Telefonat',
+  'Check-In Call': 'Check-In',
+  'Free Intro': 'Erstgespräch',
 };
 
 const slotTypeIcons: Record<string, React.ReactNode> = {
@@ -164,6 +162,7 @@ const BookingPage: React.FC = () => {
 
   const [slots, setSlots] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
+  const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [loading, setLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
@@ -176,8 +175,8 @@ const BookingPage: React.FC = () => {
     const stored = sessionStorage.getItem('dismissed_notifications');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
-const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; used: number } | null>(null);
-  const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
+  const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; used: number } | null>(null);
+
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = codeInput.trim();
@@ -258,7 +257,6 @@ const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; us
       }
     }
 
-   // Geplante Sessions laden
     const { data: sessionsData } = await supabase
       .from('sessions')
       .select('*')
@@ -404,6 +402,7 @@ const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; us
           </div>
         </div>
       </header>
+
       {notifications.filter(n => !dismissedNotifications.has(n.id)).length > 0 && !showRequests && (
         <div className="max-w-4xl mx-auto px-4 mt-3 space-y-2 w-full">
           {notifications.filter(n => !dismissedNotifications.has(n.id)).map(n => (
@@ -425,6 +424,7 @@ const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; us
           ))}
         </div>
       )}
+
       <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
         {showRequests ? (
           <div className="space-y-3">
@@ -437,7 +437,9 @@ const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; us
                   <CardContent className="p-4 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-slate-900">
-                        {b.availability_slots ? `${format(new Date(b.availability_slots.start_time), "EEEE, d. MMM · HH:mm", { locale: de })} – ${format(new Date(b.availability_slots.end_time), "HH:mm", { locale: de })}` : 'Slot entfernt'}
+                        {b.availability_slots
+                          ? `${format(new Date(b.availability_slots.start_time), "EEEE, d. MMM · HH:mm", { locale: de })} – ${format(new Date(b.availability_slots.end_time), "HH:mm", { locale: de })}`
+                          : 'Slot entfernt'}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         {b.availability_slots && <span className="text-xs text-slate-500 flex items-center gap-1">{slotTypeIcons[b.availability_slots.slot_type]}{slotTypeLabels[b.availability_slots.slot_type]}</span>}
@@ -463,41 +465,38 @@ const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; us
         ) : (
           <>
             {scheduledSessions.length > 0 && (
-            <div className="mb-4 space-y-2">
-              <h3 className="text-sm font-semibold text-slate-700">Deine geplanten Einheiten</h3>
-              {scheduledSessions.map(s => {
-                const typeLabels: Record<string, string> = {
-                  'In-Person Training': 'Vor Ort',
-                  'Online Training': 'Online',
-                  'Phone Call': 'Telefonat',
-                  'Check-In Call': 'Check-In',
-                  'Free Intro': 'Erstgespräch',
-                };
-                return (
+              <div className="mb-6 space-y-2">
+                <h3 className="text-sm font-semibold text-slate-700">Deine geplanten Einheiten</h3>
+                {scheduledSessions.map(s => (
                   <div key={s.id} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">
                         {format(new Date(s.session_date), "EEEE, d. MMMM · HH:mm", { locale: de })} Uhr
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        {typeLabels[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}
+                        {sessionTypeLabels[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}
                       </p>
                     </div>
                     <span className="text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">
                       Bestätigt
                     </span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-          <div className="flex items-center justify-between mb-4">
-            <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))}
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center justify-between mb-4">
-              <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200"><ChevronLeft className="w-5 h-5" /></Button>
-              <h2 className="text-base font-semibold text-slate-900">{format(weekStart, "d. MMM", { locale: de })} – {format(addDays(weekStart, 6), "d. MMM yyyy", { locale: de })}</h2>
-              <Button variant="ghost" size="icon" onClick={() => setWeekStart(addWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200"><ChevronRight className="w-5 h-5" /></Button>
+              <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200">
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <h2 className="text-base font-semibold text-slate-900">
+                {format(weekStart, "d. MMM", { locale: de })} – {format(addDays(weekStart, 6), "d. MMM yyyy", { locale: de })}
+              </h2>
+              <Button variant="ghost" size="icon" onClick={() => setWeekStart(addWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200">
+                <ChevronRight className="w-5 h-5" />
+              </Button>
             </div>
+
             <div className="space-y-2">
               {weekDays.map(day => {
                 const key = format(day, 'yyyy-MM-dd');
@@ -522,9 +521,12 @@ const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; us
                           const isFull = totalBooked >= slot.max_bookings && !isMyBooking;
                           const slotPast = isBefore(new Date(slot.start_time), new Date());
                           return (
-                            <button key={slot.id} disabled={isPast || slotPast || isFull}
+                            <button
+                              key={slot.id}
+                              disabled={isPast || slotPast || isFull}
                               onClick={() => { if (isMyBooking) return; setSelectedSlot(slot); }}
-                              className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${isMyBooking ? 'bg-emerald-50 border-emerald-200' : isFull || slotPast ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm cursor-pointer'}`}>
+                              className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${isMyBooking ? 'bg-emerald-50 border-emerald-200' : isFull || slotPast ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm cursor-pointer'}`}
+                            >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -546,7 +548,9 @@ const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; us
           </>
         )}
       </div>
+
       <LegalFooter />
+
       <Dialog open={!!selectedSlot} onOpenChange={open => { if (!open) setSelectedSlot(null); }}>
         <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
           <DialogHeader>
