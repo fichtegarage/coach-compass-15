@@ -97,7 +97,16 @@ const SessionsPage: React.FC = () => {
     const used = sessions.filter(s => s.package_id === packageId && ['Completed', 'No-Show'].includes(s.status)).length;
     return { used, total: pkg.sessions_included };
   };
-
+const deleteSession = async (sessionId: string) => {
+    if (!confirm('Einheit wirklich löschen?')) return;
+    const { error } = await supabase.from('sessions').delete().eq('id', sessionId);
+    if (error) {
+      toast.error('Fehler beim Löschen: ' + error.message);
+      return;
+    }
+    toast.success('Einheit gelöscht');
+    loadData();
+  };
   const save = async () => {
     if (!user || !form.client_id) return;
     const { error } = await supabase.from('sessions').insert({
@@ -382,10 +391,16 @@ const SessionsPage: React.FC = () => {
                               : 'bg-primary/10 text-foreground hover:bg-primary/20 cursor-pointer'
                           }`}
                         >
-                          <p className="font-medium truncate">
-                            {isScheduled && <span className="mr-1">⠿</span>}
-                            {format(new Date(s.session_date), 'HH:mm')} {clientName}
-                          </p>
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="font-medium truncate">
+                              {isScheduled && <span className="mr-1">⠿</span>}
+                              {format(new Date(s.session_date), 'HH:mm')} {clientName}
+                            </p>
+                            <button
+                              onClick={e => { e.preventDefault(); e.stopPropagation(); deleteSession(s.id); }}
+                              className="text-destructive/50 hover:text-destructive flex-shrink-0 text-[10px]"
+                            >✕</button>
+                          </div>
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
                             <span className="truncate">{loc}</span>
@@ -439,6 +454,10 @@ const SessionsPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           {s.late_cancellation && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">Kurzfristig</Badge>}
                           <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'No-Show' ? 'destructive' : 'secondary'}>{statusLabels[s.status] || s.status}</Badge>
+                          <button
+                            onClick={e => { e.preventDefault(); e.stopPropagation(); deleteSession(s.id); }}
+                            className="text-destructive/50 hover:text-destructive ml-1"
+                          >✕</button>
                         </div>
                       </CardContent>
                     </Card>
