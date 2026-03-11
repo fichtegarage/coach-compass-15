@@ -124,6 +124,66 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
 };
 
+const generateIcs = (booking: any) => {
+  const slot = booking.availability_slots;
+  if (!slot) return;
+  const start = new Date(slot.start_time);
+  const end = new Date(slot.end_time);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fmt = (d: Date) =>
+    `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Jakob Neumann Personal Training//DE',
+    'BEGIN:VEVENT',
+    `UID:${booking.id}@jakob-neumann.net`,
+    `DTSTART:${fmt(start)}`,
+    `DTEND:${fmt(end)}`,
+    'SUMMARY:Personal Training – Jakob Neumann',
+    `DESCRIPTION:Trainingsart: ${slotTypeLabels[slot.slot_type] || slot.slot_type}`,
+    'LOCATION:Jakob Neumann Personal Training',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+};{b.status === 'pending' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCancelRequest(b.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs"
+                        >
+                          Stornieren
+                        </Button>
+                      )}
+                      {b.status === 'confirmed' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => generateIcs(b)}
+                          className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs"
+                        >
+                          + Kalender
+                        </Button>
+                      )}
+                      {b.status === 'confirmed' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => generateIcs(b)}
+                          className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs"
+                        >
+                          + Kalender
+                        </Button>
+                      )}sto
+
 const BookingPage: React.FC = () => {
   const [clientId, setClientId] = useState<string | null>(() => sessionStorage.getItem('booking_client_id'));
   const [clientName, setClientName] = useState<string>(() => sessionStorage.getItem('booking_client_name') || '');
