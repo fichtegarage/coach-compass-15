@@ -172,7 +172,10 @@ const BookingPage: React.FC = () => {
   const [showRequests, setShowRequests] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => {
+    const stored = sessionStorage.getItem('dismissed_notifications');
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  });
   const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; used: number } | null>(null);
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -404,7 +407,11 @@ const BookingPage: React.FC = () => {
                 {n.trainer_note && ` Hinweis: ${n.trainer_note}`}
               </span>
               <button
-                onClick={() => setDismissedNotifications(prev => new Set([...prev, n.id]))}
+                onClick={() => setDismissedNotifications(prev => {
+  const updated = new Set([...prev, n.id]);
+  sessionStorage.setItem('dismissed_notifications', JSON.stringify([...updated]));
+  return updated;
+})}
                 className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
               >✕</button>
             </div>
