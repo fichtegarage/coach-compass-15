@@ -477,9 +477,43 @@ const BookingPage: React.FC = () => {
                         {sessionTypeLabels[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}
                       </p>
                     </div>
-                    <span className="text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">
-                      Bestätigt
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const start = new Date(s.session_date);
+                          const end = new Date(start.getTime() + s.duration_minutes * 60000);
+                          const pad = (n: number) => String(n).padStart(2, '0');
+                          const fmt = (d: Date) => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+                          const ics = [
+                            'BEGIN:VCALENDAR', 'VERSION:2.0',
+                            'PRODID:-//Jakob Neumann Personal Training//DE',
+                            'BEGIN:VEVENT',
+                            `UID:${s.id}@jakob-neumann.net`,
+                            `DTSTART:${fmt(start)}`,
+                            `DTEND:${fmt(end)}`,
+                            'SUMMARY:Personal Training – Jakob Neumann',
+                            `DESCRIPTION:${sessionTypeLabels[s.session_type] || s.session_type}`,
+                            `LOCATION:${s.location || 'Jakob Neumann Personal Training'}`,
+                            'END:VEVENT', 'END:VCALENDAR',
+                          ].join('\r\n');
+                          const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 text-xs"
+                      >
+                        + Kalender
+                      </Button>
+                      <span className="text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">
+                        Bestätigt
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
