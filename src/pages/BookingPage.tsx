@@ -176,8 +176,8 @@ const BookingPage: React.FC = () => {
     const stored = sessionStorage.getItem('dismissed_notifications');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
-  const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; used: number } | null>(null);
-
+const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; used: number } | null>(null);
+  const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = codeInput.trim();
@@ -257,6 +257,16 @@ const BookingPage: React.FC = () => {
         });
       }
     }
+
+   // Geplante Sessions laden
+    const { data: sessionsData } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('status', 'Scheduled')
+      .gte('session_date', new Date().toISOString())
+      .order('session_date');
+    setScheduledSessions(sessionsData || []);
 
     setLoading(false);
   };
@@ -452,6 +462,37 @@ const BookingPage: React.FC = () => {
           </div>
         ) : (
           <>
+            {scheduledSessions.length > 0 && (
+            <div className="mb-4 space-y-2">
+              <h3 className="text-sm font-semibold text-slate-700">Deine geplanten Einheiten</h3>
+              {scheduledSessions.map(s => {
+                const typeLabels: Record<string, string> = {
+                  'In-Person Training': 'Vor Ort',
+                  'Online Training': 'Online',
+                  'Phone Call': 'Telefonat',
+                  'Check-In Call': 'Check-In',
+                  'Free Intro': 'Erstgespräch',
+                };
+                return (
+                  <div key={s.id} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {format(new Date(s.session_date), "EEEE, d. MMMM · HH:mm", { locale: de })} Uhr
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {typeLabels[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">
+                      Bestätigt
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center justify-between mb-4">
+            <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))}
             <div className="flex items-center justify-between mb-4">
               <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200"><ChevronLeft className="w-5 h-5" /></Button>
               <h2 className="text-base font-semibold text-slate-900">{format(weekStart, "d. MMM", { locale: de })} – {format(addDays(weekStart, 6), "d. MMM yyyy", { locale: de })}</h2>
