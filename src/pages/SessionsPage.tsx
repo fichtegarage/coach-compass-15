@@ -10,7 +10,6 @@ import { Plus, CalendarDays, ChevronLeft, ChevronRight, RefreshCw, MapPin, List,
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, eachDayOfInterval, isSameMonth, isSameDay, isToday,
-  addMinutes,
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
@@ -93,12 +92,11 @@ const SessionsPage: React.FC = () => {
     if (!packageId) return null;
     const pkg = packages.find(p => p.id === packageId);
     if (!pkg) return null;
-    // Count all completed/no-show sessions for this package (not just this month)
-    // We only have this month's sessions loaded, so we do a rough count
     const used = sessions.filter(s => s.package_id === packageId && ['Completed', 'No-Show'].includes(s.status)).length;
     return { used, total: pkg.sessions_included };
   };
-const deleteSession = async (sessionId: string) => {
+
+  const deleteSession = async (sessionId: string) => {
     if (!confirm('Einheit wirklich löschen?')) return;
     const { error } = await supabase.from('sessions').delete().eq('id', sessionId);
     if (error) {
@@ -108,6 +106,7 @@ const deleteSession = async (sessionId: string) => {
     toast.success('Einheit gelöscht');
     loadData();
   };
+
   const save = async () => {
     if (!user || !form.client_id) return;
     const { error } = await supabase.from('sessions').insert({
@@ -133,12 +132,10 @@ const deleteSession = async (sessionId: string) => {
   const handleDrop = async (sessionId: string, targetDay: Date) => {
     const session = sessions.find(s => s.id === sessionId);
     if (!session || session.status !== 'Scheduled') return;
-    // Keep the original time, change the date
     const oldDate = new Date(session.session_date);
     const newDate = new Date(targetDay);
     newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
     const newDateStr = format(newDate, "yyyy-MM-dd'T'HH:mm:ss");
-    // Optimistic update
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, session_date: newDateStr } : s));
     setDragOverDay(null);
     const { error } = await supabase.from('sessions').update({ session_date: newDateStr }).eq('id', sessionId);
@@ -150,7 +147,6 @@ const deleteSession = async (sessionId: string) => {
     }
   };
 
-  // Calendar grid
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
@@ -214,20 +210,10 @@ const deleteSession = async (sessionId: string) => {
             </DialogContent>
           </Dialog>
           <div className="flex border border-border rounded-lg overflow-hidden">
-            <Button
-              variant={view === 'calendar' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setView('calendar')}
-              className="rounded-none"
-            >
+            <Button variant={view === 'calendar' ? 'default' : 'ghost'} size="sm" onClick={() => setView('calendar')} className="rounded-none">
               <LayoutGrid className="w-4 h-4" />
             </Button>
-            <Button
-              variant={view === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setView('list')}
-              className="rounded-none"
-            >
+            <Button variant={view === 'list' ? 'default' : 'ghost'} size="sm" onClick={() => setView('list')} className="rounded-none">
               <List className="w-4 h-4" />
             </Button>
           </div>
@@ -335,7 +321,6 @@ const deleteSession = async (sessionId: string) => {
       {view === 'calendar' ? (
         /* CALENDAR VIEW */
         <div className="border border-border rounded-xl overflow-hidden">
-          {/* Weekday headers */}
           <div className="grid grid-cols-7 bg-muted/30">
             {weekDays.map(d => (
               <div key={d} className="p-2 text-center text-xs font-medium text-muted-foreground border-b border-border">
@@ -343,7 +328,6 @@ const deleteSession = async (sessionId: string) => {
               </div>
             ))}
           </div>
-          {/* Day cells */}
           <div className="grid grid-cols-7">
             {calendarDays.map((day, i) => {
               const daySessions = getSessionsForDay(day);
@@ -365,9 +349,7 @@ const deleteSession = async (sessionId: string) => {
                     if (sessionId) handleDrop(sessionId, day);
                   }}
                 >
-                  <p className={`text-xs font-medium mb-1 ${
-                    today ? 'text-primary font-bold' : 'text-muted-foreground'
-                  }`}>
+                  <p className={`text-xs font-medium mb-1 ${today ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
                     {format(day, 'd')}
                   </p>
                   <div className="space-y-1">
@@ -439,8 +421,8 @@ const deleteSession = async (sessionId: string) => {
               {[...sessions].reverse().map(s => {
                 const count = getSessionCount(s.client_id, s.package_id);
                 return (
-                  <Link key={s.id} to={`/clients/${s.client_id}`}>
-                    <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
+                  <div key={s.id} onClick={() => setSelectedSession(s)} className="cursor-pointer">
+                    <Card className="hover:bg-accent/50 transition-colors">
                       <CardContent className="p-3 flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium">{(s.clients as any)?.full_name}</p>
@@ -462,13 +444,13 @@ const deleteSession = async (sessionId: string) => {
                         </div>
                       </CardContent>
                     </Card>
-                  </Link>
+                  </div>
                 );
               })}
-            {</div>
-          </>
-        )}
-      </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Session Detail Dialog */}
       <Dialog open={!!selectedSession} onOpenChange={open => { if (!open) setSelectedSession(null); }}>
@@ -533,4 +515,5 @@ const deleteSession = async (sessionId: string) => {
     </div>
   );
 };
+
 export default SessionsPage;
