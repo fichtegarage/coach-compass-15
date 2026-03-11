@@ -173,6 +173,7 @@ const BookingPage: React.FC = () => {
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+  const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; used: number } | null>(null);
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = codeInput.trim();
@@ -230,6 +231,30 @@ const BookingPage: React.FC = () => {
       (b: any) => b.responded_at && (b.status === 'confirmed' || b.status === 'rejected')
     );
     setNotifications(recentResponses.slice(0, 3));
+
+    // Paket und genutzte Einheiten laden
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('*, packages(id, package_name, sessions_included)')
+      .eq('id', clientId)
+      .maybeSingle();
+
+    if (clientData?.packages) {
+      const pkg = Array.isArray(clientData.packages) ? clientData.packages[0] : clientData.packages;
+      if (pkg) {
+        const { count } = await supabase
+          .from('sessions')
+          .select('*', { count: 'exact', head: true })
+          .eq('client_id', clientId)
+          .in('status', ['Completed', 'No-Show']);
+        setPackageInfo({
+          name: pkg.package_name,
+          total: pkg.sessions_included,
+          used: count || 0,
+        });
+      }
+    }
+
     setLoading(false);
   };
 
@@ -353,6 +378,11 @@ const BookingPage: React.FC = () => {
           <div>
             <h1 className="text-lg font-bold text-slate-900" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Jakob Neumann</h1>
             <p className="text-xs text-slate-500">Hallo, {clientName}</p>
+            {packageInfo && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {packageInfo.name}: <span className="font-medium text-slate-600">{packageInfo.used}/{packageInfo.total}</span> Einheiten genutzt
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => setShowRequests(!showRequests)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-100">
