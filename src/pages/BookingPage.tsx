@@ -374,7 +374,7 @@ const BookingPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-<div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col" style={{ fontFamily: "'Montserrat', sans-serif" }}> from-slate-50 to-stone-100 flex flex-col">
       <meta name="robots" content="noindex" />
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
