@@ -335,7 +335,7 @@ const BookingPage: React.FC = () => {
   // Access gate
   if (!clientId) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col items-center justify-center px-4" style={{ fontFamily: "'Montserrat', sans-serif" }}>-slate-50 to-stone-100 flex flex-col items-center justify-center px-4">
         <meta name="robots" content="noindex" />
         <div className="w-full max-w-md flex-1 flex flex-col items-center justify-center">
           <div className="text-center mb-8">
