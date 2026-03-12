@@ -347,8 +347,11 @@ const BookingPage: React.FC = () => {
         <meta name="robots" content="noindex" />
         <div className="w-full max-w-md flex-1 flex flex-col items-center justify-center">
           <div className="text-center mb-8">
-            <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-12 w-auto mx-auto mb-4" />
-            <p className="text-slate-500 mt-1">Personal Training – Terminbuchung</p>
+            <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-16 w-auto mx-auto mb-4" />
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Jakob Neumann</h1>
+            <p className="text-emerald-600 font-semibold text-sm mt-0.5">Stronger Every Day</p>
+            <div className="mt-3 h-px w-12 bg-emerald-500 mx-auto" />
+            <p className="text-slate-400 text-xs mt-3 uppercase tracking-widest">Personal Training · Terminbuchung</p>
           </div>
           <form onSubmit={handleCodeSubmit} className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 space-y-4 w-full">
             <div>
