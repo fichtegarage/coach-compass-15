@@ -34,6 +34,7 @@ interface PackageData {
   start_date: string;
   end_date: string | null;
   package_price: number;
+  payment_status: string | null;
 }
 
 interface SessionCount {
@@ -291,6 +292,33 @@ const ClientsPage: React.FC = () => {
                     {pkg.package_price}€
                     {pkg.sessions_included > 0 && ` · ${Math.round(pkg.package_price / pkg.sessions_included)}€ je Einheit`}
                   </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={pkg.payment_status || 'unpaid'}
+                    onValueChange={async (val) => {
+                      await supabase.from('packages').update({ payment_status: val }).eq('id', pkg.id);
+                      setPackages(prev => ({
+                        ...prev,
+                        [client.id]: { ...prev[client.id], payment_status: val }
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className={`h-7 text-xs w-36 ${
+                      (pkg.payment_status || 'unpaid') === 'paid'
+                        ? 'border-success/40 text-success bg-success/5'
+                        : (pkg.payment_status || 'unpaid') === 'partial'
+                        ? 'border-warning/40 text-warning bg-warning/5'
+                        : 'border-destructive/40 text-destructive bg-destructive/5'
+                    }`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paid">✓ Bezahlt</SelectItem>
+                      <SelectItem value="partial">◑ Teilweise</SelectItem>
+                      <SelectItem value="unpaid">✗ Unbezahlt</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <CalendarDays className="w-3.5 h-3.5" />
