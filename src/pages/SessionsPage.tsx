@@ -60,6 +60,8 @@ const SessionsPage: React.FC = () => {
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<any | null>(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     client_id: '', package_id: '', session_date: new Date().toISOString().slice(0, 16),
     duration_minutes: '60', session_type: 'Präsenz-Training',
@@ -70,6 +72,20 @@ const SessionsPage: React.FC = () => {
     if (!user) return;
     loadData();
   }, [user, currentMonth]);
+
+  // Populate editForm whenever selectedSession changes
+  useEffect(() => {
+    if (!selectedSession) { setEditForm(null); return; }
+    setEditForm({
+      status: selectedSession.status,
+      session_date: selectedSession.session_date?.slice(0, 16) || '',
+      duration_minutes: String(selectedSession.duration_minutes || 60),
+      session_type: sessionTypeLabels[selectedSession.session_type] || selectedSession.session_type,
+      location: selectedSession.location || 'Gym',
+      notes: selectedSession.notes || '',
+      late_cancellation: selectedSession.late_cancellation || false,
+    });
+  }, [selectedSession]);
 
   const loadData = async () => {
     const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
@@ -126,6 +142,44 @@ const SessionsPage: React.FC = () => {
     }
     setDialogOpen(false);
     toast.success('Einheit erfasst');
+    loadData();
+  };
+
+  const saveEdit = async () => {
+    if (!selectedSession || !editForm) return;
+    setSaving(true);
+
+    const wasScheduled = selectedSession.status === 'Scheduled';
+    const isCancelledByTrainer = editForm.status === 'Cancelled by Trainer';
+
+    const { error } = await supabase.from('sessions').update({
+      status: editForm.status,
+      session_date: editForm.session_date,
+      duration_minutes: Number(editForm.duration_minutes),
+      session_type: sessionTypeToDb[editForm.session_type] || editForm.session_type,
+      location: editForm.location,
+      notes: editForm.notes || null,
+      late_cancellation: editForm.late_cancellation,
+    }).eq('id', selectedSession.id);
+
+    if (error) {
+      toast.error('Fehler: ' + error.message);
+      setSaving(false);
+      return;
+    }
+
+    // Notification if trainer cancels a previously scheduled session
+    if (wasScheduled && isCancelledByTrainer && selectedSession.client_id) {
+      const sessionDate = format(new Date(editForm.session_date), "EEEE, d. MMMM · HH:mm", { locale: de });
+      await supabase.from('client_notifications').insert({
+        client_id: selectedSession.client_id,
+        message: `Deine Einheit am ${sessionDate} Uhr wurde vom Trainer abgesagt.`,
+      });
+    }
+
+    toast.success('Einheit gespeichert');
+    setSaving(false);
+    setSelectedSession(null);
     loadData();
   };
 
@@ -452,52 +506,95 @@ const SessionsPage: React.FC = () => {
         </>
       )}
 
-      {/* Session Detail Dialog */}
+      {/* Session Detail / Edit Dialog */}
       <Dialog open={!!selectedSession} onOpenChange={open => { if (!open) setSelectedSession(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-display">Einheit Details</DialogTitle>
+            <DialogTitle className="font-display">Einheit bearbeiten</DialogTitle>
           </DialogHeader>
-          {selectedSession && (
-            <div className="space-y-3">
+          {selectedSession && editForm && (
+            <div className="space-y-4">
+              {/* Read-only info */}
+              <div className="rounded-lg bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground mb-1">Kunde</p>
+                <p className="text-sm font-medium">{(selectedSession.clients as any)?.full_name}</p>
+              </div>
+
+              {/* Editable fields */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Kunde</p>
-                  <p className="text-sm font-medium">{(selectedSession.clients as any)?.full_name}</p>
+                <div className="space-y-1.5">
+                  <Label>Status</Label>
+                  <Select value={editForm.status} onValueChange={v => setEditForm((f: any) => ({ ...f, status: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {sessionStatuses.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Status</p>
-                  <Badge variant={selectedSession.status === 'Completed' ? 'default' : selectedSession.status === 'No-Show' ? 'destructive' : 'secondary'}>
-                    {statusLabels[selectedSession.status] || selectedSession.status}
-                  </Badge>
-                </div>
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Datum & Uhrzeit</p>
-                  <p className="text-sm font-medium">{format(new Date(selectedSession.session_date), "d. MMM yyyy · HH:mm", { locale: de })} Uhr</p>
-                </div>
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Dauer</p>
-                  <p className="text-sm font-medium">{selectedSession.duration_minutes} Minuten</p>
-                </div>
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Art</p>
-                  <p className="text-sm font-medium">{sessionTypeLabels[selectedSession.session_type] || selectedSession.session_type}</p>
-                </div>
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Ort</p>
-                  <p className="text-sm font-medium">{selectedSession.location || 'Gym'}</p>
+                <div className="space-y-1.5">
+                  <Label>Ort</Label>
+                  <Select value={editForm.location} onValueChange={v => setEditForm((f: any) => ({ ...f, location: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {locations.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              {selectedSession.notes && (
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Notizen</p>
-                  <p className="text-sm">{selectedSession.notes}</p>
+
+              <div className="space-y-1.5">
+                <Label>Datum & Uhrzeit</Label>
+                <Input
+                  type="datetime-local"
+                  value={editForm.session_date}
+                  onChange={e => setEditForm((f: any) => ({ ...f, session_date: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Dauer (Min.)</Label>
+                  <Input
+                    type="number"
+                    value={editForm.duration_minutes}
+                    onChange={e => setEditForm((f: any) => ({ ...f, duration_minutes: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Art</Label>
+                  <Select value={editForm.session_type} onValueChange={v => setEditForm((f: any) => ({ ...f, session_type: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {sessionTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={editForm.late_cancellation}
+                  onCheckedChange={v => setEditForm((f: any) => ({ ...f, late_cancellation: v }))}
+                />
+                <Label>Kurzfristige Absage (&lt;24h)</Label>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Notizen</Label>
+                <Textarea
+                  value={editForm.notes}
+                  onChange={e => setEditForm((f: any) => ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+
+              {editForm.status === 'Cancelled by Trainer' && selectedSession.status === 'Scheduled' && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                  ⚠️ Der Kunde wird über die Absage benachrichtigt.
                 </div>
               )}
-              {selectedSession.late_cancellation && (
-                <Badge variant="outline" className="text-destructive border-destructive/30">Kurzfristige Absage</Badge>
-              )}
-              <div className="flex gap-2 pt-2">
+
+              <div className="flex gap-2 pt-1">
                 <Button variant="outline" className="flex-1" asChild>
                   <Link to={`/clients/${selectedSession.client_id}`}>Zum Kundenprofil</Link>
                 </Button>
@@ -506,6 +603,9 @@ const SessionsPage: React.FC = () => {
                   onClick={() => { deleteSession(selectedSession.id); setSelectedSession(null); }}
                 >
                   Löschen
+                </Button>
+                <Button onClick={saveEdit} disabled={saving} className="flex-1">
+                  {saving ? 'Speichern…' : 'Speichern'}
                 </Button>
               </div>
             </div>
