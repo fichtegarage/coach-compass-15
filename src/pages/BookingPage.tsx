@@ -171,6 +171,7 @@ const BookingPage: React.FC = () => {
   const [showRequests, setShowRequests] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [clientNotifications, setClientNotifications] = useState<any[]>([]);
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => {
     const stored = sessionStorage.getItem('dismissed_notifications');
     return stored ? new Set(JSON.parse(stored)) : new Set();
@@ -266,6 +267,15 @@ const BookingPage: React.FC = () => {
       .order('session_date');
     setScheduledSessions(sessionsData || []);
 
+    // Trainer-Absage-Notifications laden
+    const { data: clientNotifs } = await supabase
+      .from('client_notifications')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('is_read', false)
+      .order('created_at', { ascending: false });
+    setClientNotifications(clientNotifs || []);
+
     setLoading(false);
   };
 
@@ -340,6 +350,11 @@ const BookingPage: React.FC = () => {
     loadData();
   };
 
+  const dismissClientNotification = async (id: string) => {
+    await supabase.from('client_notifications').update({ is_read: true }).eq('id', id);
+    setClientNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
   // Access gate
   if (!clientId) {
     return (
@@ -347,11 +362,8 @@ const BookingPage: React.FC = () => {
         <meta name="robots" content="noindex" />
         <div className="w-full max-w-md flex-1 flex flex-col items-center justify-center">
           <div className="text-center mb-8">
-            <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-16 w-auto mx-auto mb-4" />
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Jakob Neumann</h1>
-            <p className="text-emerald-600 font-semibold text-sm mt-0.5">Stronger Every Day</p>
-            <div className="mt-3 h-px w-12 bg-emerald-500 mx-auto" />
-            <p className="text-slate-400 text-xs mt-3 uppercase tracking-widest">Personal Training · Terminbuchung</p>
+            <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-12 w-auto mx-auto mb-4" />
+            <p className="text-slate-500 mt-1">Personal Training – Terminbuchung</p>
           </div>
           <form onSubmit={handleCodeSubmit} className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 space-y-4 w-full">
             <div>
@@ -406,6 +418,7 @@ const BookingPage: React.FC = () => {
         </div>
       </header>
 
+      {/* Booking response notifications (confirmed / rejected) */}
       {notifications.filter(n => !dismissedNotifications.has(n.id)).length > 0 && !showRequests && (
         <div className="max-w-4xl mx-auto px-4 mt-3 space-y-2 w-full">
           {notifications.filter(n => !dismissedNotifications.has(n.id)).map(n => (
@@ -421,6 +434,21 @@ const BookingPage: React.FC = () => {
                   sessionStorage.setItem('dismissed_notifications', JSON.stringify([...updated]));
                   return updated;
                 })}
+                className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Trainer-cancellation notifications */}
+      {clientNotifications.length > 0 && !showRequests && (
+        <div className="max-w-4xl mx-auto px-4 mt-2 space-y-2 w-full">
+          {clientNotifications.map(n => (
+            <div key={n.id} className="rounded-lg px-4 py-2 text-sm border flex items-center justify-between gap-2 bg-red-50 border-red-200 text-red-800">
+              <span>📅 {n.message}</span>
+              <button
+                onClick={() => dismissClientNotification(n.id)}
                 className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
               >✕</button>
             </div>
