@@ -206,6 +206,18 @@ const ClientsPage: React.FC = () => {
     return 'bg-muted text-muted-foreground';
   };
 
+  const deleteClient = async (e: React.MouseEvent, clientId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm('Kunden wirklich löschen? Alle zugehörigen Daten (Einheiten, Pakete, Metriken) werden unwiderruflich gelöscht.')) return;
+    const { error } = await supabase.from('clients').delete().eq('id', clientId);
+    if (error) {
+      alert('Fehler beim Löschen: ' + error.message);
+      return;
+    }
+    setClients(prev => prev.filter(c => c.id !== clientId));
+  };
+
   const toggleExpand = (e: React.MouseEvent, clientId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -370,6 +382,17 @@ const ClientsPage: React.FC = () => {
                 </div>
               )}
 
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 text-xs"
+                onClick={(e) => deleteClient(e, client.id)}
+              >
+                Kunde löschen
+              </Button>
             </div>
           )}
         </Card>
