@@ -11,9 +11,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut, CalendarDays } from 'lucide-react';
 
+// Sendet name + email direkt mit – keine DB-Abfrage in der Edge Function nötig
 const sendBookingEmail = async (
   type: 'request_submitted' | 'request_confirmed' | 'request_rejected',
-  client_id: string,
+  client_name: string,
+  client_email: string | null,
   slotStart: string,
   slotEnd: string,
   trainer_note?: string
@@ -23,7 +25,8 @@ const sendBookingEmail = async (
   await supabase.functions.invoke('send-booking-email', {
     body: {
       type,
-      client_id,
+      client_name,
+      client_email,
       slot: {
         date: format(start, 'EEEE, d. MMMM yyyy', { locale: de }),
         start: format(start, 'HH:mm'),
@@ -179,6 +182,7 @@ const generateIcs = (booking: any) => {
 const BookingPage: React.FC = () => {
   const [clientId, setClientId] = useState<string | null>(() => sessionStorage.getItem('booking_client_id'));
   const [clientName, setClientName] = useState<string>(() => sessionStorage.getItem('booking_client_name') || '');
+  const [clientEmail, setClientEmail] = useState<string | null>(() => sessionStorage.getItem('booking_client_email') || null);
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
@@ -209,7 +213,7 @@ const BookingPage: React.FC = () => {
     setCodeError('');
     const { data, error } = await supabase
       .from('clients')
-      .select('id, full_name')
+      .select('id, full_name, email')
       .eq('booking_code', code)
       .eq('booking_code_active', true)
       .maybeSingle();
@@ -221,16 +225,20 @@ const BookingPage: React.FC = () => {
     }
     sessionStorage.setItem('booking_client_id', data.id);
     sessionStorage.setItem('booking_client_name', data.full_name);
+    if (data.email) sessionStorage.setItem('booking_client_email', data.email);
     setClientId(data.id);
     setClientName(data.full_name);
+    setClientEmail(data.email || null);
     setCodeLoading(false);
   };
 
   const handleLogout = () => {
     sessionStorage.removeItem('booking_client_id');
     sessionStorage.removeItem('booking_client_name');
+    sessionStorage.removeItem('booking_client_email');
     setClientId(null);
     setClientName('');
+    setClientEmail(null);
   };
 
   const loadData = async () => {
@@ -265,19 +273,26 @@ const BookingPage: React.FC = () => {
       .eq('id', clientId)
       .maybeSingle();
 
-    if (clientData?.packages) {
-      const pkg = Array.isArray(clientData.packages) ? clientData.packages[0] : clientData.packages;
-      if (pkg) {
-        const { count } = await supabase
-          .from('sessions')
-          .select('*', { count: 'exact', head: true })
-          .eq('client_id', clientId)
-          .in('status', ['Completed', 'No-Show']);
-        setPackageInfo({
-          name: pkg.package_name,
-          total: pkg.sessions_included,
-          used: count || 0,
-        });
+    if (clientData) {
+      // E-Mail aktuell halten
+      if (clientData.email && clientData.email !== clientEmail) {
+        setClientEmail(clientData.email);
+        sessionStorage.setItem('booking_client_email', clientData.email);
+      }
+      if (clientData.packages) {
+        const pkg = Array.isArray(clientData.packages) ? clientData.packages[0] : clientData.packages;
+        if (pkg) {
+          const { count } = await supabase
+            .from('sessions')
+            .select('*', { count: 'exact', head: true })
+            .eq('client_id', clientId)
+            .in('status', ['Completed', 'No-Show']);
+          setPackageInfo({
+            name: pkg.package_name,
+            total: pkg.sessions_included,
+            used: count || 0,
+          });
+        }
       }
     }
 
@@ -360,8 +375,7 @@ const BookingPage: React.FC = () => {
       return;
     }
     toast.success('Deine Anfrage wurde gesendet. Du hörst bald von deinem Trainer!');
-    // E-Mail-Bestätigung an den Kunden
-    await sendBookingEmail('request_submitted', clientId, selectedSlot.start_time, selectedSlot.end_time);
+    await sendBookingEmail('request_submitted', clientName, clientEmail, selectedSlot.start_time, selectedSlot.end_time);
     setSelectedSlot(null);
     setBookingMessage('');
     setSubmitting(false);
