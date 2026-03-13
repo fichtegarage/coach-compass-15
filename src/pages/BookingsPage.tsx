@@ -148,8 +148,8 @@ const BookingsPage: React.FC = () => {
           const dateStr = format(targetDate, 'yyyy-MM-dd');
           slotsToCreate.push({
             trainer_id: user.id,
-            start_time: `${dateStr}T${slotForm.start_time}:00`,
-            end_time: `${dateStr}T${slotForm.end_time}:00`,
+            start_time: new Date(`${dateStr}T${slotForm.start_time}:00`).toISOString(),
+            end_time: new Date(`${dateStr}T${slotForm.end_time}:00`).toISOString(),
             slot_type: slotForm.slot_type,
             notes: slotForm.notes || null,
           });
@@ -158,8 +158,8 @@ const BookingsPage: React.FC = () => {
     } else {
       slotsToCreate.push({
         trainer_id: user.id,
-        start_time: `${slotForm.date}T${slotForm.start_time}:00`,
-        end_time: `${slotForm.date}T${slotForm.end_time}:00`,
+        start_time: new Date(`${slotForm.date}T${slotForm.start_time}:00`).toISOString(),
+        end_time: new Date(`${slotForm.date}T${slotForm.end_time}:00`).toISOString(),
         slot_type: slotForm.slot_type,
         notes: slotForm.notes || null,
       });
