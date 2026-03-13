@@ -41,6 +41,7 @@ const sendBookingEmail = async (
     },
   });
 };
+
 const slotTypeLabels: Record<string, string> = {
   'in-person': 'Vor Ort',
   'online': 'Online',
@@ -69,7 +70,6 @@ const BookingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
 
-  // New slot form
   const [slotDialogOpen, setSlotDialogOpen] = useState(false);
   const [slotForm, setSlotForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -82,7 +82,6 @@ const BookingsPage: React.FC = () => {
     recurring_weeks: '4',
   });
 
-  // Respond dialog
   const [respondDialog, setRespondDialog] = useState<any | null>(null);
   const [trainerNote, setTrainerNote] = useState('');
   const [responding, setResponding] = useState(false);
@@ -111,7 +110,6 @@ const BookingsPage: React.FC = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Realtime subscription for new booking requests
   useEffect(() => {
     const channel = supabase
       .channel('booking-requests-realtime')
@@ -144,7 +142,6 @@ const BookingsPage: React.FC = () => {
     return requests.filter(r => r.status === filter);
   }, [requests, filter]);
 
-  // Count bookings per slot
   const slotBookingCounts = useMemo(() => {
     const counts: Record<string, { confirmed: number; pending: number }> = {};
     requests.forEach(r => {
@@ -157,7 +154,6 @@ const BookingsPage: React.FC = () => {
 
   const createSlot = async () => {
     if (!user) return;
-
     const slotsToCreate: any[] = [];
 
     if (slotForm.recurring && slotForm.recurring_days.length > 0) {
@@ -220,7 +216,6 @@ const BookingsPage: React.FC = () => {
       responded_at: new Date().toISOString(),
     };
 
-    // If confirming, mark slot as not bookable if at capacity
     if (status === 'confirmed') {
       const slot = slots.find(s => s.id === respondDialog.slot_id) || respondDialog.availability_slots;
       if (slot) {
@@ -233,7 +228,6 @@ const BookingsPage: React.FC = () => {
 
     await supabase.from('booking_requests').update(updates).eq('id', respondDialog.id);
 
-    // Bei Bestätigung automatisch eine Session erstellen
     if (status === 'confirmed' && respondDialog.availability_slots) {
       const slotTypeMap: Record<string, string> = {
         'in-person': 'In-Person Training',
@@ -256,6 +250,18 @@ const BookingsPage: React.FC = () => {
     }
 
     toast.success(status === 'confirmed' ? 'Buchung bestätigt & Session erstellt' : 'Buchung abgelehnt');
+
+    // E-Mail an den Kunden senden
+    if (respondDialog.availability_slots) {
+      await sendBookingEmail(
+        status === 'confirmed' ? 'request_confirmed' : 'request_rejected',
+        respondDialog.client_id,
+        respondDialog.availability_slots.start_time,
+        respondDialog.availability_slots.end_time,
+        trainerNote || undefined
+      );
+    }
+
     setRespondDialog(null);
     setTrainerNote('');
     setResponding(false);
@@ -314,7 +320,6 @@ const BookingsPage: React.FC = () => {
               const key = format(day, 'yyyy-MM-dd');
               const daySlots = slotsByDay[key] || [];
               const isPast = isBefore(day, startOfDay(new Date())) && !isSameDay(day, new Date());
-
               return (
                 <Card key={key} className={isPast ? 'opacity-50' : ''}>
                   <CardContent className="p-3">
