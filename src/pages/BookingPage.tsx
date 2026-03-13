@@ -11,6 +11,28 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut, CalendarDays } from 'lucide-react';
 
+const sendBookingEmail = async (
+  type: 'request_submitted' | 'request_confirmed' | 'request_rejected',
+  client_id: string,
+  slotStart: string,
+  slotEnd: string,
+  trainer_note?: string
+) => {
+  const start = new Date(slotStart);
+  const end = new Date(slotEnd);
+  await supabase.functions.invoke('send-booking-email', {
+    body: {
+      type,
+      client_id,
+      slot: {
+        date: format(start, 'EEEE, d. MMMM yyyy', { locale: de }),
+        start: format(start, 'HH:mm'),
+        end: format(end, 'HH:mm'),
+        trainer_note: trainer_note || null,
+      },
+    },
+  });
+};
 // ── Legal texts ───────────────────────────────────────────────────────────────
 const impressumText = `Angaben gemäß § 5 TMG
 
