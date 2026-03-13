@@ -21,7 +21,8 @@ import { toast } from 'sonner';
 
 const sendBookingEmail = async (
   type: 'request_submitted' | 'request_confirmed' | 'request_rejected',
-  client_id: string,
+  client_name: string,
+  client_email: string | null,
   slotStart: string,
   slotEnd: string,
   trainer_note?: string
@@ -31,7 +32,8 @@ const sendBookingEmail = async (
   await supabase.functions.invoke('send-booking-email', {
     body: {
       type,
-      client_id,
+      client_name,
+      client_email,
       slot: {
         date: format(start, 'EEEE, d. MMMM yyyy', { locale: de }),
         start: format(start, 'HH:mm'),
@@ -100,7 +102,8 @@ const BookingsPage: React.FC = () => {
         .order('start_time'),
       supabase
         .from('booking_requests')
-        .select('*, clients(full_name, profile_photo_url), availability_slots(start_time, end_time, slot_type, trainer_id)')
+        // email mitholen für die Bestätigungs-/Ablehnungsmail
+        .select('*, clients(full_name, email, profile_photo_url), availability_slots(start_time, end_time, slot_type, trainer_id)')
         .order('requested_at', { ascending: false }),
     ]);
     setSlots(slotsRes.data || []);
@@ -251,11 +254,12 @@ const BookingsPage: React.FC = () => {
 
     toast.success(status === 'confirmed' ? 'Buchung bestätigt & Session erstellt' : 'Buchung abgelehnt');
 
-    // E-Mail an den Kunden senden
+    // E-Mail an den Kunden – name + email direkt aus dem request-Objekt
     if (respondDialog.availability_slots) {
       await sendBookingEmail(
         status === 'confirmed' ? 'request_confirmed' : 'request_rejected',
-        respondDialog.client_id,
+        respondDialog.clients?.full_name || '',
+        respondDialog.clients?.email || null,
         respondDialog.availability_slots.start_time,
         respondDialog.availability_slots.end_time,
         trainerNote || undefined
