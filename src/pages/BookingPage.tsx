@@ -33,6 +33,7 @@ const sendBookingEmail = async (
     },
   });
 };
+
 // ── Legal texts ───────────────────────────────────────────────────────────────
 const impressumText = `Angaben gemäß § 5 TMG
 
@@ -289,7 +290,6 @@ const BookingPage: React.FC = () => {
       .order('session_date');
     setScheduledSessions(sessionsData || []);
 
-    // Trainer-Absage-Notifications laden
     const { data: clientNotifs } = await supabase
       .from('client_notifications')
       .select('*')
@@ -360,6 +360,8 @@ const BookingPage: React.FC = () => {
       return;
     }
     toast.success('Deine Anfrage wurde gesendet. Du hörst bald von deinem Trainer!');
+    // E-Mail-Bestätigung an den Kunden
+    await sendBookingEmail('request_submitted', clientId, selectedSlot.start_time, selectedSlot.end_time);
     setSelectedSlot(null);
     setBookingMessage('');
     setSubmitting(false);
