@@ -2,10 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Security: only allow calls with the correct secret
-  const authHeader = req.headers['authorization'] ?? req.headers['Authorization'];
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  const secret = req.query.secret ?? req.headers['authorization']?.replace('Bearer ', '');
+if (secret !== process.env.CRON_SECRET) {
+  return res.status(401).json({ error: 'Unauthorized' });
+}
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
