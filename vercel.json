@@ -1,111 +1,12 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-// This runs every hour via Vercel Cron.
-// It finds all sessions starting in the next 2–3 hours that haven't been reminded yet,
-// sends a reminder email to the client, and marks them as reminded.
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Vercel calls cron jobs via GET; protect against other callers
-  const authHeader = req.headers['authorization'];
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const supabaseUrl = process.env.VITE_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-  const now = new Date();
-  const windowStart = new Date(now.getTime() + 2 * 60 * 60 * 1000);      // +2h
-  const windowEnd   = new Date(now.getTime() + 3 * 60 * 60 * 1000);      // +3h
-
-  // Fetch scheduled sessions in the 2–3h window that haven't been reminded yet
-  const sessionsRes = await fetch(
-    `${supabaseUrl}/rest/v1/sessions?select=id,session_date,duration_minutes,session_type,client_id,reminder_sent,clients(full_name,email)&status=eq.Scheduled&reminder_sent=eq.false&session_date=gte.${windowStart.toISOString()}&session_date=lte.${windowEnd.toISOString()}`,
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
     {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-      },
+      "path": "/api/cron-reminders",
+      "schedule": "0 * * * *"
     }
-  );
-
-  if (!sessionsRes.ok) {
-    const err = await sessionsRes.text();
-    console.error('Supabase fetch error:', err);
-    return res.status(500).json({ error: err });
-  }
-
-  const sessions: any[] = await sessionsRes.json();
-
-  if (sessions.length === 0) {
-    return res.status(200).json({ sent: 0 });
-  }
-
-  const sessionTypeLabels: Record<string, string> = {
-    'In-Person Training': 'Präsenz-Training',
-    'Online Training': 'Online-Training',
-    'Phone Call': 'Telefonat',
-    'Check-In Call': 'Check-In Call',
-    'Free Intro': 'Erstgespräch',
-  };
-
-  let sent = 0;
-  for (const session of sessions) {
-    const client = session.clients;
-    if (!client?.email) continue;
-
-    const startDate = new Date(session.session_date);
-    const timeStr = startDate.toLocaleString('de-DE', {
-      weekday: 'long', day: 'numeric', month: 'long',
-      hour: '2-digit', minute: '2-digit',
-      timeZone: 'Europe/Berlin',
-    });
-    const typeLabel = sessionTypeLabels[session.session_type] || session.session_type;
-
-    // Send reminder email via Resend
-    const emailRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'Jakob Neumann Training <noreply@jakob-neumann.net>',
-        to: client.email,
-        subject: '⏰ Erinnerung: Dein Training in 2 Stunden',
-        html: `
-          <p>Hallo ${client.full_name},</p>
-          <p>nur eine kurze Erinnerung: dein <strong>${typeLabel}</strong> findet heute statt:</p>
-          <p style="font-size:1.1em;font-weight:bold;">${timeStr} Uhr</p>
-          <p>Dauer: ${session.duration_minutes} Minuten</p>
-          <p>Bis gleich!<br/>Jakob Neumann Personal Training</p>
-        `,
-      }),
-    });
-
-    if (!emailRes.ok) {
-      console.error('Resend error for session', session.id, await emailRes.text());
-      continue;
-    }
-
-    // Mark session as reminded
-    await fetch(
-      `${supabaseUrl}/rest/v1/sessions?id=eq.${session.id}`,
-      {
-        method: 'PATCH',
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
-        },
-        body: JSON.stringify({ reminder_sent: true }),
-      }
-    );
-
-    sent++;
-  }
-
-  return res.status(200).json({ sent });
+  ]
 }
