@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       html,
     }),
   });
-
+  
   if (!response.ok) {
     const error = await response.text();
     console.error('Resend error:', error);
