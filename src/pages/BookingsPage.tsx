@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,35 +13,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import {
   Plus, Check, X, ChevronLeft, ChevronRight, Loader2, Trash2,
-  Clock, MapPin, Video, Phone, CalendarDays, AlertTriangle
+  Clock, CalendarDays, AlertTriangle
 } from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isBefore, isSameDay, formatDistanceToNow, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 
-const sendBookingEmail = async (
-  type: 'request_submitted' | 'request_confirmed' | 'request_rejected',
-  client_name: string,
-  client_email: string | null,
-  slotStart: string,
-  slotEnd: string,
-  trainer_note?: string
-) => {
-  const start = new Date(slotStart);
-  const end = new Date(slotEnd);
-  await supabase.functions.invoke('send-booking-email', {
-    body: {
-      type,
-      client_name,
-      client_email,
-      slot: {
-        date: format(start, 'EEEE, d. MMMM yyyy', { locale: de }),
-        start: format(start, 'HH:mm'),
-        end: format(end, 'HH:mm'),
-        trainer_note: trainer_note || null,
-      },
-    },
-  });
+// ── E-Mail helper ─────────────────────────────────────────────────────────────
+const sendEmail = async (to: string, subject: string, html: string) => {
+  try {
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html }),
+    });
+  } catch (e) {
+    console.error('E-Mail konnte nicht gesendet werden', e);
+  }
 };
 
 const slotTypeLabels: Record<string, string> = {
@@ -102,7 +90,6 @@ const BookingsPage: React.FC = () => {
         .order('start_time'),
       supabase
         .from('booking_requests')
-        // email mitholen für die Bestätigungs-/Ablehnungsmail
         .select('*, clients(full_name, email, profile_photo_url), availability_slots(start_time, end_time, slot_type, trainer_id)')
         .order('requested_at', { ascending: false }),
     ]);
@@ -209,18 +196,6 @@ const BookingsPage: React.FC = () => {
     loadData();
   };
 
-  const sendEmail = async (to: string, subject: string, html: string) => {
-  try {
-    await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, html }),
-    });
-  } catch (e) {
-    console.error('E-Mail konnte nicht gesendet werden', e);
-  }
-};
-
   const handleRespond = async (status: 'confirmed' | 'rejected') => {
     if (!respondDialog) return;
     setResponding(true);
@@ -264,20 +239,7 @@ const BookingsPage: React.FC = () => {
       });
     }
 
-    toast.success(status === 'confirmed' ? 'Buchung bestätigt & Session erstellt' : 'Buchung abgelehnt');
-
-    // E-Mail an den Kunden – name + email direkt aus dem request-Objekt
-    if (respondDialog.availability_slots) {
-      await sendBookingEmail(
-        status === 'confirmed' ? 'request_confirmed' : 'request_rejected',
-        respondDialog.clients?.full_name || '',
-        respondDialog.clients?.email || null,
-        respondDialog.availability_slots.start_time,
-        respondDialog.availability_slots.end_time,
-        trainerNote || undefined
-      );
-    }
-// E-Mail an Kunden
+    // E-Mail an Kunden
     const clientEmail = respondDialog.clients?.email;
     if (clientEmail && respondDialog.availability_slots) {
       const slotDate = format(new Date(respondDialog.availability_slots.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
@@ -301,6 +263,8 @@ const BookingsPage: React.FC = () => {
         );
       }
     }
+
+    toast.success(status === 'confirmed' ? 'Buchung bestätigt & Session erstellt' : 'Buchung abgelehnt');
     setRespondDialog(null);
     setTrainerNote('');
     setResponding(false);
