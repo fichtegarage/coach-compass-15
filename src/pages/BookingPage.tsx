@@ -9,32 +9,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut } from 'lucide-react';
 
-// Sendet name + email direkt mit – keine DB-Abfrage in der Edge Function nötig
-const sendBookingEmail = async (
-  type: 'request_submitted' | 'request_confirmed' | 'request_rejected',
-  client_name: string,
-  client_email: string | null,
-  slotStart: string,
-  slotEnd: string,
-  trainer_note?: string
-) => {
-  const start = new Date(slotStart);
-  const end = new Date(slotEnd);
-  await supabase.functions.invoke('send-booking-email', {
-    body: {
-      type,
-      client_name,
-      client_email,
-      slot: {
-        date: format(start, 'EEEE, d. MMMM yyyy', { locale: de }),
-        start: format(start, 'HH:mm'),
-        end: format(end, 'HH:mm'),
-        trainer_note: trainer_note || null,
-      },
-    },
-  });
+// ── E-Mail helper ─────────────────────────────────────────────────────────────
+const sendEmail = async (to: string, subject: string, html: string) => {
+  try {
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html }),
+    });
+  } catch (e) {
+    console.error('E-Mail konnte nicht gesendet werden', e);
+  }
 };
 
 // ── Legal texts ───────────────────────────────────────────────────────────────
@@ -274,7 +261,6 @@ const BookingPage: React.FC = () => {
       .maybeSingle();
 
     if (clientData) {
-      // E-Mail aktuell halten
       if (clientData.email && clientData.email !== clientEmail) {
         setClientEmail(clientData.email);
         sessionStorage.setItem('booking_client_email', clientData.email);
@@ -375,7 +361,31 @@ const BookingPage: React.FC = () => {
       return;
     }
     toast.success('Deine Anfrage wurde gesendet. Du hörst bald von deinem Trainer!');
-    await sendBookingEmail('request_submitted', clientName, clientEmail, selectedSlot.start_time, selectedSlot.end_time);
+
+    const slotDate = format(new Date(selectedSlot.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
+
+    // E-Mail an Trainer
+    await sendEmail(
+      'jakob.neumann@posteo.de',
+      'Neue Buchungsanfrage 📅',
+      `<p><strong>${clientName}</strong> hat eine neue Buchungsanfrage gestellt.</p>
+       <p>Termin: <strong>${slotDate} Uhr</strong></p>
+       ${bookingMessage ? `<p>Nachricht: „${bookingMessage}"</p>` : ''}
+       <p><a href="https://buchung.jakob-neumann.net">Zur App</a></p>`
+    );
+
+    // Bestätigungs-E-Mail an Kunden (falls E-Mail vorhanden)
+    if (clientEmail) {
+      await sendEmail(
+        clientEmail,
+        'Deine Buchungsanfrage wurde eingereicht',
+        `<p>Hallo ${clientName},</p>
+         <p>deine Anfrage für den Termin am <strong>${slotDate} Uhr</strong> wurde eingereicht.</p>
+         <p>Du erhältst eine weitere Benachrichtigung, sobald Jakob deinen Termin bestätigt hat.</p>
+         <p>Bis bald,<br/>Jakob Neumann Personal Training</p>`
+      );
+    }
+
     setSelectedSlot(null);
     setBookingMessage('');
     setSubmitting(false);
