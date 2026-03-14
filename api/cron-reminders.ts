@@ -1,37 +1,25 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Security: only allow calls with the correct secret
-  const secret = req.query.secret ?? req.headers['authorization']?.toString().replace('Bearer ', '');
-if (secret !== process.env.CRON_SECRET) {
-  return res.status(401).json({ error: 'Unauthorized' });
-}
+  // Auth via query parameter: ?secret=...
+  const secret = Array.isArray(req.query.secret) ? req.query.secret[0] : req.query.secret;
+  if (!secret || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-    return res.status(500).json({ error: 'Missing environment variables' });
+    return res.status(500).json({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' });
   }
-
   if (!process.env.RESEND_API_KEY) {
-    console.error('Missing RESEND_API_KEY');
     return res.status(500).json({ error: 'Missing RESEND_API_KEY' });
   }
 
   const now = new Date();
-  const windowStart = new Date(now.getTime() + 2 * 60 * 60 * 1000); // now + 2h
-  const windowEnd   = new Date(now.getTime() + 3 * 60 * 60 * 1000); // now + 3h
-
-  // Fetch scheduled sessions in the 2–3h window, not yet reminded
-  // Uses select with embedded clients relation
-  const params = new URLSearchParams({
-    select: 'id,session_date,duration_minutes,session_type,client_id,reminder_sent,clients(full_name,email)',
-    status: 'eq.Scheduled',
-    reminder_sent: 'eq.false',
-    session_date: `gte.${windowStart.toISOString()}`,
-    'session_date.lte': windowEnd.toISOString(),
-  });
+  const windowStart = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const windowEnd   = new Date(now.getTime() + 3 * 60 * 60 * 1000);
 
   const sessionsRes = await fetch(
     `${supabaseUrl}/rest/v1/sessions?select=id,session_date,duration_minutes,session_type,client_id,reminder_sent,clients(full_name,email)&status=eq.Scheduled&reminder_sent=eq.false&session_date=gte.${windowStart.toISOString()}&session_date=lte.${windowEnd.toISOString()}`,
@@ -46,12 +34,10 @@ if (secret !== process.env.CRON_SECRET) {
 
   if (!sessionsRes.ok) {
     const err = await sessionsRes.text();
-    console.error('Supabase fetch error:', err);
     return res.status(500).json({ error: 'Supabase fetch failed', details: err });
   }
 
   const sessions: any[] = await sessionsRes.json();
-  console.log(`Found ${sessions.length} session(s) to remind`);
 
   if (sessions.length === 0) {
     return res.status(200).json({ sent: 0, message: 'No sessions in window' });
@@ -66,27 +52,18 @@ if (secret !== process.env.CRON_SECRET) {
   };
 
   let sent = 0;
-  const errors: string[] = [];
-
   for (const session of sessions) {
     const client = session.clients;
-    if (!client?.email) {
-      console.log(`Session ${session.id}: no client email, skipping`);
-      continue;
-    }
+    if (!client?.email) continue;
 
     const startDate = new Date(session.session_date);
     const timeStr = startDate.toLocaleString('de-DE', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
+      weekday: 'long', day: 'numeric', month: 'long',
+      hour: '2-digit', minute: '2-digit',
       timeZone: 'Europe/Berlin',
     });
     const typeLabel = sessionTypeLabels[session.session_type] || session.session_type;
 
-    // Send reminder email via Resend
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -111,39 +88,21 @@ if (secret !== process.env.CRON_SECRET) {
       }),
     });
 
-    if (!emailRes.ok) {
-      const errText = await emailRes.text();
-      console.error(`Resend error for session ${session.id}:`, errText);
-      errors.push(session.id);
-      continue;
-    }
+    if (!emailRes.ok) continue;
 
-    // Mark session as reminded so we don't send again
-    const patchRes = await fetch(
-      `${supabaseUrl}/rest/v1/sessions?id=eq.${session.id}`,
-      {
-        method: 'PATCH',
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
-        },
-        body: JSON.stringify({ reminder_sent: true }),
-      }
-    );
+    await fetch(`${supabaseUrl}/rest/v1/sessions?id=eq.${session.id}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({ reminder_sent: true }),
+    });
 
-    if (!patchRes.ok) {
-      console.error(`Failed to mark session ${session.id} as reminded`);
-    } else {
-      sent++;
-      console.log(`Reminder sent to ${client.email} for session ${session.id}`);
-    }
+    sent++;
   }
 
-  return res.status(200).json({
-    sent,
-    errors: errors.length > 0 ? errors : undefined,
-    message: `${sent} reminder(s) sent`,
-  });
+  return res.status(200).json({ sent, message: `${sent} reminder(s) sent` });
 }
