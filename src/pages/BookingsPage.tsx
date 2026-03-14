@@ -209,6 +209,18 @@ const BookingsPage: React.FC = () => {
     loadData();
   };
 
+  const sendEmail = async (to: string, subject: string, html: string) => {
+  try {
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html }),
+    });
+  } catch (e) {
+    console.error('E-Mail konnte nicht gesendet werden', e);
+  }
+};
+
   const handleRespond = async (status: 'confirmed' | 'rejected') => {
     if (!respondDialog) return;
     setResponding(true);
@@ -265,7 +277,30 @@ const BookingsPage: React.FC = () => {
         trainerNote || undefined
       );
     }
-
+// E-Mail an Kunden
+    const clientEmail = respondDialog.clients?.email;
+    if (clientEmail && respondDialog.availability_slots) {
+      const slotDate = format(new Date(respondDialog.availability_slots.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
+      if (status === 'confirmed') {
+        await sendEmail(
+          clientEmail,
+          'Dein Termin wurde bestätigt ✅',
+          `<p>Hallo ${respondDialog.clients.full_name},</p>
+           <p>dein Termin am <strong>${slotDate} Uhr</strong> wurde bestätigt.</p>
+           ${trainerNote ? `<p>Hinweis von Jakob: ${trainerNote}</p>` : ''}
+           <p>Bis bald,<br/>Jakob Neumann Personal Training</p>`
+        );
+      } else {
+        await sendEmail(
+          clientEmail,
+          'Deine Buchungsanfrage',
+          `<p>Hallo ${respondDialog.clients.full_name},</p>
+           <p>leider kann ich den Termin am <strong>${slotDate} Uhr</strong> nicht bestätigen.</p>
+           ${trainerNote ? `<p>Hinweis: ${trainerNote}</p>` : ''}
+           <p>Melde dich gerne für einen anderen Termin.<br/>Jakob Neumann Personal Training</p>`
+        );
+      }
+    }
     setRespondDialog(null);
     setTrainerNote('');
     setResponding(false);
