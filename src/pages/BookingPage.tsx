@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfWeek, addDays, isBefore, isSameDay, addWeeks, subWeeks, startOfDay } from 'date-fns';
+import { format, startOfWeek, addDays, isBefore, isSameDay, addWeeks, subWeeks, startOfDay, differenceInDays, differenceInHours } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -87,12 +87,8 @@ const LegalFooter: React.FC = () => {
   return (
     <>
       <footer className="py-4 flex gap-4 justify-center">
-        <button onClick={() => setModal('impressum')} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
-          Impressum
-        </button>
-        <button onClick={() => setModal('datenschutz')} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
-          Datenschutz
-        </button>
+        <button onClick={() => setModal('impressum')} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Impressum</button>
+        <button onClick={() => setModal('datenschutz')} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Datenschutz</button>
       </footer>
       {modal === 'impressum' && <LegalModal title="Impressum" content={impressumText} onClose={() => setModal(null)} />}
       {modal === 'datenschutz' && <LegalModal title="Datenschutzerklärung" content={datenschutzText} onClose={() => setModal(null)} />}
@@ -121,10 +117,11 @@ const slotTypeIcons: Record<string, React.ReactNode> = {
   'call': <Phone className="w-3.5 h-3.5" />,
 };
 
+// Feature 8: Klare Statusbezeichnungen
 const statusLabels: Record<string, string> = {
-  pending: 'Ausstehend',
-  confirmed: 'Bestätigt',
-  rejected: 'Abgelehnt',
+  pending: 'Wartet auf Bestätigung',
+  confirmed: 'Bestätigt ✅',
+  rejected: 'Abgelehnt ❌',
   cancelled: 'Storniert',
 };
 
@@ -132,7 +129,7 @@ const statusColors: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800 border-amber-200',
   confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   rejected: 'bg-red-100 text-red-800 border-red-200',
-  cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
+  cancelled: 'bg-gray-100 text-gray-500 border-gray-200',
 };
 
 const generateIcs = (booking: any) => {
@@ -144,8 +141,7 @@ const generateIcs = (booking: any) => {
   const fmt = (d: Date) =>
     `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
   const ics = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
+    'BEGIN:VCALENDAR', 'VERSION:2.0',
     'PRODID:-//Jakob Neumann Personal Training//DE',
     'BEGIN:VEVENT',
     `UID:${booking.id}@jakob-neumann.net`,
@@ -154,8 +150,7 @@ const generateIcs = (booking: any) => {
     'SUMMARY:Personal Training – Jakob Neumann',
     `DESCRIPTION:Trainingsart: ${slotTypeLabels[slot.slot_type] || slot.slot_type}`,
     'LOCATION:Jakob Neumann Personal Training',
-    'END:VEVENT',
-    'END:VCALENDAR',
+    'END:VEVENT', 'END:VCALENDAR',
   ].join('\r\n');
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -190,7 +185,10 @@ const BookingPage: React.FC = () => {
     const stored = sessionStorage.getItem('dismissed_notifications');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
-  const [packageInfo, setPackageInfo] = useState<{ name: string; total: number; used: number } | null>(null);
+  // Feature 11: Paketlaufzeit
+  const [packageInfo, setPackageInfo] = useState<{
+    name: string; total: number; used: number; endDate: string | null;
+  } | null>(null);
 
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,7 +254,7 @@ const BookingPage: React.FC = () => {
 
     const { data: clientData } = await supabase
       .from('clients')
-      .select('*, packages(id, package_name, sessions_included)')
+      .select('*, packages(id, package_name, sessions_included, end_date)')
       .eq('id', clientId)
       .maybeSingle();
 
@@ -277,6 +275,7 @@ const BookingPage: React.FC = () => {
             name: pkg.package_name,
             total: pkg.sessions_included,
             used: count || 0,
+            endDate: pkg.end_date || null,
           });
         }
       }
@@ -320,6 +319,7 @@ const BookingPage: React.FC = () => {
     return map;
   }, [slots, weekDays]);
 
+  // Feature 10: Alle Slots mit aktiver Anfrage des Kunden
   const myBookingSlotIds = useMemo(() => {
     return new Set(
       (bookings || [])
@@ -348,6 +348,14 @@ const BookingPage: React.FC = () => {
 
   const handleBookSlot = async () => {
     if (!selectedSlot || !clientId) return;
+
+    // Feature 10: Doppelbuchung verhindern
+    if (myBookingSlotIds.has(selectedSlot.id)) {
+      toast.error('Du hast für diesen Slot bereits eine Anfrage gestellt.');
+      setSelectedSlot(null);
+      return;
+    }
+
     setSubmitting(true);
     const { error } = await supabase.from('booking_requests').insert({
       slot_id: selectedSlot.id,
@@ -374,7 +382,7 @@ const BookingPage: React.FC = () => {
        <p><a href="https://buchung.jakob-neumann.net">Zur App</a></p>`
     );
 
-    // Bestätigungs-E-Mail an Kunden (falls E-Mail vorhanden)
+    // Eingangsbestätigung an Kunden
     if (clientEmail) {
       await sendEmail(
         clientEmail,
@@ -392,7 +400,15 @@ const BookingPage: React.FC = () => {
     loadData();
   };
 
-  const handleCancelRequest = async (requestId: string) => {
+  // Feature 7: Stornierung mit 24h-Sperre
+  const handleCancelRequest = async (requestId: string, slotStartTime?: string) => {
+    if (slotStartTime) {
+      const hoursUntilSlot = differenceInHours(new Date(slotStartTime), new Date());
+      if (hoursUntilSlot < 24) {
+        toast.error('Absagen innerhalb von 24 Stunden vor dem Termin sind nicht möglich. Bitte kontaktiere Jakob direkt.');
+        return;
+      }
+    }
     await supabase.from('booking_requests').update({ status: 'cancelled' }).eq('id', requestId);
     toast.success('Buchungsanfrage storniert.');
     loadData();
@@ -402,6 +418,13 @@ const BookingPage: React.FC = () => {
     await supabase.from('client_notifications').update({ is_read: true }).eq('id', id);
     setClientNotifications(prev => prev.filter(n => n.id !== id));
   };
+
+  // Feature 11: Verbleibende Tage im Paket
+  const remainingDays = useMemo(() => {
+    if (!packageInfo?.endDate) return null;
+    const days = differenceInDays(new Date(packageInfo.endDate), new Date());
+    return days;
+  }, [packageInfo]);
 
   // Access gate
   if (!clientId) {
@@ -444,20 +467,28 @@ const BookingPage: React.FC = () => {
       <meta name="robots" content="noindex" />
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-8 w-auto" />
-          </div>
+          <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-8 w-auto" />
           <div className="text-right">
             <p className="text-base font-semibold text-slate-900">Hallo, {clientName} 👋</p>
             {packageInfo && (
-              <p className="text-xs text-slate-400 mt-0.5">
-                {packageInfo.name}: <span className="font-medium text-emerald-600">{packageInfo.used}/{packageInfo.total}</span> Einheiten
-              </p>
+              <div className="flex flex-col items-end gap-0.5">
+                <p className="text-xs text-slate-400">
+                  {packageInfo.name}: <span className="font-medium text-emerald-600">{packageInfo.used}/{packageInfo.total}</span> Einheiten
+                </p>
+                {/* Feature 11: Paketlaufzeit */}
+                {remainingDays !== null && (
+                  <p className={`text-xs font-medium ${remainingDays <= 7 ? 'text-red-500' : remainingDays <= 14 ? 'text-amber-500' : 'text-slate-400'}`}>
+                    {remainingDays > 0
+                      ? `Paket läuft noch ${remainingDays} Tag${remainingDays === 1 ? '' : 'e'}`
+                      : 'Paket abgelaufen'}
+                  </p>
+                )}
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => setShowRequests(!showRequests)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-100">
-              {showRequests ? 'Kalender' : 'Meine Anfragen'}
+              {showRequests ? 'Kalender' : 'Meine Buchungen'}
             </Button>
             <Button variant="ghost" size="icon" onClick={handleLogout} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100">
               <LogOut className="w-4 h-4" />
@@ -466,14 +497,14 @@ const BookingPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Booking response notifications (confirmed / rejected) */}
+      {/* Booking response notifications */}
       {notifications.filter(n => !dismissedNotifications.has(n.id)).length > 0 && !showRequests && (
         <div className="max-w-4xl mx-auto px-4 mt-3 space-y-2 w-full">
           {notifications.filter(n => !dismissedNotifications.has(n.id)).map(n => (
             <div key={n.id} className={`rounded-lg px-4 py-2 text-sm border flex items-center justify-between gap-2 ${n.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
               <span>
                 Deine Anfrage für {n.availability_slots ? format(new Date(n.availability_slots.start_time), "d. MMM, HH:mm", { locale: de }) : '—'} wurde{' '}
-                <strong>{n.status === 'confirmed' ? 'bestätigt' : 'abgelehnt'}</strong>.
+                <strong>{n.status === 'confirmed' ? 'bestätigt ✅' : 'abgelehnt ❌'}</strong>.
                 {n.trainer_note && ` Hinweis: ${n.trainer_note}`}
               </span>
               <button
@@ -495,57 +526,22 @@ const BookingPage: React.FC = () => {
           {clientNotifications.map(n => (
             <div key={n.id} className="rounded-lg px-4 py-2 text-sm border flex items-center justify-between gap-2 bg-red-50 border-red-200 text-red-800">
               <span>📅 {n.message}</span>
-              <button
-                onClick={() => dismissClientNotification(n.id)}
-                className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-              >✕</button>
+              <button onClick={() => dismissClientNotification(n.id)} className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity">✕</button>
             </div>
           ))}
         </div>
       )}
 
       <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
+        {/* Feature 6: Vollständige Buchungshistorie */}
         {showRequests ? (
-          <div className="space-y-3">
-            <h2 className="text-lg font-bold text-slate-900">Meine Buchungsanfragen</h2>
-            {bookings.length === 0 ? (
-              <p className="text-slate-500 text-sm py-8 text-center">Noch keine Anfragen</p>
-            ) : (
-              bookings.map((b: any) => (
-                <Card key={b.id} className="bg-white border-slate-200 shadow-sm">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">
-                        {b.availability_slots
-                          ? `${format(new Date(b.availability_slots.start_time), "EEEE, d. MMM · HH:mm", { locale: de })} – ${format(new Date(b.availability_slots.end_time), "HH:mm", { locale: de })}`
-                          : 'Slot entfernt'}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {b.availability_slots && <span className="text-xs text-slate-500 flex items-center gap-1">{slotTypeIcons[b.availability_slots.slot_type]}{slotTypeLabels[b.availability_slots.slot_type]}</span>}
-                        <span className="text-xs text-slate-400">Angefragt {format(new Date(b.requested_at), "d. MMM, HH:mm", { locale: de })}</span>
-                      </div>
-                      {b.client_message && <p className="text-xs text-slate-500 mt-1">„{b.client_message}"</p>}
-                      {b.trainer_note && <p className="text-xs text-slate-500 mt-1 italic">Trainer: {b.trainer_note}</p>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={statusColors[b.status]}>{statusLabels[b.status]}</Badge>
-                      {b.status === 'pending' && (
-                        <Button variant="ghost" size="sm" onClick={() => handleCancelRequest(b.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs">Stornieren</Button>
-                      )}
-                      {b.status === 'confirmed' && (
-                        <Button variant="ghost" size="sm" onClick={() => generateIcs(b)} className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs">+ Kalender</Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        ) : (
-          <>
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-slate-900">Meine Buchungen</h2>
+
+            {/* Geplante Sessions */}
             {scheduledSessions.length > 0 && (
-              <div className="mb-6 space-y-2">
-                <h3 className="text-sm font-semibold text-slate-700">Deine geplanten Einheiten</h3>
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bestätigte Einheiten</h3>
                 {scheduledSessions.map(s => (
                   <div key={s.id} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between">
                     <div>
@@ -558,20 +554,17 @@ const BookingPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        variant="ghost" size="sm"
                         onClick={() => {
                           const start = new Date(s.session_date);
                           const end = new Date(start.getTime() + s.duration_minutes * 60000);
                           const pad = (n: number) => String(n).padStart(2, '0');
                           const fmt = (d: Date) => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
                           const ics = [
-                            'BEGIN:VCALENDAR', 'VERSION:2.0',
-                            'PRODID:-//Jakob Neumann Personal Training//DE',
+                            'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Jakob Neumann Personal Training//DE',
                             'BEGIN:VEVENT',
                             `UID:${s.id}@jakob-neumann.net`,
-                            `DTSTART:${fmt(start)}`,
-                            `DTEND:${fmt(end)}`,
+                            `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`,
                             'SUMMARY:Personal Training – Jakob Neumann',
                             `DESCRIPTION:${sessionTypeLabels[s.session_type] || s.session_type}`,
                             `LOCATION:${s.location || 'Jakob Neumann Personal Training'}`,
@@ -579,18 +572,130 @@ const BookingPage: React.FC = () => {
                           ].join('\r\n');
                           const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
                           const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
+                          const a = document.createElement('a'); a.href = url;
                           a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
-                          a.click();
-                          URL.revokeObjectURL(url);
+                          a.click(); URL.revokeObjectURL(url);
                         }}
                         className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 text-xs"
-                      >
-                        + Kalender
-                      </Button>
+                      >+ Kalender</Button>
+                      <span className="text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">Bestätigt ✅</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Alle Buchungsanfragen */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Anfragen & Verlauf</h3>
+              {bookings.length === 0 ? (
+                <p className="text-slate-500 text-sm py-6 text-center">Noch keine Anfragen</p>
+              ) : (
+                bookings.map((b: any) => {
+                  const slotStart = b.availability_slots?.start_time;
+                  const hoursUntil = slotStart ? differenceInHours(new Date(slotStart), new Date()) : 999;
+                  const canCancel = (b.status === 'pending' || b.status === 'confirmed') && hoursUntil >= 24;
+                  const withinLock = (b.status === 'pending' || b.status === 'confirmed') && hoursUntil < 24;
+
+                  return (
+                    <Card key={b.id} className="bg-white border-slate-200 shadow-sm">
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">
+                            {slotStart
+                              ? `${format(new Date(slotStart), "EEEE, d. MMM · HH:mm", { locale: de })} – ${format(new Date(b.availability_slots.end_time), "HH:mm", { locale: de })}`
+                              : 'Slot entfernt'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {b.availability_slots && (
+                              <span className="text-xs text-slate-500 flex items-center gap-1">
+                                {slotTypeIcons[b.availability_slots.slot_type]}
+                                {slotTypeLabels[b.availability_slots.slot_type]}
+                              </span>
+                            )}
+                            <span className="text-xs text-slate-400">
+                              Angefragt {format(new Date(b.requested_at), "d. MMM, HH:mm", { locale: de })}
+                            </span>
+                          </div>
+                          {b.client_message && <p className="text-xs text-slate-500 mt-1">„{b.client_message}"</p>}
+                          {b.trainer_note && <p className="text-xs text-slate-500 mt-1 italic">Hinweis: {b.trainer_note}</p>}
+                          {/* Feature 7: Hinweis bei 24h-Sperre */}
+                          {withinLock && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              ⚠️ Absage nicht mehr möglich (weniger als 24h). Bitte kontaktiere Jakob direkt.
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-col sm:flex-row ml-3">
+                          <Badge variant="outline" className={statusColors[b.status]}>
+                            {statusLabels[b.status]}
+                          </Badge>
+                          {canCancel && (
+                            <Button
+                              variant="ghost" size="sm"
+                              onClick={() => handleCancelRequest(b.id, slotStart)}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs"
+                            >Stornieren</Button>
+                          )}
+                          {b.status === 'confirmed' && slotStart && (
+                            <Button
+                              variant="ghost" size="sm"
+                              onClick={() => generateIcs(b)}
+                              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs"
+                            >+ Kalender</Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Geplante Einheiten im Kalender-View */}
+            {scheduledSessions.length > 0 && (
+              <div className="mb-6 space-y-2">
+                <h3 className="text-sm font-semibold text-slate-700">Deine nächsten Einheiten</h3>
+                {scheduledSessions.map(s => (
+                  <div key={s.id} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {format(new Date(s.session_date), "EEEE, d. MMMM · HH:mm", { locale: de })} Uhr
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {sessionTypeLabels[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => {
+                          const start = new Date(s.session_date);
+                          const end = new Date(start.getTime() + s.duration_minutes * 60000);
+                          const pad = (n: number) => String(n).padStart(2, '0');
+                          const fmt = (d: Date) => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+                          const ics = [
+                            'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Jakob Neumann Personal Training//DE',
+                            'BEGIN:VEVENT',
+                            `UID:${s.id}@jakob-neumann.net`,
+                            `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`,
+                            'SUMMARY:Personal Training – Jakob Neumann',
+                            `DESCRIPTION:${sessionTypeLabels[s.session_type] || s.session_type}`,
+                            `LOCATION:${s.location || 'Jakob Neumann Personal Training'}`,
+                            'END:VEVENT', 'END:VCALENDAR',
+                          ].join('\r\n');
+                          const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a'); a.href = url;
+                          a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
+                          a.click(); URL.revokeObjectURL(url);
+                        }}
+                        className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 text-xs"
+                      >+ Kalender</Button>
                       <span className="text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">
-                        Bestätigt
+                        Bestätigt ✅
                       </span>
                     </div>
                   </div>
@@ -598,6 +703,7 @@ const BookingPage: React.FC = () => {
               </div>
             )}
 
+            {/* Wochenkalender */}
             <div className="flex items-center justify-between mb-4">
               <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200">
                 <ChevronLeft className="w-5 h-5" />
@@ -636,17 +742,32 @@ const BookingPage: React.FC = () => {
                           return (
                             <button
                               key={slot.id}
-                              disabled={isPast || slotPast || isFull}
+                              disabled={isPast || slotPast || isFull || isMyBooking}
                               onClick={() => { if (isMyBooking) return; setSelectedSlot(slot); }}
-                              className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${isMyBooking ? 'bg-emerald-50 border-emerald-200' : isFull || slotPast ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm cursor-pointer'}`}
+                              className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${
+                                isMyBooking
+                                  ? 'bg-emerald-50 border-emerald-200 cursor-default'
+                                  : isFull || slotPast
+                                  ? 'bg-slate-50 border-slate-100 cursor-not-allowed'
+                                  : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm cursor-pointer'
+                              }`}
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                  <span className="text-sm font-medium text-slate-900">{format(new Date(slot.start_time), 'HH:mm')} – {format(new Date(slot.end_time), 'HH:mm')}</span>
-                                  <span className="text-xs text-slate-500 flex items-center gap-1">{slotTypeIcons[slot.slot_type]}{slotTypeLabels[slot.slot_type]}</span>
+                                  <span className="text-sm font-medium text-slate-900">
+                                    {format(new Date(slot.start_time), 'HH:mm')} – {format(new Date(slot.end_time), 'HH:mm')}
+                                  </span>
+                                  <span className="text-xs text-slate-500 flex items-center gap-1">
+                                    {slotTypeIcons[slot.slot_type]}{slotTypeLabels[slot.slot_type]}
+                                  </span>
                                 </div>
-                                {isMyBooking && myBooking && <Badge variant="outline" className={statusColors[myBooking.status]}>{statusLabels[myBooking.status]}</Badge>}
+                                {/* Feature 10: Zeige Status wenn bereits gebucht */}
+                                {isMyBooking && myBooking && (
+                                  <Badge variant="outline" className={statusColors[myBooking.status]}>
+                                    {statusLabels[myBooking.status]}
+                                  </Badge>
+                                )}
                                 {isFull && !isMyBooking && <span className="text-xs text-slate-400">Ausgebucht</span>}
                               </div>
                             </button>
@@ -664,6 +785,7 @@ const BookingPage: React.FC = () => {
 
       <LegalFooter />
 
+      {/* Buchungs-Dialog */}
       <Dialog open={!!selectedSlot} onOpenChange={open => { if (!open) setSelectedSlot(null); }}>
         <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
           <DialogHeader>
@@ -678,7 +800,13 @@ const BookingPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Nachricht an den Trainer (optional)</label>
-                <Textarea value={bookingMessage} onChange={e => setBookingMessage(e.target.value)} placeholder="z.B. Schwerpunkt Oberkörper gewünscht..." className="bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400" rows={3} />
+                <Textarea
+                  value={bookingMessage}
+                  onChange={e => setBookingMessage(e.target.value)}
+                  placeholder="z.B. Schwerpunkt Oberkörper gewünscht..."
+                  className="bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                  rows={3}
+                />
               </div>
               <Button onClick={handleBookSlot} disabled={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Termin anfragen'}
