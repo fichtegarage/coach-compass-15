@@ -37,6 +37,28 @@ const sendEmail = async (to: string, subject: string, html: string) => {
   }
 };
 
+// ── Auto-split helper: Zeitblock → Array von 60-Min-Slots ────────────────────
+const splitIntoHourlySlots = (
+  dateStr: string,
+  startTime: string,
+  endTime: string
+): { start_time: string; end_time: string }[] => {
+  const start = new Date(`${dateStr}T${startTime}:00`);
+  const end = new Date(`${dateStr}T${endTime}:00`);
+  const result: { start_time: string; end_time: string }[] = [];
+  let current = start;
+  while (current < end) {
+    const next = new Date(current.getTime() + 60 * 60 * 1000);
+    if (next > end) break; // unvollständige Slots nicht anlegen
+    result.push({
+      start_time: current.toISOString(),
+      end_time: next.toISOString(),
+    });
+    current = next;
+  }
+  return result;
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const slotTypeLabels: Record<string, string> = {
   'in-person': 'Vor Ort',
@@ -74,14 +96,6 @@ const requestStatusColors: Record<string, string> = {
   rejected: 'bg-destructive/10 text-destructive border-destructive/20',
   cancelled: 'bg-muted text-muted-foreground border-border',
 };
-
-// ── Color coding for calendar entries ────────────────────────────────────────
-// Slots (free):        blue outline
-// Slots (with pending): amber
-// Scheduled sessions:  green solid
-// Completed sessions:  gray
-// Cancelled/No-Show:   red strikethrough
-// Past slots:          muted/opacity
 
 const BookingsPage: React.FC = () => {
   const { user } = useAuth();
@@ -145,7 +159,7 @@ const BookingsPage: React.FC = () => {
         .from('sessions')
         .select('*, clients(full_name)')
         .gte('session_date', monthStart.toISOString())
-        .lte('session_date', monthEnd.toISOString() )
+        .lte('session_date', monthEnd.toISOString())
         .order('session_date'),
       supabase
         .from('clients')
@@ -175,7 +189,7 @@ const BookingsPage: React.FC = () => {
     return () => { supabase.removeChannel(channel); };
   }, [loadData]);
 
-  // Feature 9: In-App 24h Notification – check on load
+  // In-App 24h Notification
   useEffect(() => {
     if (!sessions.length) return;
     const in24h = sessions.filter(s => {
@@ -219,24 +233,44 @@ const BookingsPage: React.FC = () => {
     return counts;
   }, [requests]);
 
-  // Entries per day for calendar
+  // ── Vorschau: wie viele Slots entstehen beim Erstellen ───────────────────
+  const slotPreviewCount = useMemo(() => {
+    if (!slotForm.start_time || !slotForm.end_time) return 0;
+    const start = new Date(`2000-01-01T${slotForm.start_time}:00`);
+    const end = new Date(`2000-01-01T${slotForm.end_time}:00`);
+    const diffMinutes = (end.getTime() - start.getTime()) / 60000;
+    return Math.floor(diffMinutes / 60);
+  }, [slotForm.start_time, slotForm.end_time]);
+
+  // ── Entries per day for calendar ─────────────────────────────────────────
+  // Slots werden nur angezeigt wenn:
+  //   a) is_bookable = true  ODER
+  //   b) noch eine ausstehende Anfrage existiert (Amber-Zustand)
+  // → vollständig gebuchte Slots (is_bookable=false, kein pending) werden ausgeblendet
   const entriesByDay = useMemo(() => {
     const map: Record<string, { slots: any[]; sessions: any[] }> = {};
     calendarDays.forEach(d => {
       map[format(d, 'yyyy-MM-dd')] = { slots: [], sessions: [] };
     });
+
     slots.forEach(slot => {
+      const hasPending = (slotBookingCounts[slot.id]?.pending || 0) > 0;
+      // Gebuchte Slots (nicht mehr buchbar, keine ausstehende Anfrage) ausblenden
+      if (!slot.is_bookable && !hasPending) return;
+
       const key = format(new Date(slot.start_time), 'yyyy-MM-dd');
       if (map[key]) map[key].slots.push(slot);
     });
+
     sessions.forEach(session => {
       const key = format(new Date(session.session_date), 'yyyy-MM-dd');
       if (map[key]) map[key].sessions.push(session);
     });
-    return map;
-  }, [slots, sessions, calendarDays]);
 
-  // ── Slot actions ─────────────────────────────────────────────────────────
+    return map;
+  }, [slots, sessions, slotBookingCounts, calendarDays]);
+
+  // ── Slot actions ──────────────────────────────────────────────────────────
   const createSlot = async () => {
     if (!user) return;
     const slotsToCreate: any[] = [];
@@ -249,30 +283,52 @@ const BookingsPage: React.FC = () => {
           const targetDate = addDays(addWeeks(baseDate, w), dayOfWeek);
           if (isBefore(targetDate, startOfDay(new Date()))) continue;
           const dateStr = format(targetDate, 'yyyy-MM-dd');
-          slotsToCreate.push({
-            trainer_id: user.id,
-            start_time: new Date(`${dateStr}T${slotForm.start_time}:00`).toISOString(),
-            end_time: new Date(`${dateStr}T${slotForm.end_time}:00`).toISOString(),
-            slot_type: slotForm.slot_type,
-            notes: slotForm.notes || null,
+          // Auto-split in 60-Min-Slots
+          const hourlySlots = splitIntoHourlySlots(dateStr, slotForm.start_time, slotForm.end_time);
+          hourlySlots.forEach(s => {
+            slotsToCreate.push({
+              trainer_id: user.id,
+              start_time: s.start_time,
+              end_time: s.end_time,
+              slot_type: slotForm.slot_type,
+              notes: slotForm.notes || null,
+            });
           });
         }
       }
     } else {
-      slotsToCreate.push({
-        trainer_id: user.id,
-        start_time: new Date(`${slotForm.date}T${slotForm.start_time}:00`).toISOString(),
-        end_time: new Date(`${slotForm.date}T${slotForm.end_time}:00`).toISOString(),
-        slot_type: slotForm.slot_type,
-        notes: slotForm.notes || null,
+      // Auto-split in 60-Min-Slots
+      const hourlySlots = splitIntoHourlySlots(slotForm.date, slotForm.start_time, slotForm.end_time);
+      hourlySlots.forEach(s => {
+        slotsToCreate.push({
+          trainer_id: user.id,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          slot_type: slotForm.slot_type,
+          notes: slotForm.notes || null,
+        });
       });
+    }
+
+    if (slotsToCreate.length === 0) {
+      toast.error('Kein gültiger Zeitblock (mind. 1 Stunde eingeben)');
+      return;
     }
 
     const { error } = await supabase.from('availability_slots').insert(slotsToCreate);
     if (error) { toast.error('Fehler beim Erstellen der Slots'); return; }
-    toast.success(`${slotsToCreate.length} Slot(s) erstellt`);
+    toast.success(`${slotsToCreate.length} Slot(s) à 60 Min. erstellt`);
     setSlotDialogOpen(false);
-    setSlotForm({ date: new Date().toISOString().split('T')[0], start_time: '09:00', end_time: '10:00', slot_type: 'in-person', notes: '', recurring: false, recurring_days: [], recurring_weeks: '4' });
+    setSlotForm({
+      date: new Date().toISOString().split('T')[0],
+      start_time: '09:00',
+      end_time: '10:00',
+      slot_type: 'in-person',
+      notes: '',
+      recurring: false,
+      recurring_days: [],
+      recurring_weeks: '4',
+    });
     loadData();
   };
 
@@ -323,7 +379,6 @@ const BookingsPage: React.FC = () => {
       .eq('id', editSession.id);
     if (error) { toast.error('Fehler: ' + error.message); return; }
 
-    // Notification if trainer cancels scheduled session
     if (wasScheduled && isCancelledByTrainer && editSession.client_id) {
       const sessionDate = format(new Date(editSession.session_date), "EEEE, d. MMMM · HH:mm", { locale: de });
       await supabase.from('client_notifications').insert({
@@ -378,7 +433,6 @@ const BookingsPage: React.FC = () => {
       }
     }
 
-    // E-Mail an Kunden
     const clientEmail = respondDialog.clients?.email;
     if (clientEmail && respondDialog.availability_slots) {
       const slotDate = format(new Date(respondDialog.availability_slots.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
@@ -464,7 +518,6 @@ const BookingsPage: React.FC = () => {
             </Button>
           </div>
 
-          {/* Weekday headers */}
           <div className="border border-border rounded-xl overflow-hidden">
             <div className="grid grid-cols-7 bg-muted/30">
               {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(d => (
@@ -488,7 +541,7 @@ const BookingsPage: React.FC = () => {
                       {format(day, 'd')}
                     </p>
                     <div className="space-y-0.5">
-                      {/* Slots */}
+                      {/* Slots – gebuchte (is_bookable=false, kein pending) sind bereits herausgefiltert */}
                       {entries.slots.map(slot => {
                         const counts = slotBookingCounts[slot.id];
                         const hasPending = (counts?.pending || 0) > 0;
@@ -616,14 +669,29 @@ const BookingsPage: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Startzeit</Label>
+                <Label>Verfügbar von</Label>
                 <Input type="time" value={slotForm.start_time} onChange={e => setSlotForm(f => ({ ...f, start_time: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>Endzeit</Label>
+                <Label>Verfügbar bis</Label>
                 <Input type="time" value={slotForm.end_time} onChange={e => setSlotForm(f => ({ ...f, end_time: e.target.value }))} />
               </div>
             </div>
+
+            {/* Live-Vorschau Slot-Anzahl */}
+            {slotPreviewCount > 0 ? (
+              <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
+                → {slotPreviewCount} Slot{slotPreviewCount > 1 ? 's' : ''} à 60 Min. werden erstellt
+                {slotForm.recurring && slotForm.recurring_days.length > 0
+                  ? ` × ${slotForm.recurring_days.length} Tag(e) × ${slotForm.recurring_weeks} Woche(n)`
+                  : ''}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                Bitte mind. 1 Stunde Verfügbarkeit eingeben
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Typ</Label>
               <Select value={slotForm.slot_type} onValueChange={v => setSlotForm(f => ({ ...f, slot_type: v }))}>
@@ -670,12 +738,14 @@ const BookingsPage: React.FC = () => {
                 </div>
               </div>
             )}
-            <Button onClick={createSlot} className="w-full">Slot erstellen</Button>
+            <Button onClick={createSlot} className="w-full" disabled={slotPreviewCount === 0}>
+              {slotPreviewCount > 0 ? `${slotPreviewCount} Slot${slotPreviewCount > 1 ? 's' : ''} erstellen` : 'Slot erstellen'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* ── Edit Slot Dialog (Feature 2) ── */}
+      {/* ── Edit Slot Dialog ── */}
       <Dialog open={!!editSlot} onOpenChange={open => { if (!open) setEditSlot(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -725,7 +795,7 @@ const BookingsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Edit Session Status Dialog (Feature 4) ── */}
+      {/* ── Edit Session Status Dialog ── */}
       <Dialog open={!!editSession} onOpenChange={open => { if (!open) setEditSession(null); }}>
         <DialogContent>
           <DialogHeader>
