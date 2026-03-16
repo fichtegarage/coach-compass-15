@@ -32,6 +32,13 @@ interface PackageFeature {
 }
 
 const packageFeaturesMap: Record<string, PackageFeature[]> = {
+  'Testkunde': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Feedback nach letzter Einheit erhalten', key: 'feedback_erhalten', manual: true },
+  ],
   'Starter': [
     { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
     { label: 'Trainingseinheiten', key: 'sessions' },
@@ -62,6 +69,10 @@ const packageFeaturesMap: Record<string, PackageFeature[]> = {
 };
 
 const packageTemplates: Record<string, { sessions_included: string; checkin_calls_included: string; package_price: string; duration_weeks: string; description: string }> = {
+  'Testkunde': {
+    sessions_included: '3', checkin_calls_included: '0', package_price: '0', duration_weeks: '8',
+    description: '1 Vorgespräch + 3 Einheiten à 60 Min. • kostenlos • 8 Wochen',
+  },
   'Starter': {
     sessions_included: '5', checkin_calls_included: '0', package_price: '470', duration_weeks: '13',
     description: '5 Einheiten à 60 Min. • gültig 3 Monate',
@@ -75,8 +86,8 @@ const packageTemplates: Record<string, { sessions_included: string; checkin_call
     description: '20 Einheiten à 60 Min. • gültig 12 Monate',
   },
 };
-const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
 
+const sessionTypes = ['In-Person Training', 'Online Training', 'Phone Call', 'Check-In Call', 'Free Intro'];
 const sessionStatuses = ['Scheduled', 'Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
 
 const sessionTypeLabelsDE: Record<string, string> = {
@@ -161,10 +172,7 @@ const BookingCodeCard: React.FC<{ client: any; clientId: string; onUpdate: () =>
               </Button>
             </div>
             <div className="flex items-center gap-2">
-              <Switch
-                checked={client.booking_code_active}
-                onCheckedChange={handleToggle}
-              />
+              <Switch checked={client.booking_code_active} onCheckedChange={handleToggle} />
               <span className="text-sm text-muted-foreground">
                 {client.booking_code_active ? 'Aktiv' : 'Deaktiviert'}
               </span>
@@ -195,8 +203,7 @@ const ClientDetailPage: React.FC = () => {
   const [quickLogText, setQuickLogText] = useState('');
   const [editingPinned, setEditingPinned] = useState(false);
   const [pinnedText, setPinnedText] = useState('');
-  
-  // Session form
+
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const defaultSessionForm = {
@@ -206,7 +213,6 @@ const ClientDetailPage: React.FC = () => {
   };
   const [sessionForm, setSessionForm] = useState(defaultSessionForm);
 
-  // Package form
   const [packageDialogOpen, setPackageDialogOpen] = useState(false);
   const [packageForm, setPackageForm] = useState({
     package_name: '', sessions_included: '10', checkin_calls_included: '0',
@@ -215,14 +221,12 @@ const ClientDetailPage: React.FC = () => {
     deal_adjusted_terms: '', payment_status: 'Unpaid', payment_date: '',
   });
 
-  // Metric form
   const [metricDialogOpen, setMetricDialogOpen] = useState(false);
   const [metricForm, setMetricForm] = useState({
     measured_at: new Date().toISOString().split('T')[0],
     weight_kg: '', body_fat_pct: '', waist_cm: '', hip_cm: '', chest_cm: '',
   });
 
-  // Benchmark form
   const [benchmarkDialogOpen, setBenchmarkDialogOpen] = useState(false);
   const [benchmarkForm, setBenchmarkForm] = useState({
     label: '', value: '', measured_at: new Date().toISOString().split('T')[0],
@@ -308,6 +312,7 @@ const ClientDetailPage: React.FC = () => {
       case 'whatsapp_support': return { done: true };
       case 'prio_buchung': return { done: true };
       case 'gratis_einheit': return { done: manualDone, manual: true };
+      case 'feedback_erhalten': return { done: manualDone, manual: true };
       default: return { done: false };
     }
   };
@@ -383,6 +388,7 @@ const ClientDetailPage: React.FC = () => {
 
   const savePackage = async () => {
     if (!user || !id) return;
+    const isTestkunde = packageForm.package_name === 'Testkunde';
     const endDate = packageForm.start_date && packageForm.duration_weeks
       ? new Date(new Date(packageForm.start_date).getTime() + Number(packageForm.duration_weeks) * 7 * 86400000).toISOString().split('T')[0]
       : null;
@@ -391,16 +397,17 @@ const ClientDetailPage: React.FC = () => {
       package_name: packageForm.package_name,
       sessions_included: Number(packageForm.sessions_included),
       checkin_calls_included: Number(packageForm.checkin_calls_included),
-      package_price: Number(packageForm.package_price),
+      package_price: isTestkunde ? 0 : Number(packageForm.package_price),
       start_date: packageForm.start_date,
       end_date: endDate,
       duration_weeks: packageForm.duration_weeks ? Number(packageForm.duration_weeks) : null,
-      is_deal: packageForm.is_deal,
-      deal_reason: packageForm.is_deal ? packageForm.deal_reason : null,
-      deal_discounted_price: packageForm.is_deal && packageForm.deal_discounted_price ? Number(packageForm.deal_discounted_price) : null,
-      deal_adjusted_terms: packageForm.is_deal ? packageForm.deal_adjusted_terms : null,
-      payment_status: packageForm.payment_status,
-      payment_date: packageForm.payment_date || null,
+      is_deal: false,
+      deal_reason: null,
+      deal_discounted_price: null,
+      deal_adjusted_terms: null,
+      // Testkunden haben keinen offenen Zahlungsstatus
+      payment_status: isTestkunde ? 'Paid in full' : packageForm.payment_status,
+      payment_date: isTestkunde ? packageForm.start_date : (packageForm.payment_date || null),
     });
     setPackageDialogOpen(false);
     toast.success('Paket hinzugefügt');
@@ -442,7 +449,6 @@ const ClientDetailPage: React.FC = () => {
     return <div className="text-center py-12"><p className="text-muted-foreground">Kunde nicht gefunden</p></div>;
   }
 
-  // Calculations
   const activePackage = packages.find(p => {
     const sessionsUsed = sessions.filter(s => s.package_id === p.id && ['Completed', 'No-Show'].includes(s.status)).length;
     return sessionsUsed < p.sessions_included;
@@ -490,6 +496,8 @@ const ClientDetailPage: React.FC = () => {
     return 'bg-destructive/10 text-destructive border-destructive/20';
   };
 
+  const isTestkundeFormSelected = packageForm.package_name === 'Testkunde';
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <Button variant="ghost" onClick={() => navigate('/clients')} className="gap-2">
@@ -516,6 +524,12 @@ const ClientDetailPage: React.FC = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-display font-bold">{client.full_name}</h1>
             <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
+            {/* Testkunde-Badge */}
+            {activePackage?.package_name === 'Testkunde' && (
+              <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300">
+                Testkunde
+              </Badge>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
             {clientSinceDuration && <span>Kunde seit {clientSinceDuration}</span>}
@@ -600,15 +614,26 @@ const ClientDetailPage: React.FC = () => {
             const usedSessions = getSessionsUsed(activePackage.id);
             const checkinCount = sessions.filter(s => s.package_id === activePackage.id && s.session_type === 'Check-In Call' && s.status === 'Completed').length;
             const hasMetrics = metrics.length > 0;
+            const isTestPkg = activePackage.package_name === 'Testkunde';
             return (
               <Card className="stat-glow">
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Aktives Paket</CardTitle></CardHeader>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-display flex items-center gap-2">
+                    Aktives Paket
+                    {isTestPkg && (
+                      <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">
+                        Testkunde
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">{activePackage.package_name}</p>
                       <p className="text-sm text-muted-foreground">
                         {usedSessions} / {activePackage.sessions_included} Einheiten genutzt
+                        {isTestPkg && <span className="ml-2 text-violet-600 font-medium">· kostenlos</span>}
                       </p>
                     </div>
                     {activePackage.sessions_included - usedSessions <= 2 && (
@@ -712,6 +737,7 @@ const ClientDetailPage: React.FC = () => {
                     }}>
                       <SelectTrigger><SelectValue placeholder="Paket wählen" /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="Testkunde">🧪 Testkunde – 3 Einheiten · kostenlos</SelectItem>
                         <SelectItem value="Starter">Starter – 5 Einheiten · 470€</SelectItem>
                         <SelectItem value="Transformation">Transformation – 10 Einheiten · 890€</SelectItem>
                         <SelectItem value="Intensiv">Intensiv – 20 Einheiten · 1.700€</SelectItem>
@@ -721,6 +747,14 @@ const ClientDetailPage: React.FC = () => {
                       <p className="text-xs text-muted-foreground">{packageTemplates[packageForm.package_name].description}</p>
                     )}
                   </div>
+
+                  {/* Testkunde-Hinweis */}
+                  {isTestkundeFormSelected && (
+                    <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-xs text-violet-800">
+                      🧪 Testkunde: Kein Zahlungsstatus erforderlich. Das Paket ist kostenlos.
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Enthaltene Einheiten</Label>
@@ -731,20 +765,25 @@ const ClientDetailPage: React.FC = () => {
                       <Input type="number" value={packageForm.checkin_calls_included} onChange={e => setPackageForm(f => ({ ...f, checkin_calls_included: e.target.value }))} />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Paketpreis (€)</Label>
-                      <Input type="number" value={packageForm.package_price} onChange={e => setPackageForm(f => ({ ...f, package_price: e.target.value }))} />
+
+                  {/* Preis nur bei Nicht-Testkunden */}
+                  {!isTestkundeFormSelected && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Paketpreis (€)</Label>
+                        <Input type="number" value={packageForm.package_price} onChange={e => setPackageForm(f => ({ ...f, package_price: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Preis je Einheit</Label>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          {packageForm.package_price && Number(packageForm.sessions_included) > 0
+                            ? `€${(Number(packageForm.package_price) / Number(packageForm.sessions_included)).toFixed(2)}`
+                            : '—'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Preis je Einheit</Label>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {packageForm.package_price && Number(packageForm.sessions_included) > 0
-                          ? `€${(Number(packageForm.package_price) / Number(packageForm.sessions_included)).toFixed(2)}`
-                          : '—'}
-                      </p>
-                    </div>
-                  </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Startdatum</Label>
@@ -755,43 +794,50 @@ const ClientDetailPage: React.FC = () => {
                       <Input type="number" value={packageForm.duration_weeks} onChange={e => setPackageForm(f => ({ ...f, duration_weeks: e.target.value }))} placeholder="Berechnet Enddatum" />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={packageForm.is_deal} onCheckedChange={v => setPackageForm(f => ({ ...f, is_deal: v }))} />
-                    <Label>Sonderkonditionen / Angebot</Label>
-                  </div>
-                  {packageForm.is_deal && (
-                    <div className="space-y-4 pl-4 border-l-2 border-primary/30">
-                      <div className="space-y-2">
-                        <Label>Rabattgrund</Label>
-                        <Input value={packageForm.deal_reason} onChange={e => setPackageForm(f => ({ ...f, deal_reason: e.target.value }))} placeholder="z.B. Freundin von Stammkunde – 15% Rabatt" />
+
+                  {/* Zahlungsfelder nur bei Nicht-Testkunden */}
+                  {!isTestkundeFormSelected && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={packageForm.is_deal} onCheckedChange={v => setPackageForm(f => ({ ...f, is_deal: v }))} />
+                        <Label>Sonderkonditionen / Angebot</Label>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Rabattierter Preis (€)</Label>
-                        <Input type="number" value={packageForm.deal_discounted_price} onChange={e => setPackageForm(f => ({ ...f, deal_discounted_price: e.target.value }))} />
+                      {packageForm.is_deal && (
+                        <div className="space-y-4 pl-4 border-l-2 border-primary/30">
+                          <div className="space-y-2">
+                            <Label>Rabattgrund</Label>
+                            <Input value={packageForm.deal_reason} onChange={e => setPackageForm(f => ({ ...f, deal_reason: e.target.value }))} placeholder="z.B. Freundin von Stammkunde – 15% Rabatt" />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Rabattierter Preis (€)</Label>
+                            <Input type="number" value={packageForm.deal_discounted_price} onChange={e => setPackageForm(f => ({ ...f, deal_discounted_price: e.target.value }))} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Angepasste Konditionen</Label>
+                            <Input value={packageForm.deal_adjusted_terms} onChange={e => setPackageForm(f => ({ ...f, deal_adjusted_terms: e.target.value }))} />
+                          </div>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Zahlungsstatus</Label>
+                          <Select value={packageForm.payment_status} onValueChange={v => setPackageForm(f => ({ ...f, payment_status: v }))}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Unpaid">Unbezahlt</SelectItem>
+                              <SelectItem value="Partially paid">Teilweise bezahlt</SelectItem>
+                              <SelectItem value="Paid in full">Vollständig bezahlt</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Zahlungsdatum</Label>
+                          <Input type="date" value={packageForm.payment_date} onChange={e => setPackageForm(f => ({ ...f, payment_date: e.target.value }))} />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Angepasste Konditionen</Label>
-                        <Input value={packageForm.deal_adjusted_terms} onChange={e => setPackageForm(f => ({ ...f, deal_adjusted_terms: e.target.value }))} />
-                      </div>
-                    </div>
+                    </>
                   )}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Zahlungsstatus</Label>
-                      <Select value={packageForm.payment_status} onValueChange={v => setPackageForm(f => ({ ...f, payment_status: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Unpaid">Unbezahlt</SelectItem>
-                          <SelectItem value="Partially paid">Teilweise bezahlt</SelectItem>
-                          <SelectItem value="Paid in full">Vollständig bezahlt</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Zahlungsdatum</Label>
-                      <Input type="date" value={packageForm.payment_date} onChange={e => setPackageForm(f => ({ ...f, payment_date: e.target.value }))} />
-                    </div>
-                  </div>
+
                   <Button onClick={savePackage} className="w-full">Paket speichern</Button>
                 </div>
               </DialogContent>
@@ -805,6 +851,7 @@ const ClientDetailPage: React.FC = () => {
                 const used = getSessionsUsed(pkg.id);
                 const remaining = pkg.sessions_included - used;
                 const hasFollowUp = packages.some(p => p.id !== pkg.id && new Date(p.start_date) > new Date(pkg.start_date));
+                const isTestPkg = pkg.package_name === 'Testkunde';
                 return (
                   <Card key={pkg.id}>
                     <CardContent className="p-4">
@@ -812,15 +859,24 @@ const ClientDetailPage: React.FC = () => {
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="font-medium">{pkg.package_name}</p>
-                            {pkg.is_deal && <Badge variant="outline" className="text-primary border-primary/30">Angebot</Badge>}
-                            <Badge variant="outline" className={paymentColor(pkg.payment_status)}>{paymentStatusLabelsDE[pkg.payment_status] || pkg.payment_status}</Badge>
+                            {isTestPkg && (
+                              <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">
+                                Testkunde
+                              </Badge>
+                            )}
+                            {!isTestPkg && pkg.is_deal && <Badge variant="outline" className="text-primary border-primary/30">Angebot</Badge>}
+                            {/* Zahlungsstatus nur bei Nicht-Testkunden */}
+                            {!isTestPkg && (
+                              <Badge variant="outline" className={paymentColor(pkg.payment_status)}>{paymentStatusLabelsDE[pkg.payment_status] || pkg.payment_status}</Badge>
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground mt-1">
-                            {used}/{pkg.sessions_included} Einheiten · €{pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price}
+                            {used}/{pkg.sessions_included} Einheiten
+                            {isTestPkg ? ' · kostenlos' : ` · €${pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price}`}
                             {pkg.start_date && ` · ${format(new Date(pkg.start_date), 'd. MMM yyyy', { locale: de })}`}
                             {pkg.end_date && ` → ${format(new Date(pkg.end_date), 'd. MMM yyyy', { locale: de })}`}
                           </p>
-                          {pkg.deal_reason && <p className="text-xs text-primary mt-1">{pkg.deal_reason}</p>}
+                          {!isTestPkg && pkg.deal_reason && <p className="text-xs text-primary mt-1">{pkg.deal_reason}</p>}
                         </div>
                         <div className="flex items-center gap-2">
                           {remaining <= 2 && remaining > 0 && (
@@ -1020,13 +1076,11 @@ const ClientDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* PROGRESS PHOTOS */}
           {id && <ProgressPhotos clientId={id} />}
         </TabsContent>
 
         {/* NOTES TAB */}
         <TabsContent value="notes" className="space-y-4 mt-4">
-          {/* Quick Log */}
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Schnellnotiz</CardTitle></CardHeader>
             <CardContent>
@@ -1052,7 +1106,6 @@ const ClientDetailPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* General Notes */}
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Allgemeine Notizen</CardTitle></CardHeader>
             <CardContent>
