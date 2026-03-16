@@ -37,18 +37,20 @@ interface PackageData {
   payment_status: string | null;
 }
 
-interface SessionCount {
-  client_id: string;
-  count: number;
-}
-
 interface PackageFeature {
   label: string;
-  key: 'erstgespraech' | 'sessions' | 'trainingsplan' | 'fortschrittsdoku' | 'checkin_calls' | 'ernaehrung' | 'fortschrittsfotos' | 'whatsapp_support' | 'prio_buchung' | 'gratis_einheit';
+  key: 'erstgespraech' | 'sessions' | 'trainingsplan' | 'fortschrittsdoku' | 'checkin_calls' | 'ernaehrung' | 'fortschrittsfotos' | 'whatsapp_support' | 'prio_buchung' | 'gratis_einheit' | 'feedback_erhalten';
   manual?: boolean;
 }
 
 const packageFeaturesMap: Record<string, PackageFeature[]> = {
+  'Testkunde': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Feedback nach letzter Einheit erhalten', key: 'feedback_erhalten', manual: true },
+  ],
   'Starter': [
     { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
     { label: 'Trainingseinheiten', key: 'sessions' },
@@ -151,11 +153,7 @@ const ClientsPage: React.FC = () => {
   const toggleManualCompletion = useCallback(async (packageId: string, featureKey: string, currentlyDone: boolean) => {
     if (!user) return;
     if (currentlyDone) {
-      await supabase
-        .from('package_feature_completions')
-        .delete()
-        .eq('package_id', packageId)
-        .eq('feature_key', featureKey);
+      await supabase.from('package_feature_completions').delete().eq('package_id', packageId).eq('feature_key', featureKey);
       setManualCompletions(prev => {
         const next = { ...prev };
         const s = new Set(next[packageId]);
@@ -164,9 +162,7 @@ const ClientsPage: React.FC = () => {
         return next;
       });
     } else {
-      await supabase
-        .from('package_feature_completions')
-        .insert({ user_id: user.id, package_id: packageId, feature_key: featureKey });
+      await supabase.from('package_feature_completions').insert({ user_id: user.id, package_id: packageId, feature_key: featureKey });
       setManualCompletions(prev => {
         const next = { ...prev };
         const s = new Set(next[packageId] || []);
@@ -182,10 +178,7 @@ const ClientsPage: React.FC = () => {
     e.stopPropagation();
     if (!confirm('Kunden wirklich löschen? Alle zugehörigen Daten (Einheiten, Pakete, Metriken) werden unwiderruflich gelöscht.')) return;
     const { error } = await supabase.from('clients').delete().eq('id', clientId);
-    if (error) {
-      alert('Fehler beim Löschen: ' + error.message);
-      return;
-    }
+    if (error) { alert('Fehler beim Löschen: ' + error.message); return; }
     setClients(prev => prev.filter(c => c.id !== clientId));
   };
 
@@ -197,13 +190,8 @@ const ClientsPage: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const activeClients = filtered
-    .filter(c => c.status === 'Active' && packages[c.id])
-    .sort(sortByFirstName);
-
-  const archivedClients = filtered
-    .filter(c => c.status !== 'Active' || !packages[c.id])
-    .sort(sortByFirstName);
+  const activeClients = filtered.filter(c => c.status === 'Active' && packages[c.id]).sort(sortByFirstName);
+  const archivedClients = filtered.filter(c => c.status !== 'Active' || !packages[c.id]).sort(sortByFirstName);
 
   const statusColor = (s: string) => {
     if (s === 'Active') return 'bg-success/10 text-success border-success/20';
@@ -230,6 +218,7 @@ const ClientsPage: React.FC = () => {
       case 'whatsapp_support': return { done: true };
       case 'prio_buchung': return { done: true };
       case 'gratis_einheit': return { done: manualDone, manual: true };
+      case 'feedback_erhalten': return { done: manualDone, manual: true };
       default: return { done: false };
     }
   };
@@ -241,6 +230,7 @@ const ClientsPage: React.FC = () => {
     const usedCheckins = checkinCounts[client.id] || 0;
     const hasMetrics = (metricCounts[client.id] || 0) > 0;
     const features = pkg ? (packageFeaturesMap[pkg.package_name] || []) : [];
+    const isTestPkg = pkg?.package_name === 'Testkunde';
 
     return (
       <div key={client.id}>
@@ -255,7 +245,15 @@ const ClientsPage: React.FC = () => {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{client.full_name}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium truncate">{client.full_name}</p>
+                  {/* Testkunde-Badge in der Liste */}
+                  {isTestPkg && (
+                    <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs flex-shrink-0">
+                      🧪 Testkunde
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {pkg ? pkg.package_name : 'Kein Paket'}
                   {client.starting_date && ` · Kunde seit ${formatDistanceToNow(new Date(client.starting_date), { locale: de })}`}
@@ -263,12 +261,7 @@ const ClientsPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={(e) => toggleExpand(e, client.id)}
-                >
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => toggleExpand(e, client.id)}>
                   {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </Button>
               </div>
@@ -279,17 +272,28 @@ const ClientsPage: React.FC = () => {
             <div className="border-t border-border px-4 pb-4 pt-3 space-y-4">
               {pkg && (
                 <>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
-                      <p className="font-semibold text-sm">Paket {pkg.package_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {pkg.package_price}€
-                        {pkg.sessions_included > 0 && ` · ${Math.round(pkg.package_price / pkg.sessions_included)}€ je Einheit`}
+                      <p className="font-semibold text-sm flex items-center gap-2">
+                        Paket {pkg.package_name}
+                        {isTestPkg && (
+                          <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">
+                            kostenlos
+                          </Badge>
+                        )}
                       </p>
+                      {!isTestPkg && (
+                        <p className="text-xs text-muted-foreground">
+                          {pkg.package_price}€
+                          {pkg.sessions_included > 0 && ` · ${Math.round(pkg.package_price / pkg.sessions_included)}€ je Einheit`}
+                        </p>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    {/* Zahlungsstatus nur bei Nicht-Testkunden */}
+                    {!isTestPkg && (
                       <Select
-                        value={pkg.payment_status || 'unpaid'}
+                        value={pkg.payment_status || 'Unpaid'}
                         onValueChange={async (val) => {
                           await supabase.from('packages').update({ payment_status: val }).eq('id', pkg.id);
                           setPackages(prev => ({
@@ -299,21 +303,22 @@ const ClientsPage: React.FC = () => {
                         }}
                       >
                         <SelectTrigger className={`h-7 text-xs w-36 ${
-                          (pkg.payment_status || 'unpaid') === 'paid'
+                          pkg.payment_status === 'Paid in full'
                             ? 'border-success/40 text-success bg-success/5'
-                            : (pkg.payment_status || 'unpaid') === 'partial'
+                            : pkg.payment_status === 'Partially paid'
                             ? 'border-warning/40 text-warning bg-warning/5'
                             : 'border-destructive/40 text-destructive bg-destructive/5'
                         }`}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="paid">✓ Bezahlt</SelectItem>
-                          <SelectItem value="partial">◑ Teilweise</SelectItem>
-                          <SelectItem value="unpaid">✗ Unbezahlt</SelectItem>
+                          <SelectItem value="Paid in full">✓ Bezahlt</SelectItem>
+                          <SelectItem value="Partially paid">◑ Teilweise</SelectItem>
+                          <SelectItem value="Unpaid">✗ Unbezahlt</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
+                    )}
+
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <CalendarDays className="w-3.5 h-3.5" />
                       <span>
