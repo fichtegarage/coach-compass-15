@@ -355,7 +355,7 @@ const ClientDetailPage: React.FC = () => {
   const saveSession = async () => {
     if (!user || !id) return;
     const payload = {
-      session_date: sessionForm.session_date,
+      session_date: new Date(sessionForm.session_date).toISOString(),
       duration_minutes: Number(sessionForm.duration_minutes),
       session_type: sessionForm.session_type,
       status: sessionForm.status,
