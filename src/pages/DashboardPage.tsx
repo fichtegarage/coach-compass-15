@@ -23,6 +23,7 @@ const sessionTypeLabels: Record<string, string> = {
   'Phone Call': 'Telefonat',
   'Check-In Call': 'Check-In Call',
   'Free Intro': 'Erstgespräch',
+  'Duo Training': 'Duo Training',
 };
 
 const sessionStatusLabels: Record<string, string> = {
@@ -51,6 +52,7 @@ interface TimelineSession {
   id: string;
   clientName: string;
   clientId: string;
+  secondClientName?: string;
   sessionType: string;
   sessionDate: string;
   status: string;
@@ -109,9 +111,10 @@ const DashboardPage: React.FC = () => {
     const weekEnd = format(addDays(new Date(), 6), 'yyyy-MM-dd');
 
     const [sessionsRes, packagesRes, clientsRes, ytdSessionsRes, ytdBookingsRes, allClientsRes] = await Promise.all([
+      // ── FIX: explizite FK-Namen wegen second_client_id ──
       supabase
         .from('sessions')
-        .select('*, clients(full_name, id)')
+        .select('*, clients!sessions_client_id_fkey(full_name, id), second_client:clients!sessions_second_client_id_fkey(full_name)')
         .gte('session_date', today + 'T00:00:00')
         .lte('session_date', weekEnd + 'T23:59:59')
         .order('session_date'),
@@ -123,10 +126,10 @@ const DashboardPage: React.FC = () => {
         .select('id, full_name, date_of_birth')
         .eq('status', 'Active')
         .not('date_of_birth', 'is', null),
-      // YTD sessions
+      // YTD sessions – gleiches Fix
       supabase
         .from('sessions')
-        .select('*, clients(full_name, id)')
+        .select('*, clients!sessions_client_id_fkey(full_name, id), second_client:clients!sessions_second_client_id_fkey(full_name)')
         .gte('session_date', yearStart)
         .lte('session_date', yearEnd)
         .order('session_date', { ascending: false }),
@@ -148,6 +151,7 @@ const DashboardPage: React.FC = () => {
       id: s.id,
       clientName: (s.clients as any)?.full_name || 'Unbekannt',
       clientId: s.client_id,
+      secondClientName: (s.second_client as any)?.full_name,
       sessionType: s.session_type,
       sessionDate: s.session_date,
       status: s.status,
@@ -164,7 +168,8 @@ const DashboardPage: React.FC = () => {
       const clientName = (pkg.clients as any)?.full_name || 'Unbekannt';
       const clientId = (pkg.clients as any)?.id || pkg.client_id;
 
-      if (pkg.payment_status !== 'Paid in full') {
+      // Kein Zahlungs-Reminder für Testkunden
+      if (pkg.package_name !== 'Testkunde' && pkg.payment_status !== 'Paid in full') {
         const price = pkg.is_deal && pkg.deal_discounted_price
           ? pkg.deal_discounted_price
           : pkg.package_price;
@@ -224,11 +229,7 @@ const DashboardPage: React.FC = () => {
       for (const day of next7Days) {
         if (getMonth(day) === dobMonth && getDate(day) === dobDay) {
           const dayKey = format(day, 'yyyy-MM-dd');
-          bdayMap[dayKey].push({
-            clientName: c.full_name,
-            clientId: c.id,
-            date: day,
-          });
+          bdayMap[dayKey].push({ clientName: c.full_name, clientId: c.id, date: day });
           if (isToday(day)) {
             const age = new Date().getFullYear() - dob.getFullYear();
             reminderList.push({
@@ -250,16 +251,15 @@ const DashboardPage: React.FC = () => {
     const ytdSessions = ytdSessionsRes.data || [];
     const ytdBookings = ytdBookingsRes.data || [];
 
-    // Revenue: sum of packages with start_date in current year
     const ytdPackages = packages.filter(p => p.start_date && p.start_date.startsWith(String(currentYear)));
     const totalRevenue = ytdPackages.reduce((sum, p) => {
+      if (p.package_name === 'Testkunde') return sum;
       const price = p.is_deal && p.deal_discounted_price ? Number(p.deal_discounted_price) : Number(p.package_price);
       return sum + price;
     }, 0);
 
     const completedSessions = ytdSessions.filter(s => s.status === 'Completed');
 
-    // Client session ranking
     const sessionCountByClient: Record<string, { name: string; count: number }> = {};
     completedSessions.forEach(s => {
       const cid = s.client_id;
@@ -272,9 +272,9 @@ const DashboardPage: React.FC = () => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    // Client revenue ranking
     const revenueByClient: Record<string, { name: string; revenue: number }> = {};
     ytdPackages.forEach(p => {
+      if (p.package_name === 'Testkunde') return;
       const cid = (p.clients as any)?.id || p.client_id;
       const cname = (p.clients as any)?.full_name || 'Unbekannt';
       const price = p.is_deal && p.deal_discounted_price ? Number(p.deal_discounted_price) : Number(p.package_price);
@@ -285,9 +285,6 @@ const DashboardPage: React.FC = () => {
       .map(([id, v]) => ({ clientId: id, clientName: v.name, revenue: v.revenue }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
-
-    // Unique clients with sessions this year
-    const uniqueClients = new Set(ytdSessions.map(s => s.client_id));
 
     setYearStats({
       totalRevenue,
@@ -388,21 +385,11 @@ const DashboardPage: React.FC = () => {
             return (
               <div
                 key={idx}
-                className={`rounded-xl border border-border p-3 transition-colors ${
-                  today ? 'bg-primary/5 border-primary/20' : 'bg-card'
-                }`}
+                className={`rounded-xl border border-border p-3 transition-colors ${today ? 'bg-primary/5 border-primary/20' : 'bg-card'}`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div
-                    className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center text-xs font-bold shrink-0 ${
-                      today
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    <span className="text-[10px] leading-none uppercase">
-                      {format(day, 'EEE', { locale: de })}
-                    </span>
+                  <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center text-xs font-bold shrink-0 ${today ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                    <span className="text-[10px] leading-none uppercase">{format(day, 'EEE', { locale: de })}</span>
                     <span className="text-sm leading-none">{format(day, 'd')}</span>
                   </div>
                   <span className="text-sm font-medium text-foreground">
@@ -415,7 +402,6 @@ const DashboardPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Birthday banners for this day */}
                 {(birthdaysByDay[format(day, 'yyyy-MM-dd')] || []).map(b => (
                   <Link key={b.clientId} to={`/clients/${b.clientId}`}>
                     <div className="pl-[52px] mb-2">
@@ -432,8 +418,7 @@ const DashboardPage: React.FC = () => {
                   <div className="pl-[52px] flex items-center gap-2">
                     <p className="text-xs text-muted-foreground">Keine Termine</p>
                     <Button
-                      variant="ghost"
-                      size="sm"
+                      variant="ghost" size="sm"
                       className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
                       onClick={() => {
                         const d = new Date(day);
@@ -450,23 +435,26 @@ const DashboardPage: React.FC = () => {
                     {daySessions.map(s => {
                       const isCancelled = s.status.startsWith('Cancelled') || s.status === 'No-Show';
                       const isScheduled = s.status === 'Scheduled';
+                      const isDuo = s.sessionType === 'Duo Training';
                       return (
                         <Link key={s.id} to={`/clients/${s.clientId}`}>
-                          <div
-                            className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
-                              isCancelled
-                                ? 'bg-destructive/10 text-destructive/70 line-through'
-                                : isScheduled
-                                ? 'bg-primary/10 border border-primary/20 hover:bg-primary/15'
-                                : 'bg-muted/50 hover:bg-muted'
-                            }`}
-                          >
+                          <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+                            isCancelled
+                              ? 'bg-destructive/10 text-destructive/70 line-through'
+                              : isScheduled
+                              ? 'bg-primary/10 border border-primary/20 hover:bg-primary/15'
+                              : 'bg-muted/50 hover:bg-muted'
+                          }`}>
                             <div className="flex items-center gap-2 min-w-0">
                               <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                               <span className="font-medium truncate">
                                 {format(new Date(s.sessionDate), 'HH:mm')}
                               </span>
-                              <span className="truncate">{s.clientName}</span>
+                              {isDuo && <Users className="w-3 h-3 text-primary shrink-0" />}
+                              <span className="truncate">
+                                {s.clientName}
+                                {isDuo && s.secondClientName && ` & ${s.secondClientName}`}
+                              </span>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               <span className="text-xs text-muted-foreground">
@@ -497,29 +485,13 @@ const DashboardPage: React.FC = () => {
               <Link key={i} to={`/clients/${r.clientId}`}>
                 <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
                   <CardContent className="p-3 flex items-center gap-3">
-                    <div
-                      className={`p-2 rounded-lg shrink-0 ${
-                        r.severity === 'destructive'
-                          ? 'bg-destructive/10'
-                          : r.severity === 'info'
-                          ? 'bg-info/10'
-                          : 'bg-warning/10'
-                      }`}
-                    >
+                    <div className={`p-2 rounded-lg shrink-0 ${r.severity === 'destructive' ? 'bg-destructive/10' : r.severity === 'info' ? 'bg-info/10' : 'bg-warning/10'}`}>
                       {r.type === 'birthday' ? (
                         <Cake className="w-4 h-4 text-info" />
                       ) : r.type === 'unpaid' ? (
-                        <DollarSign
-                          className={`w-4 h-4 ${
-                            r.severity === 'destructive' ? 'text-destructive' : 'text-warning'
-                          }`}
-                        />
+                        <DollarSign className={`w-4 h-4 ${r.severity === 'destructive' ? 'text-destructive' : 'text-warning'}`} />
                       ) : (
-                        <Package
-                          className={`w-4 h-4 ${
-                            r.severity === 'destructive' ? 'text-destructive' : 'text-warning'
-                          }`}
-                        />
+                        <Package className={`w-4 h-4 ${r.severity === 'destructive' ? 'text-destructive' : 'text-warning'}`} />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -551,10 +523,8 @@ const DashboardPage: React.FC = () => {
               <TabsTrigger value="bookings">Buchungen ({yearStats.bookingsYTD.length})</TabsTrigger>
             </TabsList>
 
-            {/* Rankings */}
             <TabsContent value="rankings" className="mt-3">
               <div className="grid md:grid-cols-2 gap-4">
-                {/* Session Ranking */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-display flex items-center gap-2">
@@ -564,28 +534,18 @@ const DashboardPage: React.FC = () => {
                   <CardContent className="space-y-1.5">
                     {yearStats.clientSessionRanking.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Noch keine Daten</p>
-                    ) : (
-                      yearStats.clientSessionRanking.map((c, i) => (
-                        <Link key={c.clientId} to={`/clients/${c.clientId}`}>
-                          <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-accent/50 transition-colors">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                              i === 0 ? 'bg-primary text-primary-foreground' :
-                              i === 1 ? 'bg-primary/20 text-primary' :
-                              i === 2 ? 'bg-primary/10 text-primary' :
-                              'bg-muted text-muted-foreground'
-                            }`}>
-                              {i + 1}
-                            </span>
-                            <span className="text-sm flex-1 truncate">{c.clientName}</span>
-                            <span className="text-sm font-display font-bold text-primary">{c.count}</span>
-                          </div>
-                        </Link>
-                      ))
-                    )}
+                    ) : yearStats.clientSessionRanking.map((c, i) => (
+                      <Link key={c.clientId} to={`/clients/${c.clientId}`}>
+                        <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-accent/50 transition-colors">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${i === 0 ? 'bg-primary text-primary-foreground' : i === 1 ? 'bg-primary/20 text-primary' : i === 2 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{i + 1}</span>
+                          <span className="text-sm flex-1 truncate">{c.clientName}</span>
+                          <span className="text-sm font-display font-bold text-primary">{c.count}</span>
+                        </div>
+                      </Link>
+                    ))}
                   </CardContent>
                 </Card>
 
-                {/* Revenue Ranking */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-display flex items-center gap-2">
@@ -595,30 +555,20 @@ const DashboardPage: React.FC = () => {
                   <CardContent className="space-y-1.5">
                     {yearStats.clientRevenueRanking.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Noch keine Daten</p>
-                    ) : (
-                      yearStats.clientRevenueRanking.map((c, i) => (
-                        <Link key={c.clientId} to={`/clients/${c.clientId}`}>
-                          <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-accent/50 transition-colors">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                              i === 0 ? 'bg-success text-success-foreground' :
-                              i === 1 ? 'bg-success/20 text-success' :
-                              i === 2 ? 'bg-success/10 text-success' :
-                              'bg-muted text-muted-foreground'
-                            }`}>
-                              {i + 1}
-                            </span>
-                            <span className="text-sm flex-1 truncate">{c.clientName}</span>
-                            <span className="text-sm font-display font-bold text-success">€{c.revenue.toLocaleString('de-DE')}</span>
-                          </div>
-                        </Link>
-                      ))
-                    )}
+                    ) : yearStats.clientRevenueRanking.map((c, i) => (
+                      <Link key={c.clientId} to={`/clients/${c.clientId}`}>
+                        <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-accent/50 transition-colors">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${i === 0 ? 'bg-success text-success-foreground' : i === 1 ? 'bg-success/20 text-success' : i === 2 ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>{i + 1}</span>
+                          <span className="text-sm flex-1 truncate">{c.clientName}</span>
+                          <span className="text-sm font-display font-bold text-success">€{c.revenue.toLocaleString('de-DE')}</span>
+                        </div>
+                      </Link>
+                    ))}
                   </CardContent>
                 </Card>
               </div>
             </TabsContent>
 
-            {/* Sessions History */}
             <TabsContent value="sessions" className="mt-3">
               <Card>
                 <CardContent className="p-0">
@@ -626,33 +576,35 @@ const DashboardPage: React.FC = () => {
                     <p className="text-sm text-muted-foreground text-center py-8">Keine Sessions in {currentYear}</p>
                   ) : (
                     <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
-                      {yearStats.sessionsYTD.map(s => (
-                        <Link key={s.id} to={`/clients/${s.client_id}`}>
-                          <div className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 transition-colors">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">
-                                {(s.clients as any)?.full_name || 'Unbekannt'}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {format(new Date(s.session_date), 'd. MMM yyyy · HH:mm', { locale: de })} · {sessionTypeLabels[s.session_type] || s.session_type}
-                              </p>
+                      {yearStats.sessionsYTD.map(s => {
+                        const isDuo = s.session_type === 'Duo Training';
+                        const secondName = (s.second_client as any)?.full_name;
+                        return (
+                          <Link key={s.id} to={`/clients/${s.client_id}`}>
+                            <div className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 transition-colors">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                                  {isDuo && <Users className="w-3.5 h-3.5 text-primary shrink-0" />}
+                                  {(s.clients as any)?.full_name || 'Unbekannt'}
+                                  {isDuo && secondName && <span className="text-muted-foreground">& {secondName}</span>}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(s.session_date), 'd. MMM yyyy · HH:mm', { locale: de })} · {sessionTypeLabels[s.session_type] || s.session_type}
+                                </p>
+                              </div>
+                              <Badge variant={s.status === 'Completed' ? 'default' : s.status === 'Scheduled' ? 'secondary' : 'destructive'} className="text-xs shrink-0">
+                                {sessionStatusLabels[s.status] || s.status}
+                              </Badge>
                             </div>
-                            <Badge
-                              variant={s.status === 'Completed' ? 'default' : s.status === 'Scheduled' ? 'secondary' : 'destructive'}
-                              className="text-xs shrink-0"
-                            >
-                              {sessionStatusLabels[s.status] || s.status}
-                            </Badge>
-                          </div>
-                        </Link>
-                      ))}
+                          </Link>
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </TabsContent>
 
-            {/* Bookings History */}
             <TabsContent value="bookings" className="mt-3">
               <Card>
                 <CardContent className="p-0">
@@ -664,14 +616,11 @@ const DashboardPage: React.FC = () => {
                         <Link key={b.id} to={`/clients/${b.client_id}`}>
                           <div className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 transition-colors">
                             <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">
-                                {(b.clients as any)?.full_name || 'Unbekannt'}
-                              </p>
+                              <p className="text-sm font-medium truncate">{(b.clients as any)?.full_name || 'Unbekannt'}</p>
                               <p className="text-xs text-muted-foreground">
                                 {b.availability_slots
                                   ? `${format(new Date(b.availability_slots.start_time), 'd. MMM yyyy · HH:mm', { locale: de })} – ${format(new Date(b.availability_slots.end_time), 'HH:mm')}`
-                                  : `Angefragt ${format(new Date(b.requested_at), 'd. MMM yyyy · HH:mm', { locale: de })}`
-                                }
+                                  : `Angefragt ${format(new Date(b.requested_at), 'd. MMM yyyy · HH:mm', { locale: de })}`}
                               </p>
                               {b.client_message && <p className="text-xs text-muted-foreground truncate">„{b.client_message}"</p>}
                             </div>
