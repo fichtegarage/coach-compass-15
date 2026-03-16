@@ -73,7 +73,6 @@ const SessionsPage: React.FC = () => {
     loadData();
   }, [user, currentMonth]);
 
-  // Populate editForm whenever selectedSession changes
   useEffect(() => {
     if (!selectedSession) { setEditForm(null); return; }
     setEditForm({
@@ -115,19 +114,18 @@ const SessionsPage: React.FC = () => {
   const deleteSession = async (sessionId: string) => {
     if (!confirm('Einheit wirklich löschen?')) return;
     const { error } = await supabase.from('sessions').delete().eq('id', sessionId);
-    if (error) {
-      toast.error('Fehler beim Löschen: ' + error.message);
-      return;
-    }
+    if (error) { toast.error('Fehler beim Löschen: ' + error.message); return; }
     toast.success('Einheit gelöscht');
     loadData();
   };
 
+  // ── FIX 1: Neue Einheit anlegen ───────────────────────────────────────────
+  // new Date(form.session_date).toISOString() wandelt lokale Zeit → UTC
   const save = async () => {
     if (!user || !form.client_id) return;
     const { error } = await supabase.from('sessions').insert({
       client_id: form.client_id, user_id: user.id,
-      session_date: form.session_date,
+      session_date: new Date(form.session_date).toISOString(),
       duration_minutes: Number(form.duration_minutes),
       session_type: sessionTypeToDb[form.session_type] || form.session_type,
       status: form.status,
@@ -136,15 +134,13 @@ const SessionsPage: React.FC = () => {
       location: form.location,
       package_id: form.package_id || null,
     });
-    if (error) {
-      toast.error('Fehler: ' + error.message);
-      return;
-    }
+    if (error) { toast.error('Fehler: ' + error.message); return; }
     setDialogOpen(false);
     toast.success('Einheit erfasst');
     loadData();
   };
 
+  // ── FIX 2: Einheit bearbeiten ─────────────────────────────────────────────
   const saveEdit = async () => {
     if (!selectedSession || !editForm) return;
     setSaving(true);
@@ -154,7 +150,7 @@ const SessionsPage: React.FC = () => {
 
     const { error } = await supabase.from('sessions').update({
       status: editForm.status,
-      session_date: editForm.session_date,
+      session_date: new Date(editForm.session_date).toISOString(),
       duration_minutes: Number(editForm.duration_minutes),
       session_type: sessionTypeToDb[editForm.session_type] || editForm.session_type,
       location: editForm.location,
@@ -162,13 +158,8 @@ const SessionsPage: React.FC = () => {
       late_cancellation: editForm.late_cancellation,
     }).eq('id', selectedSession.id);
 
-    if (error) {
-      toast.error('Fehler: ' + error.message);
-      setSaving(false);
-      return;
-    }
+    if (error) { toast.error('Fehler: ' + error.message); setSaving(false); return; }
 
-    // Notification if trainer cancels a previously scheduled session
     if (wasScheduled && isCancelledByTrainer && selectedSession.client_id) {
       const sessionDate = format(new Date(editForm.session_date), "EEEE, d. MMMM · HH:mm", { locale: de });
       await supabase.from('client_notifications').insert({
@@ -183,16 +174,18 @@ const SessionsPage: React.FC = () => {
     loadData();
   };
 
+  // ── FIX 3: Drag & Drop verschieben ────────────────────────────────────────
+  // newDate.toISOString() statt format()-String ohne Timezone
   const handleDrop = async (sessionId: string, targetDay: Date) => {
     const session = sessions.find(s => s.id === sessionId);
     if (!session || session.status !== 'Scheduled') return;
     const oldDate = new Date(session.session_date);
     const newDate = new Date(targetDay);
     newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
-    const newDateStr = format(newDate, "yyyy-MM-dd'T'HH:mm:ss");
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, session_date: newDateStr } : s));
+    const newDateISO = newDate.toISOString();
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, session_date: newDateISO } : s));
     setDragOverDay(null);
-    const { error } = await supabase.from('sessions').update({ session_date: newDateStr }).eq('id', sessionId);
+    const { error } = await supabase.from('sessions').update({ session_date: newDateISO }).eq('id', sessionId);
     if (error) {
       toast.error('Verschieben fehlgeschlagen');
       loadData();
@@ -373,7 +366,6 @@ const SessionsPage: React.FC = () => {
       </div>
 
       {view === 'calendar' ? (
-        /* CALENDAR VIEW */
         <div className="border border-border rounded-xl overflow-hidden">
           <div className="grid grid-cols-7 bg-muted/30">
             {weekDays.map(d => (
@@ -462,7 +454,6 @@ const SessionsPage: React.FC = () => {
           </div>
         </div>
       ) : (
-        /* LIST VIEW */
         <>
           <p className="text-sm text-muted-foreground">{sessions.length} Einheiten</p>
           {sessions.length === 0 ? (
@@ -514,13 +505,11 @@ const SessionsPage: React.FC = () => {
           </DialogHeader>
           {selectedSession && editForm && (
             <div className="space-y-4">
-              {/* Read-only info */}
               <div className="rounded-lg bg-muted/30 p-3">
                 <p className="text-xs text-muted-foreground mb-1">Kunde</p>
                 <p className="text-sm font-medium">{(selectedSession.clients as any)?.full_name}</p>
               </div>
 
-              {/* Editable fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Status</Label>
