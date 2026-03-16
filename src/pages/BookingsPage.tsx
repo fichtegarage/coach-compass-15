@@ -157,7 +157,7 @@ const BookingsPage: React.FC = () => {
         .order('requested_at', { ascending: false }),
       supabase
         .from('sessions')
-        .select('*, clients(full_name)')
+        .select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)')
         .gte('session_date', monthStart.toISOString())
         .lte('session_date', monthEnd.toISOString())
         .order('session_date'),
@@ -571,6 +571,8 @@ const BookingsPage: React.FC = () => {
                         const isCompleted = session.status === 'Completed';
                         const isScheduled = session.status === 'Scheduled';
                         const clientName = session.clients?.full_name?.split(' ')[0] || '?';
+                        const secondClientName = session.second_client?.full_name?.split(' ')[0];
+                        const isDuoSession = session.session_type === 'Duo Training';
                         return (
                           <button
                             key={session.id}
@@ -586,7 +588,7 @@ const BookingsPage: React.FC = () => {
                             }`}
                           >
                             <span className="font-medium">{format(new Date(session.session_date), 'HH:mm')}</span>
-                            {' '}{clientName}
+                            {' '}{clientName}{isDuoSession && secondClientName ? ' & ' + secondClientName : ''}
                           </button>
                         );
                       })}
