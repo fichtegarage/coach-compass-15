@@ -215,7 +215,7 @@ const SessionsPage: React.FC = () => {
     sessions.filter(s => isSameDay(new Date(s.session_date), day));
 
   const calendarFeedUrl = user
-    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-feed?user_id=${user.id}`
+    ? `${window.location.origin}/api/calendar-feed?user_id=${user.id}`
     : '';
 
   const copyFeedUrl = async () => {
