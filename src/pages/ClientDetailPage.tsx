@@ -335,7 +335,7 @@ const ClientDetailPage: React.FC = () => {
   const openEditSession = (s: any) => {
     setEditingSessionId(s.id);
     setSessionForm({
-      session_date: s.session_date?.slice(0, 16) || '',
+      session_date: s.session_date ? format(new Date(s.session_date), "yyyy-MM-dd'T'HH:mm") : '',
       duration_minutes: String(s.duration_minutes),
       session_type: s.session_type,
       status: s.status,
