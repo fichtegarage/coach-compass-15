@@ -80,7 +80,7 @@ const SessionsPage: React.FC = () => {
     if (!selectedSession) { setEditForm(null); return; }
     setEditForm({
       status: selectedSession.status,
-      session_date: selectedSession.session_date?.slice(0, 16) || '',
+      session_date: selectedSession.session_date ? format(new Date(selectedSession.session_date), "yyyy-MM-dd'T'HH:mm") : '',
       duration_minutes: String(selectedSession.duration_minutes || 60),
       session_type: sessionTypeLabels[selectedSession.session_type] || selectedSession.session_type,
       location: selectedSession.location || 'Gym',
@@ -215,7 +215,7 @@ const SessionsPage: React.FC = () => {
     sessions.filter(s => isSameDay(new Date(s.session_date), day));
 
   const calendarFeedUrl = user
-    ? `/api/calendar-feed?user_id=${user.id}`
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-feed?user_id=${user.id}`
     : '';
 
   const copyFeedUrl = async () => {
