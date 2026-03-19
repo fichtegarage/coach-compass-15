@@ -16,6 +16,7 @@ import BookingsPage from "./pages/BookingsPage";
 import BookingPage from "./pages/BookingPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
+import OnboardingPage from './pages/OnboardingPage';
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const AppRoutes = () => {
         <Route path="/sessions" element={<SessionsPage />} />
         <Route path="/bookings" element={<BookingsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
