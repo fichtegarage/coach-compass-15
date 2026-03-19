@@ -4,15 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
-  saveOnboarding, 
   createConversation, 
   createHealthRecord,
   getClient 
 } from '@/lib/onboarding-api';
 import type { ConversationForm, HealthRecordForm } from '@/types/onboarding';
+import { Users, UserPlus, ArrowLeft } from 'lucide-react';
 
 // ============================================
 // CONFIGURATION
@@ -141,22 +144,49 @@ const PERSONALITY_TYPES = [
   { id: 'unclear', label: 'Noch unklar', icon: '❓', traits: ['Weitere Beobachtung'], strategy: 'Im Probetraining genauer beobachten' },
 ];
 
+const FITNESS_GOALS = ['Abnehmen', 'Muskelaufbau', 'Ausdauer', 'Reha', 'Allgemeine Fitness', 'Wettkampfvorbereitung'];
+const ACQUISITION_SOURCES = ['Empfehlung', 'Instagram', 'Website', 'Google', 'Laufkundschaft', 'Sonstiges'];
+
 // ============================================
 // COMPONENT
 // ============================================
 
 interface OnboardingWizardProps {
-  clientId?: string; // Optional: Wenn gesetzt, für bestehenden Kunden
+  clientId?: string;
 }
+
+type WizardStep = 'select' | 'new-client' | 'conversation';
 
 export default function OnboardingWizard({ clientId: propClientId }: OnboardingWizardProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { user } = useAuth();
   
-  // Client ID aus Props oder URL-Parameter
-  const clientId = propClientId || searchParams.get('clientId');
+  const clientIdFromUrl = propClientId || searchParams.get('clientId');
   
+  // Wizard state
+  const [wizardStep, setWizardStep] = useState<WizardStep>(clientIdFromUrl ? 'conversation' : 'select');
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(clientIdFromUrl);
+  const [allClients, setAllClients] = useState<any[]>([]);
+  
+  // Client form state (for new clients)
+  const [clientForm, setClientForm] = useState({
+    full_name: '',
+    date_of_birth: '',
+    email: '',
+    phone: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    health_notes: '',
+    fitness_goal: '',
+    fitness_goal_text: '',
+    starting_date: new Date().toISOString().split('T')[0],
+    status: 'Active',
+    acquisition_source: '',
+  });
+  
+  // Conversation state
   const [currentPhase, setCurrentPhase] = useState(0);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [clientName, setClientName] = useState('');
@@ -165,12 +195,25 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
   const [isSaving, setIsSaving] = useState(false);
   const [existingClient, setExistingClient] = useState<any>(null);
 
-  // Bestehenden Kunden laden
+  // Load all clients for dropdown
   useEffect(() => {
-    if (clientId) {
-      loadClient(clientId);
+    loadClients();
+  }, []);
+
+  // Load existing client if ID provided
+  useEffect(() => {
+    if (selectedClientId) {
+      loadClient(selectedClientId);
     }
-  }, [clientId]);
+  }, [selectedClientId]);
+
+  const loadClients = async () => {
+    const { data } = await supabase
+      .from('clients')
+      .select('id, full_name, status')
+      .order('full_name');
+    setAllClients(data || []);
+  };
 
   const loadClient = async (id: string) => {
     try {
@@ -178,7 +221,6 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
       if (client) {
         setExistingClient(client);
         setClientName(client.full_name);
-        // Vorhandene Daten vorausfüllen
         if (client.occupation) setFormData(prev => ({ ...prev, occupation: client.occupation }));
         if (client.fitness_goal_text) setFormData(prev => ({ ...prev, fitness_goal_text: client.fitness_goal_text }));
       }
@@ -191,8 +233,89 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
     setFormData(prev => ({ ...prev, [fieldId]: value }));
   };
 
+  const updateClientForm = (field: string, value: string) => {
+    setClientForm(prev => ({ ...prev, [field]: value }));
+  };
+
   const phase = PHASES[currentPhase];
   const progress = ((currentPhase + 1) / PHASES.length) * 100;
+
+  // ============================================
+  // HANDLE CLIENT SELECTION
+  // ============================================
+
+  const handleSelectExistingClient = (clientId: string) => {
+    setSelectedClientId(clientId);
+    setWizardStep('conversation');
+  };
+
+  const handleStartNewClient = () => {
+    setWizardStep('new-client');
+  };
+
+  const handleCreateClientAndContinue = async () => {
+    if (!user || !clientForm.full_name.trim()) {
+      toast({
+        title: "Name erforderlich",
+        description: "Bitte gib mindestens den Namen des Kunden ein.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { data: newClient, error } = await supabase
+        .from('clients')
+        .insert({
+          user_id: user.id,
+          full_name: clientForm.full_name,
+          date_of_birth: clientForm.date_of_birth || null,
+          email: clientForm.email || null,
+          phone: clientForm.phone || null,
+          whatsapp_link: clientForm.phone ? `https://wa.me/${clientForm.phone.replace(/\D/g, '')}` : null,
+          emergency_contact_name: clientForm.emergency_contact_name || null,
+          emergency_contact_phone: clientForm.emergency_contact_phone || null,
+          health_notes: clientForm.health_notes || null,
+          fitness_goal: clientForm.fitness_goal || null,
+          fitness_goal_text: clientForm.fitness_goal_text || null,
+          starting_date: clientForm.starting_date || null,
+          status: 'prospect',
+          acquisition_source: clientForm.acquisition_source || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSelectedClientId(newClient.id);
+      setExistingClient(newClient);
+      setClientName(newClient.full_name);
+      
+      // Pre-fill conversation data from client form
+      if (clientForm.fitness_goal_text) {
+        setFormData(prev => ({ ...prev, fitness_goal_text: clientForm.fitness_goal_text }));
+      }
+      if (clientForm.acquisition_source) {
+        setFormData(prev => ({ ...prev, contact_source: clientForm.acquisition_source }));
+      }
+      
+      setWizardStep('conversation');
+      toast({
+        title: "Kunde angelegt",
+        description: `${newClient.full_name} wurde erstellt. Du kannst jetzt das Erstgespräch führen.`,
+      });
+    } catch (error) {
+      console.error('Fehler:', error);
+      toast({
+        title: "Fehler",
+        description: "Kunde konnte nicht angelegt werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // ============================================
   // SAVE TO DATABASE
@@ -202,10 +325,9 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
     setIsSaving(true);
     
     try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) throw new Error('Nicht eingeloggt');
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Nicht eingeloggt');
 
-      // Daten aufteilen
       const conversationData: ConversationForm = {
         contact_source: formData.contact_source,
         motivation: formData.motivation,
@@ -233,56 +355,30 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         substances: formData.substances,
       };
 
-      let finalClientId = clientId;
+      const finalClientId = selectedClientId!;
 
-      if (existingClient) {
-        // Bestehenden Kunden aktualisieren
-        await supabase
-          .from('clients')
-          .update({
-            occupation: formData.occupation,
-            fitness_goal_text: formData.fitness_goal_text,
-          })
-          .eq('id', existingClient.id);
-        
-        finalClientId = existingClient.id;
-      } else {
-        // Neuen Kunden anlegen
-        const { data: newClient, error: clientError } = await supabase
-          .from('clients')
-          .insert({
-            user_id: user.user.id,
-            full_name: clientName,
-            occupation: formData.occupation,
-            fitness_goal_text: formData.fitness_goal_text,
-            status: 'prospect',
-          })
-          .select()
-          .single();
-
-        if (clientError) throw clientError;
-        finalClientId = newClient.id;
-      }
-
-      // Gespräch speichern
-      const conversation = await createConversation(finalClientId!, conversationData);
-
-      // Gesundheitsdaten speichern
-      await createHealthRecord(finalClientId!, healthData, conversation.id);
-
-      // Status auf "trial" setzen
+      // Update client fields
       await supabase
         .from('clients')
-        .update({ status: 'trial' })
+        .update({
+          occupation: formData.occupation,
+          fitness_goal_text: formData.fitness_goal_text,
+          status: 'trial',
+        })
         .eq('id', finalClientId);
+
+      // Save conversation
+      const conversation = await createConversation(finalClientId, conversationData);
+
+      // Save health data
+      await createHealthRecord(finalClientId, healthData, conversation.id);
 
       toast({
         title: "Erstgespräch gespeichert",
         description: `Daten für ${clientName} wurden erfolgreich gespeichert.`,
       });
 
-      // Zurück zur Kundenübersicht
-      navigate(`/clients`);
+      navigate(`/clients/${finalClientId}`);
       
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
@@ -295,6 +391,193 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
       setIsSaving(false);
     }
   };
+
+  // ============================================
+  // RENDER: CLIENT SELECTION
+  // ============================================
+
+  if (wizardStep === 'select') {
+    return (
+      <div className="max-w-xl mx-auto p-4 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Erstgespräch</h1>
+          <p className="text-muted-foreground mt-1">Für wen möchtest du das Erstgespräch führen?</p>
+        </div>
+
+        <div className="grid gap-4">
+          {/* Existing Client */}
+          <Card className="cursor-pointer hover:border-primary/50 transition-colors">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Bestehenden Kunden auswählen
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select onValueChange={handleSelectExistingClient}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Kunde auswählen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allClients.map(client => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.full_name}
+                      {client.status === 'prospect' && (
+                        <span className="ml-2 text-xs text-muted-foreground">(Interessent)</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {allClients.length === 0 && (
+                <p className="text-sm text-muted-foreground mt-2">Noch keine Kunden vorhanden.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* New Client */}
+          <Card 
+            className="cursor-pointer hover:border-primary/50 transition-colors"
+            onClick={handleStartNewClient}
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <UserPlus className="w-5 h-5" />
+                Neuen Kunden anlegen
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Lege zuerst die Stammdaten an, dann führst du das Erstgespräch.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // RENDER: NEW CLIENT FORM
+  // ============================================
+
+  if (wizardStep === 'new-client') {
+    return (
+      <div className="max-w-2xl mx-auto p-4 space-y-6">
+        <Button variant="ghost" onClick={() => setWizardStep('select')} className="gap-2">
+          <ArrowLeft className="w-4 h-4" /> Zurück
+        </Button>
+        
+        <div>
+          <h1 className="text-2xl font-bold">Neuer Kunde</h1>
+          <p className="text-muted-foreground mt-1">Erfasse die Stammdaten, dann geht's zum Erstgespräch.</p>
+        </div>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Persönliche Daten</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Vollständiger Name *</Label>
+                <Input 
+                  value={clientForm.full_name} 
+                  onChange={e => updateClientForm('full_name', e.target.value)} 
+                  placeholder="Max Mustermann"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Geburtsdatum</Label>
+                <Input 
+                  type="date" 
+                  value={clientForm.date_of_birth} 
+                  onChange={e => updateClientForm('date_of_birth', e.target.value)} 
+                />
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>E-Mail</Label>
+                <Input 
+                  type="email" 
+                  value={clientForm.email} 
+                  onChange={e => updateClientForm('email', e.target.value)} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Telefon (mit Vorwahl)</Label>
+                <Input 
+                  value={clientForm.phone} 
+                  onChange={e => updateClientForm('phone', e.target.value)} 
+                  placeholder="+49..." 
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Notfallkontakt</CardTitle></CardHeader>
+          <CardContent className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input 
+                value={clientForm.emergency_contact_name} 
+                onChange={e => updateClientForm('emergency_contact_name', e.target.value)} 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Telefon</Label>
+              <Input 
+                value={clientForm.emergency_contact_phone} 
+                onChange={e => updateClientForm('emergency_contact_phone', e.target.value)} 
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Trainingsdetails</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Fitnessziel</Label>
+                <Select value={clientForm.fitness_goal} onValueChange={v => updateClientForm('fitness_goal', v)}>
+                  <SelectTrigger><SelectValue placeholder="Ziel wählen" /></SelectTrigger>
+                  <SelectContent>
+                    {FITNESS_GOALS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Wie hat er/sie mich gefunden?</Label>
+                <Select value={clientForm.acquisition_source} onValueChange={v => updateClientForm('acquisition_source', v)}>
+                  <SelectTrigger><SelectValue placeholder="Quelle wählen" /></SelectTrigger>
+                  <SelectContent>
+                    {ACQUISITION_SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Ziel-Details (Freitext)</Label>
+              <Textarea 
+                value={clientForm.fitness_goal_text} 
+                onChange={e => updateClientForm('fitness_goal_text', e.target.value)} 
+                rows={2} 
+                placeholder="Was möchte der Kunde erreichen?"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button onClick={handleCreateClientAndContinue} disabled={isSaving || !clientForm.full_name.trim()}>
+            {isSaving ? 'Wird angelegt...' : 'Kunde anlegen & Erstgespräch starten →'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // ============================================
   // RENDER: SUMMARY
@@ -362,7 +645,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
   }
 
   // ============================================
-  // RENDER: WIZARD
+  // RENDER: CONVERSATION WIZARD
   // ============================================
 
   return (
@@ -373,23 +656,14 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">Erstgespräch</h1>
-            {existingClient ? (
-              <p className="text-sm text-muted-foreground">{clientName}</p>
-            ) : (
-              <Input
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                placeholder="Name des Kunden"
-                className="mt-1 max-w-xs"
-              />
-            )}
+            <p className="text-sm text-muted-foreground">{clientName}</p>
           </div>
           <span className="text-sm text-muted-foreground">
             {new Date().toLocaleDateString('de-DE')}
           </span>
         </div>
         
-        {/* Progress */}
+        {/* Progress - FIXED: added overflow-hidden */}
         <div className="h-2 bg-secondary rounded-full overflow-hidden">
           <div 
             className="h-full bg-primary transition-all duration-500"
@@ -398,15 +672,15 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         </div>
       </div>
 
-      {/* Phase Navigation */}
-      <div className="flex gap-1 overflow-x-auto pb-2">
+      {/* Phase Navigation - FIXED: added flex-wrap and better overflow handling */}
+      <div className="flex flex-wrap gap-1 pb-2">
         {PHASES.map((p, idx) => (
           <Button
             key={p.id}
             variant={idx === currentPhase ? 'default' : idx < currentPhase ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setCurrentPhase(idx)}
-            className="flex-shrink-0"
+            className="flex-shrink-0 text-xs sm:text-sm"
           >
             <span className="mr-1">{p.icon}</span>
             <span className="hidden sm:inline">{p.title}</span>
@@ -540,7 +814,6 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         ) : (
           <Button
             onClick={() => setShowSummary(true)}
-            disabled={!clientName.trim()}
             className="flex-1"
           >
             Zusammenfassung →
