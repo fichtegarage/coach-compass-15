@@ -4,7 +4,7 @@
 // Datei: src/lib/onboarding-api.ts
 
 import { supabase } from './supabase'; // Passe den Import an
-import { supabase } from '@/integrations/supabase/client';
+import type {
   Client,
   ClientConversation,
   ClientHealthRecord,
@@ -14,7 +14,9 @@ import { supabase } from '@/integrations/supabase/client';
   HealthRecordForm,
   BodyDataForm,
   ClientOverview,
-  FIELD_MAPPING,
+} from '../types/onboarding';
+
+import {
   PERSONALITY_MAPPING,
 } from '../types/onboarding';
 
