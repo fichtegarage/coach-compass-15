@@ -13,7 +13,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, Users, CalendarDays, Settings, Dumbbell, LogOut, CalendarCheck } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, Settings, Dumbbell, LogOut, CalendarCheck, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const AppSidebar: React.FC = () => {
@@ -43,6 +43,7 @@ const AppSidebar: React.FC = () => {
   const navItems = [
     { title: 'Übersicht', url: '/dashboard', icon: LayoutDashboard },
     { title: 'Kunden', url: '/clients', icon: Users },
+    { title: 'Erstgespräch', url: '/onboarding', icon: ClipboardList },
     { title: 'Einheiten', url: '/sessions', icon: CalendarDays },
     { title: 'Buchungen', url: '/bookings', icon: CalendarCheck, badge: pendingCount },
     { title: 'Einstellungen', url: '/settings', icon: Settings },
