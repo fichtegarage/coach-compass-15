@@ -543,6 +543,9 @@ const ClientDetailPage: React.FC = () => {
           <Button size="sm" className="gap-2" onClick={() => setBookDialogOpen(true)}>
             <Plus className="w-4 h-4" /> Session buchen
           </Button>
+          <Link to={`/onboarding?clientId=${id}`}>
+            <Button variant="outline" size="sm" className="gap-2"><FileText className="w-4 h-4" /> Erstgespräch</Button>
+          </Link>
           <Link to={`/clients/${id}/edit`}>
             <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Bearbeiten</Button>
           </Link>
