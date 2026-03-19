@@ -3,7 +3,7 @@
 // ============================================
 // Datei: src/lib/onboarding-api.ts
 
-import { supabase } from './supabase'; // Passe den Import an
+import { supabase } from '@/integrations/supabase/client';
 import type {
   Client,
   ClientConversation,
@@ -14,11 +14,9 @@ import type {
   HealthRecordForm,
   BodyDataForm,
   ClientOverview,
-} from '../types/onboarding';
+} from '@/types/onboarding';
 
-import {
-  PERSONALITY_MAPPING,
-} from '../types/onboarding';
+import { PERSONALITY_MAPPING } from '@/types/onboarding';
 
 // ============================================
 // CLIENTS
@@ -297,7 +295,7 @@ export async function getClientWithDetails(clientId: string) {
 }
 
 // ============================================
-// ONBOARDING FLOW (Komplettes Erstgespräch speichern)
+// ONBOARDING FLOW
 // ============================================
 
 export interface OnboardingData {
@@ -306,13 +304,6 @@ export interface OnboardingData {
   health: HealthRecordForm;
 }
 
-/**
- * Speichert ein komplettes Erstgespräch
- * - Legt neuen Client an (oder nutzt bestehenden)
- * - Speichert Gesprächsdaten
- * - Speichert Gesundheitsdaten
- * - Aktualisiert Client-Felder (occupation, fitness_goal_text)
- */
 export async function saveOnboarding(
   data: OnboardingData,
   existingClientId?: string
@@ -324,23 +315,16 @@ export async function saveOnboarding(
   let client: Client;
 
   if (existingClientId) {
-    // Bestehenden Client aktualisieren
     client = await updateClient(existingClientId, {
       occupation: data.client.occupation,
-      // Weitere Felder bei Bedarf
     });
   } else {
-    // Neuen Client anlegen
     client = await createClient(data.client);
   }
 
-  // Gespräch speichern
   const conversation = await createConversation(client.id, data.conversation);
-
-  // Gesundheitsdaten speichern
   const healthRecord = await createHealthRecord(client.id, data.health, conversation.id);
 
-  // Status auf "trial" setzen wenn neu
   if (!existingClientId) {
     await updateClientStatus(client.id, 'trial');
   }
@@ -348,45 +332,42 @@ export async function saveOnboarding(
   return { client, conversation, healthRecord };
 }
 
-/**
- * Mappt Prototyp-Feldnamen zu Datenbank-Spalten
- */
-export function mapPrototypeToDb(prototypeData: Record<string, any>): {
+export function mapPrototypeToDb(prototypeData: Record<string, unknown>): {
   client: Partial<NewClientForm>;
   conversation: ConversationForm;
   health: HealthRecordForm;
 } {
   return {
     client: {
-      full_name: prototypeData.kundenName || '',
-      occupation: prototypeData.beruf,
+      full_name: (prototypeData.kundenName as string) || '',
+      occupation: prototypeData.beruf as string,
     },
     conversation: {
-      contact_source: prototypeData.kontakt_herkunft,
-      motivation: prototypeData.motivation,
-      previous_experience: prototypeData.bisherige_erfahrung,
-      stress_level: prototypeData.stress,
-      sleep_quality: prototypeData.schlaf,
-      daily_activity: prototypeData.bewegung_alltag,
-      current_training: prototypeData.training_aktuell,
-      nutrition_habits: prototypeData.ernaehrung,
-      goal_importance: prototypeData.warum_wichtig,
-      success_criteria: prototypeData.erfolgskriterium,
+      contact_source: prototypeData.kontakt_herkunft as string,
+      motivation: prototypeData.motivation as string,
+      previous_experience: prototypeData.bisherige_erfahrung as string,
+      stress_level: prototypeData.stress as string,
+      sleep_quality: prototypeData.schlaf as string,
+      daily_activity: prototypeData.bewegung_alltag as string,
+      current_training: prototypeData.training_aktuell as string,
+      nutrition_habits: prototypeData.ernaehrung as string,
+      goal_importance: prototypeData.warum_wichtig as string,
+      success_criteria: prototypeData.erfolgskriterium as string,
       personality_type: prototypeData.personalityType 
         ? PERSONALITY_MAPPING[prototypeData.personalityType as keyof typeof PERSONALITY_MAPPING]
-        : null,
-      next_steps: prototypeData.naechste_schritte,
-      notes: prototypeData.notizen,
+        : undefined,
+      next_steps: prototypeData.naechste_schritte as string,
+      notes: prototypeData.notizen as string,
     },
     health: {
-      cardiovascular: prototypeData.herz_kreislauf,
-      musculoskeletal: prototypeData.bewegungsapparat,
-      surgeries: prototypeData.operationen,
-      sports_injuries: prototypeData.verletzungen,
-      other_conditions: prototypeData.weitere_erkrankungen,
-      medications: prototypeData.medikamente,
-      current_pain: prototypeData.schmerzen_aktuell,
-      substances: prototypeData.genussmittel,
+      cardiovascular: prototypeData.herz_kreislauf as string,
+      musculoskeletal: prototypeData.bewegungsapparat as string,
+      surgeries: prototypeData.operationen as string,
+      sports_injuries: prototypeData.verletzungen as string,
+      other_conditions: prototypeData.weitere_erkrankungen as string,
+      medications: prototypeData.medikamente as string,
+      current_pain: prototypeData.schmerzen_aktuell as string,
+      substances: prototypeData.genussmittel as string,
     },
   };
 }
@@ -413,7 +394,6 @@ export async function exportClientData(clientId: string): Promise<object> {
 }
 
 export async function deleteAllClientData(clientId: string): Promise<void> {
-  // Durch ON DELETE CASCADE reicht es, den Client zu löschen
   const { error } = await supabase
     .from('clients')
     .delete()
