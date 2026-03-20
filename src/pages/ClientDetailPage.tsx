@@ -66,6 +66,33 @@ const packageFeaturesMap: Record<string, PackageFeature[]> = {
     { label: 'Priorisierte Terminbuchung', key: 'prio_buchung' },
     { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit', manual: true },
   ],
+  'Duo Starter': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten (Duo)', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+  ],
+  'Duo Transformation': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten (Duo)', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
+  ],
+  'Duo Intensiv': [
+    { label: 'Persönliches Erstgespräch & Zielsetzung', key: 'erstgespraech', manual: true },
+    { label: 'Trainingseinheiten (Duo)', key: 'sessions' },
+    { label: 'Trainingsplan passend zu deinen Zielen', key: 'trainingsplan', manual: true },
+    { label: 'Fortschrittsdokumentation', key: 'fortschrittsdoku' },
+    { label: 'Monatliche Check-in-Calls', key: 'checkin_calls' },
+    { label: 'Angepasster Ernährungsleitfaden', key: 'ernaehrung', manual: true },
+    { label: 'Fortschrittsfotos & Messung', key: 'fortschrittsfotos' },
+    { label: 'WhatsApp-Support zwischen den Einheiten', key: 'whatsapp_support' },
+    { label: 'Priorisierte Terminbuchung', key: 'prio_buchung' },
+    { label: 'Gratis-Einheit bei Weiterempfehlung', key: 'gratis_einheit', manual: true },
+  ],
 };
 
 const packageTemplates: Record<string, { sessions_included: string; checkin_calls_included: string; package_price: string; duration_weeks: string; description: string }> = {
@@ -84,6 +111,18 @@ const packageTemplates: Record<string, { sessions_included: string; checkin_call
   'Intensiv': {
     sessions_included: '20', checkin_calls_included: '12', package_price: '1700', duration_weeks: '52',
     description: '20 Einheiten à 60 Min. • gültig 12 Monate',
+  },
+  'Duo Starter': {
+    sessions_included: '5', checkin_calls_included: '0', package_price: '345', duration_weeks: '13',
+    description: '5 Einheiten à 60 Min. • je Person • gültig 3 Monate',
+  },
+  'Duo Transformation': {
+    sessions_included: '10', checkin_calls_included: '6', package_price: '650', duration_weeks: '26',
+    description: '10 Einheiten à 60 Min. • je Person • gültig 6 Monate',
+  },
+  'Duo Intensiv': {
+    sessions_included: '20', checkin_calls_included: '12', package_price: '1240', duration_weeks: '52',
+    description: '20 Einheiten à 60 Min. • je Person • gültig 12 Monate',
   },
 };
 
@@ -390,6 +429,7 @@ const ClientDetailPage: React.FC = () => {
   const savePackage = async () => {
     if (!user || !id) return;
     const isTestkunde = packageForm.package_name === 'Testkunde';
+    const isDuo = packageForm.package_name.startsWith('Duo ');
     const endDate = packageForm.start_date && packageForm.duration_weeks
       ? new Date(new Date(packageForm.start_date).getTime() + Number(packageForm.duration_weeks) * 7 * 86400000).toISOString().split('T')[0]
       : null;
@@ -406,7 +446,6 @@ const ClientDetailPage: React.FC = () => {
       deal_reason: null,
       deal_discounted_price: null,
       deal_adjusted_terms: null,
-      // Testkunden haben keinen offenen Zahlungsstatus
       payment_status: isTestkunde ? 'Paid in full' : packageForm.payment_status,
       payment_date: isTestkunde ? packageForm.start_date : (packageForm.payment_date || null),
     });
@@ -498,6 +537,7 @@ const ClientDetailPage: React.FC = () => {
   };
 
   const isTestkundeFormSelected = packageForm.package_name === 'Testkunde';
+  const isDuoPackageFormSelected = packageForm.package_name.startsWith('Duo ');
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -525,10 +565,14 @@ const ClientDetailPage: React.FC = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-display font-bold">{client.full_name}</h1>
             <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
-            {/* Testkunde-Badge */}
             {activePackage?.package_name === 'Testkunde' && (
               <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300">
                 Testkunde
+              </Badge>
+            )}
+            {activePackage?.package_name?.startsWith('Duo ') && (
+              <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+                👥 Duo
               </Badge>
             )}
           </div>
@@ -619,6 +663,7 @@ const ClientDetailPage: React.FC = () => {
             const checkinCount = sessions.filter(s => s.package_id === activePackage.id && s.session_type === 'Check-In Call' && s.status === 'Completed').length;
             const hasMetrics = metrics.length > 0;
             const isTestPkg = activePackage.package_name === 'Testkunde';
+            const isDuoPkg = activePackage.package_name.startsWith('Duo ');
             return (
               <Card className="stat-glow">
                 <CardHeader className="pb-2">
@@ -627,6 +672,11 @@ const ClientDetailPage: React.FC = () => {
                     {isTestPkg && (
                       <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">
                         Testkunde
+                      </Badge>
+                    )}
+                    {isDuoPkg && (
+                      <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 text-xs">
+                        👥 Duo
                       </Badge>
                     )}
                   </CardTitle>
@@ -638,6 +688,7 @@ const ClientDetailPage: React.FC = () => {
                       <p className="text-sm text-muted-foreground">
                         {usedSessions} / {activePackage.sessions_included} Einheiten genutzt
                         {isTestPkg && <span className="ml-2 text-violet-600 font-medium">· kostenlos</span>}
+                        {isDuoPkg && <span className="ml-2 text-blue-600 font-medium">· je Person</span>}
                       </p>
                     </div>
                     {activePackage.sessions_included - usedSessions <= 2 && (
@@ -745,6 +796,9 @@ const ClientDetailPage: React.FC = () => {
                         <SelectItem value="Starter">Starter – 5 Einheiten · 470€</SelectItem>
                         <SelectItem value="Transformation">Transformation – 10 Einheiten · 890€</SelectItem>
                         <SelectItem value="Intensiv">Intensiv – 20 Einheiten · 1.700€</SelectItem>
+                        <SelectItem value="Duo Starter">👥 Duo Starter – 5 Einheiten · 345€/Person</SelectItem>
+                        <SelectItem value="Duo Transformation">👥 Duo Transformation – 10 Einheiten · 650€/Person</SelectItem>
+                        <SelectItem value="Duo Intensiv">👥 Duo Intensiv – 20 Einheiten · 1.240€/Person</SelectItem>
                       </SelectContent>
                     </Select>
                     {packageForm.package_name && packageTemplates[packageForm.package_name] && (
@@ -752,10 +806,15 @@ const ClientDetailPage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Testkunde-Hinweis */}
                   {isTestkundeFormSelected && (
                     <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-xs text-violet-800">
                       🧪 Testkunde: Kein Zahlungsstatus erforderlich. Das Paket ist kostenlos.
+                    </div>
+                  )}
+
+                  {isDuoPackageFormSelected && (
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
+                      👥 Duo-Paket: Preis gilt je Person. Bitte für jede Person separat anlegen.
                     </div>
                   )}
 
@@ -770,11 +829,10 @@ const ClientDetailPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Preis nur bei Nicht-Testkunden */}
                   {!isTestkundeFormSelected && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Paketpreis (€)</Label>
+                        <Label>Paketpreis (€){isDuoPackageFormSelected ? ' je Person' : ''}</Label>
                         <Input type="number" value={packageForm.package_price} onChange={e => setPackageForm(f => ({ ...f, package_price: e.target.value }))} />
                       </div>
                       <div className="space-y-2">
@@ -799,7 +857,6 @@ const ClientDetailPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Zahlungsfelder nur bei Nicht-Testkunden */}
                   {!isTestkundeFormSelected && (
                     <>
                       <div className="flex items-center gap-2">
@@ -856,6 +913,7 @@ const ClientDetailPage: React.FC = () => {
                 const remaining = pkg.sessions_included - used;
                 const hasFollowUp = packages.some(p => p.id !== pkg.id && new Date(p.start_date) > new Date(pkg.start_date));
                 const isTestPkg = pkg.package_name === 'Testkunde';
+                const isDuoPkg = pkg.package_name.startsWith('Duo ');
                 return (
                   <Card key={pkg.id}>
                     <CardContent className="p-4">
@@ -868,15 +926,23 @@ const ClientDetailPage: React.FC = () => {
                                 Testkunde
                               </Badge>
                             )}
+                            {isDuoPkg && (
+                              <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 text-xs">
+                                👥 Duo
+                              </Badge>
+                            )}
                             {!isTestPkg && pkg.is_deal && <Badge variant="outline" className="text-primary border-primary/30">Angebot</Badge>}
-                            {/* Zahlungsstatus nur bei Nicht-Testkunden */}
                             {!isTestPkg && (
                               <Badge variant="outline" className={paymentColor(pkg.payment_status)}>{paymentStatusLabelsDE[pkg.payment_status] || pkg.payment_status}</Badge>
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground mt-1">
                             {used}/{pkg.sessions_included} Einheiten
-                            {isTestPkg ? ' · kostenlos' : ` · €${pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price}`}
+                            {isTestPkg
+                              ? ' · kostenlos'
+                              : isDuoPkg
+                                ? ` · €${pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price}/Person`
+                                : ` · €${pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price}`}
                             {pkg.start_date && ` · ${format(new Date(pkg.start_date), 'd. MMM yyyy', { locale: de })}`}
                             {pkg.end_date && ` → ${format(new Date(pkg.end_date), 'd. MMM yyyy', { locale: de })}`}
                           </p>
@@ -989,7 +1055,10 @@ const ClientDetailPage: React.FC = () => {
                   <CardContent className="p-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">{format(new Date(s.session_date), 'd. MMM yyyy · HH:mm', { locale: de })}</p>
-                      <p className="text-xs text-muted-foreground">{sessionTypeLabelsDE[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {sessionTypeLabelsDE[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}
+                        {s.second_client?.full_name && ` · mit ${s.second_client.full_name}`}
+                      </p>
                       {s.notes && <p className="text-xs text-muted-foreground mt-1">{s.notes}</p>}
                     </div>
                     <div className="flex items-center gap-2">
