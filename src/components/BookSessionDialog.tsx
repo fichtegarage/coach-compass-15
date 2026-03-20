@@ -215,11 +215,11 @@ const BookSessionDialog: React.FC<BookSessionDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="font-display">Session buchen</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 pr-1">
 
           {/* Type toggle */}
           <div className="grid grid-cols-3 gap-2">
@@ -366,6 +366,9 @@ const BookSessionDialog: React.FC<BookSessionDialogProps> = ({
             />
           </div>
 
+        </div>
+        {/* Button always visible outside scroll area */}
+        <div className="flex-shrink-0 pt-2 border-t">
           <Button onClick={save} className="w-full" disabled={saving}>
             {saving
               ? 'Wird gebucht...'
