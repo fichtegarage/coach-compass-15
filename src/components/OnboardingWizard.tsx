@@ -15,13 +15,36 @@ import {
   getClient 
 } from '@/lib/onboarding-api';
 import type { ConversationForm, HealthRecordForm } from '@/types/onboarding';
-import { Users, UserPlus, ArrowLeft } from 'lucide-react';
+import { Users, UserPlus, ArrowLeft, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
-const PHASES = [
+interface FieldConfig {
+  id: string;
+  label: string;
+  placeholder: string;
+  multiline?: boolean;
+  isClientField?: boolean;
+  deepQuestions?: {
+    title: string;
+    questions: string[];
+  };
+}
+
+interface PhaseConfig {
+  id: string;
+  title: string;
+  duration: string;
+  icon: string;
+  description: string;
+  prompts: string[];
+  fields: FieldConfig[];
+  isHealthSection?: boolean;
+}
+
+const PHASES: PhaseConfig[] = [
   {
     id: 'ankommen',
     title: 'Ankommen',
@@ -48,9 +71,44 @@ const PHASES = [
       'Was hat funktioniert / was nicht?',
     ],
     fields: [
-      { id: 'contact_source', label: 'Kontakt über', placeholder: 'Empfehlung, Instagram, Studio...' },
-      { id: 'motivation', label: 'Motivation', placeholder: 'Was treibt ihn/sie an?', multiline: true },
-      { id: 'previous_experience', label: 'Bisherige Erfahrung', placeholder: 'Was wurde schon versucht?', multiline: true },
+      { 
+        id: 'contact_source', 
+        label: 'Kontakt über', 
+        placeholder: 'Empfehlung, Instagram, Studio...' 
+      },
+      { 
+        id: 'motivation', 
+        label: 'Motivation', 
+        placeholder: 'Was treibt ihn/sie an?', 
+        multiline: true,
+        deepQuestions: {
+          title: 'Tiefenfragen bei unklarer/oberflächlicher Motivation',
+          questions: [
+            'Stell dir vor, du hast dein Ziel erreicht. Du wachst morgens auf – was ist der erste Unterschied, den du bemerkst?',
+            'Wer in deinem Leben würde die Veränderung als erstes bemerken? Was würde diese Person sagen?',
+            'Gibt es ein konkretes Ereignis, auf das du hinarbeitest? (Hochzeit, Urlaub, Klassentreffen, Fotoshooting...)',
+            'Wenn du an den Moment denkst, als du dachtest "Jetzt muss sich was ändern" – was war da gerade passiert?',
+            'Was wäre in einem Jahr anders, wenn du dieses Ziel NIE erreichst? Wie würde sich das anfühlen?',
+            'Mal ehrlich unter uns: Geht es dir eher ums Aussehen, ums Gefühl, oder um etwas ganz anderes?',
+          ],
+        },
+      },
+      { 
+        id: 'previous_experience', 
+        label: 'Bisherige Erfahrung', 
+        placeholder: 'Was wurde schon versucht?', 
+        multiline: true,
+        deepQuestions: {
+          title: 'Tiefenfragen bei "hat nicht funktioniert"',
+          questions: [
+            'Wenn du an deine beste Fitnessphase denkst – was war damals anders in deinem Leben?',
+            'Was war der konkrete Moment, an dem du beim letzten Versuch aufgehört hast? Was ist da passiert?',
+            'Was hat dich bisher immer wieder rausgebracht? (Stress, Verletzung, Langeweile, Zeitmangel...)',
+            'Gab es etwas, das früher gut funktioniert hat, aber jetzt nicht mehr passt?',
+            'Was müsste diesmal anders sein, damit es klappt?',
+          ],
+        },
+      },
     ],
   },
   {
@@ -67,12 +125,77 @@ const PHASES = [
       'Wie ernährst du dich so grob?',
     ],
     fields: [
-      { id: 'occupation', label: 'Beruf & Arbeitszeit', placeholder: 'Büro, Schichtdienst, körperlich...', isClientField: true },
-      { id: 'stress_level', label: 'Stresslevel', placeholder: 'niedrig / mittel / hoch – Ursachen?' },
-      { id: 'sleep_quality', label: 'Schlaf', placeholder: 'Stunden, Qualität, Probleme?' },
-      { id: 'daily_activity', label: 'Bewegung im Alltag', placeholder: 'Schritte, Fahrrad, Treppen...' },
-      { id: 'current_training', label: 'Aktuelles Training', placeholder: 'Häufigkeit, Art, seit wann?' },
-      { id: 'nutrition_habits', label: 'Ernährung (grob)', placeholder: 'Regelmäßig? Kantine? Selbst kochen?' },
+      { 
+        id: 'occupation', 
+        label: 'Beruf & Arbeitszeit', 
+        placeholder: 'Büro, Schichtdienst, körperlich...', 
+        isClientField: true 
+      },
+      { 
+        id: 'stress_level', 
+        label: 'Stresslevel', 
+        placeholder: 'niedrig / mittel / hoch – Ursachen?',
+        deepQuestions: {
+          title: 'Tiefenfragen wenn Stress unterschätzt wird',
+          questions: [
+            'Wie oft denkst du abends noch an die Arbeit, wenn du eigentlich abschalten willst?',
+            'Wann hattest du zuletzt einen Tag, an dem du an GAR NICHTS gedacht hast?',
+            'Wie würde dein Partner / dein bester Freund deinen Stresslevel einschätzen?',
+            'Was machst du, um runterzukommen? Funktioniert das?',
+            'Merkst du Stress eher im Kopf (Gedankenkreisen) oder im Körper (Verspannungen, Schlaf)?',
+          ],
+        },
+      },
+      { 
+        id: 'sleep_quality', 
+        label: 'Schlaf', 
+        placeholder: 'Stunden, Qualität, Probleme?',
+        deepQuestions: {
+          title: 'Tiefenfragen zur Schlafqualität',
+          questions: [
+            'Wie fühlst du dich morgens, wenn der Wecker klingelt? Fit oder wie gerädert?',
+            'Brauchst du Kaffee, um morgens in die Gänge zu kommen?',
+            'Wie oft wachst du nachts auf? Kannst du dann wieder einschlafen?',
+            'Schläfst du am Wochenende deutlich länger als unter der Woche?',
+            'Wann bist du das letzte Mal ohne Wecker aufgewacht und fühltest dich ausgeschlafen?',
+          ],
+        },
+      },
+      { 
+        id: 'daily_activity', 
+        label: 'Bewegung im Alltag', 
+        placeholder: 'Schritte, Fahrrad, Treppen...' 
+      },
+      { 
+        id: 'current_training', 
+        label: 'Aktuelles Training', 
+        placeholder: 'Häufigkeit, Art, seit wann?',
+        deepQuestions: {
+          title: 'Tiefenfragen bei Selbstüberschätzung',
+          questions: [
+            'Was war dein letztes Training – welcher Tag, welche Uhrzeit, was genau hast du gemacht?',
+            'Wenn du an die letzten 4 Wochen denkst – wie viele Trainingseinheiten waren es wirklich?',
+            'Wie lange dauert ein typisches Training bei dir – von Betreten bis Verlassen?',
+            'Was machst du in einer typischen Einheit? Beschreib mir den Ablauf.',
+          ],
+        },
+      },
+      { 
+        id: 'nutrition_habits', 
+        label: 'Ernährung (grob)', 
+        placeholder: 'Regelmäßig? Kantine? Selbst kochen?',
+        deepQuestions: {
+          title: 'Tiefenfragen bei "ich esse eigentlich gesund"',
+          questions: [
+            'Was hast du GESTERN gegessen? Frühstück, Mittag, Abend, Snacks – so konkret wie möglich.',
+            'Wie sieht ein typischer Dienstag bei dir aus – vom Aufstehen bis Schlafengehen, inklusive Essen?',
+            'Wann isst du aus echtem Hunger, und wann aus anderen Gründen? (Langeweile, Stress, Gewohnheit)',
+            'Wie oft bestellst du Essen oder isst auswärts pro Woche?',
+            'Trinkst du Kalorien? (Softdrinks, Säfte, Alkohol, Kaffee mit Milch/Zucker)',
+            'Gibt es Lebensmittel, bei denen du nicht aufhören kannst, wenn du einmal angefangen hast?',
+          ],
+        },
+      },
     ],
   },
   {
@@ -104,9 +227,45 @@ const PHASES = [
       'Gibt es einen Zeitrahmen?',
     ],
     fields: [
-      { id: 'fitness_goal_text', label: 'Primärziel', placeholder: 'Das wichtigste Ziel...', isClientField: true },
-      { id: 'goal_importance', label: 'Warum wichtig?', placeholder: 'Die tiefere Motivation...', multiline: true },
-      { id: 'success_criteria', label: 'Woran erkennbar?', placeholder: 'Konkretes Erfolgskriterium...' },
+      { 
+        id: 'fitness_goal_text', 
+        label: 'Primärziel', 
+        placeholder: 'Das wichtigste Ziel...', 
+        isClientField: true 
+      },
+      { 
+        id: 'goal_importance', 
+        label: 'Warum wichtig?', 
+        placeholder: 'Die tiefere Motivation...', 
+        multiline: true,
+        deepQuestions: {
+          title: 'Das "Warum hinter dem Warum" finden',
+          questions: [
+            'Was passiert, wenn du in einem Jahr immer noch genau da stehst, wo du heute bist?',
+            'Auf einer Skala von 1-10: Wie wichtig ist dir das WIRKLICH? ... Warum keine 10?',
+            'Was bist du bereit, dafür aufzugeben oder zu verändern?',
+            'Wofür brauchst du die zusätzliche Energie/Kraft/Ausdauer konkret?',
+            'Gibt es jemanden, für den du das auch tust? (Kinder, Partner, Eltern)',
+            'Was würdest du machen, wenn du fitter wärst, das du jetzt nicht machst?',
+          ],
+        },
+      },
+      { 
+        id: 'success_criteria', 
+        label: 'Woran erkennbar?', 
+        placeholder: 'Konkretes Erfolgskriterium...',
+        deepQuestions: {
+          title: 'Konkrete Erfolgskriterien herausarbeiten',
+          questions: [
+            'Woran würde dein bester Freund / dein Partner merken, dass es funktioniert hat?',
+            'Gibt es ein konkretes Kleidungsstück, das wieder passen soll?',
+            'Gibt es eine Zahl, die du im Kopf hast? (Gewicht, Körperfett, Wiederholungen...)',
+            'Gibt es ein Gefühl, das du wieder haben möchtest? Beschreib es mir.',
+            'Was müsste passieren, damit du nach 3 Monaten sagst: Das hat sich gelohnt?',
+            'Stell dir vor, wir treffen uns in 6 Monaten – was erzählst du mir, was sich verändert hat?',
+          ],
+        },
+      },
     ],
   },
   {
@@ -148,7 +307,48 @@ const FITNESS_GOALS = ['Abnehmen', 'Muskelaufbau', 'Ausdauer', 'Reha', 'Allgemei
 const ACQUISITION_SOURCES = ['Empfehlung', 'Instagram', 'Website', 'Google', 'Laufkundschaft', 'Sonstiges'];
 
 // ============================================
-// COMPONENT
+// DEEP QUESTIONS COMPONENT
+// ============================================
+
+interface DeepQuestionsProps {
+  title: string;
+  questions: string[];
+}
+
+const DeepQuestionsPanel: React.FC<DeepQuestionsProps> = ({ title, questions }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 text-xs text-primary hover:text-primary/80 transition-colors"
+      >
+        <Lightbulb className="w-3.5 h-3.5" />
+        <span>{isOpen ? 'Tiefenfragen ausblenden' : 'Tiefenfragen anzeigen'}</span>
+        {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+      
+      {isOpen && (
+        <div className="mt-2 p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+          <p className="text-xs font-medium text-primary">{title}</p>
+          <ul className="space-y-1.5">
+            {questions.map((q, idx) => (
+              <li key={idx} className="text-sm text-muted-foreground flex gap-2">
+                <span className="text-primary/60 flex-shrink-0">→</span>
+                <span>{q}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// MAIN COMPONENT
 // ============================================
 
 interface OnboardingWizardProps {
@@ -663,7 +863,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
           </span>
         </div>
         
-        {/* Progress - FIXED: added overflow-hidden */}
+        {/* Progress */}
         <div className="h-2 bg-secondary rounded-full overflow-hidden">
           <div 
             className="h-full bg-primary transition-all duration-500"
@@ -672,7 +872,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         </div>
       </div>
 
-      {/* Phase Navigation - FIXED: added flex-wrap and better overflow handling */}
+      {/* Phase Navigation */}
       <div className="flex flex-wrap gap-1 pb-2">
         {PHASES.map((p, idx) => (
           <Button
@@ -735,6 +935,13 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                       value={formData[field.id] || ''}
                       onChange={(e) => updateField(field.id, e.target.value)}
                       placeholder={field.placeholder}
+                    />
+                  )}
+                  {/* Deep Questions Panel */}
+                  {field.deepQuestions && (
+                    <DeepQuestionsPanel 
+                      title={field.deepQuestions.title} 
+                      questions={field.deepQuestions.questions} 
                     />
                   )}
                 </div>
