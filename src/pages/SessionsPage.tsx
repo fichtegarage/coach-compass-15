@@ -125,8 +125,33 @@ const SessionsPage: React.FC = () => {
     loadData();
   };
 
+  // ── Slot-Check: freien Slot löschen oder gebuchten Slot blockieren ──────
+  const checkAndHandleSlot = async (sessionDateISO: string): Promise<boolean> => {
+    const sessionTime = new Date(sessionDateISO);
+    const windowStart = new Date(sessionTime.getTime() - 2 * 60000).toISOString();
+    const windowEnd = new Date(sessionTime.getTime() + 2 * 60000).toISOString();
+    const { data: matchingSlots } = await supabase
+      .from('availability_slots')
+      .select('id, is_bookable, booking_requests(status)')
+      .gte('start_time', windowStart)
+      .lte('start_time', windowEnd);
+    if (!matchingSlots || matchingSlots.length === 0) return true;
+    const slot = matchingSlots[0] as any;
+    const hasConfirmedBooking = slot.booking_requests?.some((r: any) => r.status === 'confirmed');
+    if (hasConfirmedBooking || !slot.is_bookable) {
+      toast.error('Dieser Slot ist bereits von einem Kunden gebucht. Bitte die bestehende Buchung verwalten.');
+      return false;
+    }
+    await supabase.from('availability_slots').delete().eq('id', slot.id);
+    toast.info('Freier Slot für diese Uhrzeit wurde automatisch entfernt.');
+    return true;
+  };
+
   const save = async () => {
     if (!user || !form.client_id) return;
+    const sessionDateISO = new Date(form.session_date).toISOString();
+    const slotOk = await checkAndHandleSlot(sessionDateISO);
+    if (!slotOk) return;
     const isDuo = form.session_type === 'Duo Training';
     const { error } = await supabase.from('sessions').insert({
       client_id: form.client_id,
