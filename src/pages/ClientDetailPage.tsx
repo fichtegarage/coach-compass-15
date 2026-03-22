@@ -1,3 +1,4 @@
+import { getLatestConversation, getHealthRecord } from '@/lib/onboarding-api';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -199,6 +200,8 @@ const ClientDetailPage: React.FC = () => {
   const [metrics, setMetrics] = useState<any[]>([]);
   const [benchmarks, setBenchmarks] = useState<any[]>([]);
   const [quickLogs, setQuickLogs] = useState<any[]>([]);
+  const [conversation, setConversation] = useState<any>(null);
+  const [healthRecord, setHealthRecord] = useState<any>(null);
   const [manualCompletions, setManualCompletions] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(true);
   const [quickLogText, setQuickLogText] = useState('');
@@ -272,6 +275,15 @@ const ClientDetailPage: React.FC = () => {
       mcMap[c.package_id].add(c.feature_key);
     });
     setManualCompletions(mcMap);
+    // Erstgespräch-Daten laden
+    if (id) {
+      const [convData, healthData] = await Promise.all([
+        getLatestConversation(id),
+        getHealthRecord(id),
+      ]);
+      setConversation(convData);
+      setHealthRecord(healthData);
+    }
     setLoading(false);
   }, [id, user]);
 
@@ -609,6 +621,7 @@ const ClientDetailPage: React.FC = () => {
           <TabsTrigger value="packages">Pakete</TabsTrigger>
           <TabsTrigger value="sessions">Einheiten</TabsTrigger>
           <TabsTrigger value="progress">Fortschritt</TabsTrigger>
+          <TabsTrigger value="erstgespraech">Erstgespräch</TabsTrigger>
           <TabsTrigger value="notes">Notizen</TabsTrigger>
         </TabsList>
 
@@ -1106,6 +1119,237 @@ const ClientDetailPage: React.FC = () => {
           )}
 
           {id && <ProgressPhotos clientId={id} />}
+        </TabsContent>
+
+        {/* ERSTGESPRÄCH TAB */}
+        <TabsContent value="erstgespraech" className="space-y-4 mt-4">
+          {!conversation ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <p className="text-muted-foreground mb-4">Noch kein Erstgespräch dokumentiert.</p>
+                <Link to={`/onboarding?clientId=${id}`}>
+                  <Button className="gap-2"><FileText className="w-4 h-4" /> Erstgespräch führen</Button>
+                </Link>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Header mit Datum und Persönlichkeitstyp */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Erstgespräch vom {format(new Date(conversation.conversation_date), 'd. MMMM yyyy', { locale: de })}
+                  </p>
+                </div>
+                <Link to={`/onboarding?clientId=${id}`}>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Edit className="w-4 h-4" /> Neues Gespräch
+                  </Button>
+                </Link>
+              </div>
+
+              {/* Persönlichkeitstyp */}
+              {conversation.personality_type && (
+                <Card className="border-primary/30 bg-primary/5">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">
+                        {conversation.personality_type === 'success_oriented' ? '⚡' : 
+                         conversation.personality_type === 'avoidance_oriented' ? '🛡️' : '❓'}
+                      </span>
+                      <div>
+                        <p className="font-medium">
+                          {conversation.personality_type === 'success_oriented' ? 'Erfolgsorientiert' : 
+                           conversation.personality_type === 'avoidance_oriented' ? 'Meidungsorientiert' : 'Noch unklar'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {conversation.personality_type === 'success_oriented' 
+                            ? 'Herausfordernde Ziele setzen, Eigenverantwortung betonen' 
+                            : conversation.personality_type === 'avoidance_oriented'
+                            ? 'Realistische Erwartungen, mehr Begleitung und Sicherheit geben'
+                            : 'Im Training weiter beobachten'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Motivation & Ziele */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-display flex items-center gap-2">
+                    🎯 Motivation & Ziele
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  {conversation.contact_source && (
+                    <div>
+                      <span className="text-muted-foreground">Kontakt über:</span>{' '}
+                      <span>{conversation.contact_source}</span>
+                    </div>
+                  )}
+                  {conversation.motivation && (
+                    <div>
+                      <span className="text-muted-foreground">Motivation:</span>
+                      <p className="mt-1 whitespace-pre-wrap">{conversation.motivation}</p>
+                    </div>
+                  )}
+                  {conversation.previous_experience && (
+                    <div>
+                      <span className="text-muted-foreground">Bisherige Erfahrung:</span>
+                      <p className="mt-1 whitespace-pre-wrap">{conversation.previous_experience}</p>
+                    </div>
+                  )}
+                  {conversation.goal_importance && (
+                    <div>
+                      <span className="text-muted-foreground">Warum wichtig:</span>
+                      <p className="mt-1 whitespace-pre-wrap">{conversation.goal_importance}</p>
+                    </div>
+                  )}
+                  {conversation.success_criteria && (
+                    <div>
+                      <span className="text-muted-foreground">Erfolgskriterium:</span>
+                      <p className="mt-1">{conversation.success_criteria}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Ist-Zustand */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-display flex items-center gap-2">
+                    📊 Ist-Zustand
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid sm:grid-cols-2 gap-3 text-sm">
+                  {conversation.stress_level && (
+                    <div>
+                      <span className="text-muted-foreground">Stresslevel:</span>{' '}
+                      <span>{conversation.stress_level}</span>
+                    </div>
+                  )}
+                  {conversation.sleep_quality && (
+                    <div>
+                      <span className="text-muted-foreground">Schlaf:</span>{' '}
+                      <span>{conversation.sleep_quality}</span>
+                    </div>
+                  )}
+                  {conversation.daily_activity && (
+                    <div>
+                      <span className="text-muted-foreground">Bewegung im Alltag:</span>{' '}
+                      <span>{conversation.daily_activity}</span>
+                    </div>
+                  )}
+                  {conversation.current_training && (
+                    <div>
+                      <span className="text-muted-foreground">Aktuelles Training:</span>{' '}
+                      <span>{conversation.current_training}</span>
+                    </div>
+                  )}
+                  {conversation.nutrition_habits && (
+                    <div className="sm:col-span-2">
+                      <span className="text-muted-foreground">Ernährung:</span>{' '}
+                      <span>{conversation.nutrition_habits}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Anamnese */}
+              {healthRecord && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-display flex items-center gap-2 text-destructive">
+                      🩺 Anamnese / Gesundheit
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid sm:grid-cols-2 gap-3 text-sm">
+                    {healthRecord.cardiovascular && (
+                      <div>
+                        <span className="text-muted-foreground">Herz-Kreislauf:</span>{' '}
+                        <span>{healthRecord.cardiovascular}</span>
+                      </div>
+                    )}
+                    {healthRecord.musculoskeletal && (
+                      <div>
+                        <span className="text-muted-foreground">Bewegungsapparat:</span>{' '}
+                        <span>{healthRecord.musculoskeletal}</span>
+                      </div>
+                    )}
+                    {healthRecord.surgeries && (
+                      <div>
+                        <span className="text-muted-foreground">Operationen:</span>{' '}
+                        <span>{healthRecord.surgeries}</span>
+                      </div>
+                    )}
+                    {healthRecord.sports_injuries && (
+                      <div>
+                        <span className="text-muted-foreground">Sportverletzungen:</span>{' '}
+                        <span>{healthRecord.sports_injuries}</span>
+                      </div>
+                    )}
+                    {healthRecord.other_conditions && (
+                      <div>
+                        <span className="text-muted-foreground">Sonstige Erkrankungen:</span>{' '}
+                        <span>{healthRecord.other_conditions}</span>
+                      </div>
+                    )}
+                    {healthRecord.medications && (
+                      <div>
+                        <span className="text-muted-foreground">Medikamente:</span>{' '}
+                        <span>{healthRecord.medications}</span>
+                      </div>
+                    )}
+                    {healthRecord.current_pain && (
+                      <div>
+                        <span className="text-muted-foreground">Aktuelle Schmerzen:</span>{' '}
+                        <span>{healthRecord.current_pain}</span>
+                      </div>
+                    )}
+                    {healthRecord.substances && (
+                      <div>
+                        <span className="text-muted-foreground">Genussmittel:</span>{' '}
+                        <span>{healthRecord.substances}</span>
+                      </div>
+                    )}
+                    {!healthRecord.cardiovascular && !healthRecord.musculoskeletal && 
+                     !healthRecord.surgeries && !healthRecord.sports_injuries && 
+                     !healthRecord.other_conditions && !healthRecord.medications && 
+                     !healthRecord.current_pain && !healthRecord.substances && (
+                      <p className="text-muted-foreground sm:col-span-2">Keine Einschränkungen dokumentiert.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Nächste Schritte & Notizen */}
+              {(conversation.next_steps || conversation.notes) && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-display flex items-center gap-2">
+                      🚀 Vereinbarungen & Notizen
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {conversation.next_steps && (
+                      <div>
+                        <span className="text-muted-foreground">Nächste Schritte:</span>
+                        <p className="mt-1">{conversation.next_steps}</p>
+                      </div>
+                    )}
+                    {conversation.notes && (
+                      <div>
+                        <span className="text-muted-foreground">Notizen:</span>
+                        <p className="mt-1 whitespace-pre-wrap">{conversation.notes}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
         </TabsContent>
 
         {/* NOTES TAB */}
