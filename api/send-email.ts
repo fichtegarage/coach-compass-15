@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Jakob Neumann Training <noreply@jakob-neumann.net>',
+      from: 'Jakob Neumann Training <hallo@jakob-neumann.net>',
       to,
       subject,
       html,
