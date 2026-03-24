@@ -23,6 +23,7 @@ import {
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { buildEmail } from '@/lib/emailTemplate';
 
 // ── E-Mail helper ─────────────────────────────────────────────────────────────
 const sendEmail = async (to: string, subject: string, html: string) => {
@@ -243,10 +244,6 @@ const BookingsPage: React.FC = () => {
   }, [slotForm.start_time, slotForm.end_time]);
 
   // ── Entries per day for calendar ─────────────────────────────────────────
-  // Slots werden nur angezeigt wenn:
-  //   a) is_bookable = true  ODER
-  //   b) noch eine ausstehende Anfrage existiert (Amber-Zustand)
-  // → vollständig gebuchte Slots (is_bookable=false, kein pending) werden ausgeblendet
   const entriesByDay = useMemo(() => {
     const map: Record<string, { slots: any[]; sessions: any[] }> = {};
     calendarDays.forEach(d => {
@@ -255,9 +252,7 @@ const BookingsPage: React.FC = () => {
 
     slots.forEach(slot => {
       const hasPending = (slotBookingCounts[slot.id]?.pending || 0) > 0;
-      // Gebuchte Slots (nicht mehr buchbar, keine ausstehende Anfrage) ausblenden
       if (!slot.is_bookable && !hasPending) return;
-
       const key = format(new Date(slot.start_time), 'yyyy-MM-dd');
       if (map[key]) map[key].slots.push(slot);
     });
@@ -283,7 +278,6 @@ const BookingsPage: React.FC = () => {
           const targetDate = addDays(addWeeks(baseDate, w), dayOfWeek);
           if (isBefore(targetDate, startOfDay(new Date()))) continue;
           const dateStr = format(targetDate, 'yyyy-MM-dd');
-          // Auto-split in 60-Min-Slots
           const hourlySlots = splitIntoHourlySlots(dateStr, slotForm.start_time, slotForm.end_time);
           hourlySlots.forEach(s => {
             slotsToCreate.push({
@@ -297,7 +291,6 @@ const BookingsPage: React.FC = () => {
         }
       }
     } else {
-      // Auto-split in 60-Min-Slots
       const hourlySlots = splitIntoHourlySlots(slotForm.date, slotForm.start_time, slotForm.end_time);
       hourlySlots.forEach(s => {
         slotsToCreate.push({
@@ -436,19 +429,27 @@ const BookingsPage: React.FC = () => {
     const clientEmail = respondDialog.clients?.email;
     if (clientEmail && respondDialog.availability_slots) {
       const slotDate = format(new Date(respondDialog.availability_slots.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
+
       if (status === 'confirmed') {
-        await sendEmail(clientEmail, 'Dein Termin wurde bestätigt ✅',
-          `<p>Hallo ${respondDialog.clients.full_name},</p>
-           <p>dein Termin am <strong>${slotDate} Uhr</strong> wurde bestätigt.</p>
-           ${trainerNote ? `<p>Hinweis von Jakob: ${trainerNote}</p>` : ''}
-           <p>Bis bald,<br/>Jakob Neumann Personal Training</p>`
+        await sendEmail(
+          clientEmail,
+          'Dein Termin wurde bestätigt ✅',
+          buildEmail(`
+            <p>Hallo ${respondDialog.clients.full_name},</p>
+            <p>dein Termin am <strong>${slotDate} Uhr</strong> wurde bestätigt. Ich freue mich auf dich!</p>
+            ${trainerNote ? `<p style="background:#f4f4f5;border-radius:8px;padding:12px 16px;font-size:14px;">💬 ${trainerNote}</p>` : ''}
+          `)
         );
       } else {
-        await sendEmail(clientEmail, 'Deine Buchungsanfrage',
-          `<p>Hallo ${respondDialog.clients.full_name},</p>
-           <p>leider kann ich den Termin am <strong>${slotDate} Uhr</strong> nicht bestätigen.</p>
-           ${trainerNote ? `<p>Hinweis: ${trainerNote}</p>` : ''}
-           <p>Melde dich gerne für einen anderen Termin.<br/>Jakob Neumann Personal Training</p>`
+        await sendEmail(
+          clientEmail,
+          'Zu deiner Buchungsanfrage',
+          buildEmail(`
+            <p>Hallo ${respondDialog.clients.full_name},</p>
+            <p>leider kann ich den Termin am <strong>${slotDate} Uhr</strong> nicht bestätigen.</p>
+            ${trainerNote ? `<p style="background:#f4f4f5;border-radius:8px;padding:12px 16px;font-size:14px;">💬 ${trainerNote}</p>` : ''}
+            <p>Melde dich gerne für einen anderen Termin.</p>
+          `)
         );
       }
     }
@@ -541,7 +542,6 @@ const BookingsPage: React.FC = () => {
                       {format(day, 'd')}
                     </p>
                     <div className="space-y-0.5">
-                      {/* Slots – gebuchte (is_bookable=false, kein pending) sind bereits herausgefiltert */}
                       {entries.slots.map(slot => {
                         const counts = slotBookingCounts[slot.id];
                         const hasPending = (counts?.pending || 0) > 0;
@@ -565,7 +565,6 @@ const BookingsPage: React.FC = () => {
                         );
                       })}
 
-                      {/* Sessions */}
                       {entries.sessions.map(session => {
                         const isCancelled = session.status.startsWith('Cancelled') || session.status === 'No-Show';
                         const isCompleted = session.status === 'Completed';
@@ -680,7 +679,6 @@ const BookingsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Live-Vorschau Slot-Anzahl */}
             {slotPreviewCount > 0 ? (
               <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
                 → {slotPreviewCount} Slot{slotPreviewCount > 1 ? 's' : ''} à 60 Min. werden erstellt
