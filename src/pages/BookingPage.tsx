@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut } from 'lucide-react';
+import { buildEmail } from '@/lib/emailTemplate';
 
 // ── E-Mail helper ─────────────────────────────────────────────────────────────
 const sendEmail = async (to: string, subject: string, html: string) => {
@@ -117,7 +118,6 @@ const slotTypeIcons: Record<string, React.ReactNode> = {
   'call': <Phone className="w-3.5 h-3.5" />,
 };
 
-// Feature 8: Klare Statusbezeichnungen
 const statusLabels: Record<string, string> = {
   pending: 'Wartet auf Bestätigung',
   confirmed: 'Bestätigt ✅',
@@ -185,7 +185,6 @@ const BookingPage: React.FC = () => {
     const stored = sessionStorage.getItem('dismissed_notifications');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
-  // Feature 11: Paketlaufzeit
   const [packageInfo, setPackageInfo] = useState<{
     name: string; total: number; used: number; endDate: string | null;
   } | null>(null);
@@ -319,7 +318,6 @@ const BookingPage: React.FC = () => {
     return map;
   }, [slots, weekDays]);
 
-  // Feature 10: Alle Slots mit aktiver Anfrage des Kunden
   const myBookingSlotIds = useMemo(() => {
     return new Set(
       (bookings || [])
@@ -349,7 +347,6 @@ const BookingPage: React.FC = () => {
   const handleBookSlot = async () => {
     if (!selectedSlot || !clientId) return;
 
-    // Feature 10: Doppelbuchung verhindern
     if (myBookingSlotIds.has(selectedSlot.id)) {
       toast.error('Du hast für diesen Slot bereits eine Anfrage gestellt.');
       setSelectedSlot(null);
@@ -372,9 +369,9 @@ const BookingPage: React.FC = () => {
 
     const slotDate = format(new Date(selectedSlot.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
 
-    // E-Mail an Trainer
+    // Interne Benachrichtigung an Trainer (kein Template nötig)
     await sendEmail(
-      'jakob.neumann@posteo.de',
+      'hallo@jakob-neumann.net',
       'Neue Buchungsanfrage 📅',
       `<p><strong>${clientName}</strong> hat eine neue Buchungsanfrage gestellt.</p>
        <p>Termin: <strong>${slotDate} Uhr</strong></p>
@@ -387,10 +384,11 @@ const BookingPage: React.FC = () => {
       await sendEmail(
         clientEmail,
         'Deine Buchungsanfrage wurde eingereicht',
-        `<p>Hallo ${clientName},</p>
-         <p>deine Anfrage für den Termin am <strong>${slotDate} Uhr</strong> wurde eingereicht.</p>
-         <p>Du erhältst eine weitere Benachrichtigung, sobald Jakob deinen Termin bestätigt hat.</p>
-         <p>Bis bald,<br/>Jakob Neumann Personal Training</p>`
+        buildEmail(`
+          <p>Hallo ${clientName},</p>
+          <p>deine Anfrage für den Termin am <strong>${slotDate} Uhr</strong> wurde eingereicht.</p>
+          <p>Du erhältst eine weitere Benachrichtigung, sobald der Termin bestätigt wurde.</p>
+        `)
       );
     }
 
@@ -400,7 +398,6 @@ const BookingPage: React.FC = () => {
     loadData();
   };
 
-  // Feature 7: Stornierung mit 24h-Sperre
   const handleCancelRequest = async (requestId: string, slotStartTime?: string) => {
     if (slotStartTime) {
       const hoursUntilSlot = differenceInHours(new Date(slotStartTime), new Date());
@@ -419,7 +416,6 @@ const BookingPage: React.FC = () => {
     setClientNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  // Feature 11: Verbleibende Tage im Paket
   const remainingDays = useMemo(() => {
     if (!packageInfo?.endDate) return null;
     const days = differenceInDays(new Date(packageInfo.endDate), new Date());
@@ -475,7 +471,6 @@ const BookingPage: React.FC = () => {
                 <p className="text-xs text-slate-400">
                   {packageInfo.name}: <span className="font-medium text-emerald-600">{packageInfo.used}/{packageInfo.total}</span> Einheiten
                 </p>
-                {/* Feature 11: Paketlaufzeit */}
                 {remainingDays !== null && (
                   <p className={`text-xs font-medium ${remainingDays <= 7 ? 'text-red-500' : remainingDays <= 14 ? 'text-amber-500' : 'text-slate-400'}`}>
                     {remainingDays > 0
@@ -533,12 +528,10 @@ const BookingPage: React.FC = () => {
       )}
 
       <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
-        {/* Feature 6: Vollständige Buchungshistorie */}
         {showRequests ? (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-slate-900">Meine Buchungen</h2>
 
-            {/* Geplante Sessions */}
             {scheduledSessions.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bestätigte Einheiten</h3>
@@ -585,7 +578,6 @@ const BookingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Alle Buchungsanfragen */}
             <div className="space-y-2">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Anfragen & Verlauf</h3>
               {bookings.length === 0 ? (
@@ -619,7 +611,6 @@ const BookingPage: React.FC = () => {
                           </div>
                           {b.client_message && <p className="text-xs text-slate-500 mt-1">„{b.client_message}"</p>}
                           {b.trainer_note && <p className="text-xs text-slate-500 mt-1 italic">Hinweis: {b.trainer_note}</p>}
-                          {/* Feature 7: Hinweis bei 24h-Sperre */}
                           {withinLock && (
                             <p className="text-xs text-amber-600 mt-1">
                               ⚠️ Absage nicht mehr möglich (weniger als 24h). Bitte kontaktiere Jakob direkt.
@@ -654,7 +645,6 @@ const BookingPage: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Geplante Einheiten im Kalender-View */}
             {scheduledSessions.length > 0 && (
               <div className="mb-6 space-y-2">
                 <h3 className="text-sm font-semibold text-slate-700">Deine nächsten Einheiten</h3>
@@ -703,7 +693,6 @@ const BookingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Wochenkalender */}
             <div className="flex items-center justify-between mb-4">
               <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="text-slate-600 hover:bg-slate-200">
                 <ChevronLeft className="w-5 h-5" />
@@ -762,7 +751,6 @@ const BookingPage: React.FC = () => {
                                     {slotTypeIcons[slot.slot_type]}{slotTypeLabels[slot.slot_type]}
                                   </span>
                                 </div>
-                                {/* Feature 10: Zeige Status wenn bereits gebucht */}
                                 {isMyBooking && myBooking && (
                                   <Badge variant="outline" className={statusColors[myBooking.status]}>
                                     {statusLabels[myBooking.status]}
