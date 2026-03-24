@@ -371,7 +371,7 @@ const BookingPage: React.FC = () => {
 
     // Interne Benachrichtigung an Trainer (kein Template nötig)
     await sendEmail(
-      'hallo@jakob-neumann.net',
+      'jakob.neumann@posteo.de',
       'Neue Buchungsanfrage 📅',
       `<p><strong>${clientName}</strong> hat eine neue Buchungsanfrage gestellt.</p>
        <p>Termin: <strong>${slotDate} Uhr</strong></p>
