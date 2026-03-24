@@ -138,6 +138,10 @@ const BookingsPage: React.FC = () => {
   const [trainerNote, setTrainerNote] = useState('');
   const [responding, setResponding] = useState(false);
 
+  // Multi-select delete
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedSlotIds, setSelectedSlotIds] = useState<Set<string>>(new Set());
+
   const loadData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -243,24 +247,29 @@ const BookingsPage: React.FC = () => {
     return Math.floor(diffMinutes / 60);
   }, [slotForm.start_time, slotForm.end_time]);
 
-  // ── Entries per day for calendar ─────────────────────────────────────────
+  // ── Entries per day for calendar – merged & sorted chronologically ──────────
   const entriesByDay = useMemo(() => {
-    const map: Record<string, { slots: any[]; sessions: any[] }> = {};
-    calendarDays.forEach(d => {
-      map[format(d, 'yyyy-MM-dd')] = { slots: [], sessions: [] };
-    });
+    type CalEntry =
+      | { kind: 'slot'; time: number; data: any }
+      | { kind: 'session'; time: number; data: any };
+
+    const map: Record<string, CalEntry[]> = {};
+    calendarDays.forEach(d => { map[format(d, 'yyyy-MM-dd')] = []; });
 
     slots.forEach(slot => {
       const hasPending = (slotBookingCounts[slot.id]?.pending || 0) > 0;
       if (!slot.is_bookable && !hasPending) return;
       const key = format(new Date(slot.start_time), 'yyyy-MM-dd');
-      if (map[key]) map[key].slots.push(slot);
+      if (map[key]) map[key].push({ kind: 'slot', time: new Date(slot.start_time).getTime(), data: slot });
     });
 
     sessions.forEach(session => {
       const key = format(new Date(session.session_date), 'yyyy-MM-dd');
-      if (map[key]) map[key].sessions.push(session);
+      if (map[key]) map[key].push({ kind: 'session', time: new Date(session.session_date).getTime(), data: session });
     });
+
+    // Sort each day chronologically
+    Object.keys(map).forEach(key => map[key].sort((a, b) => a.time - b.time));
 
     return map;
   }, [slots, sessions, slotBookingCounts, calendarDays]);
@@ -356,6 +365,23 @@ const BookingsPage: React.FC = () => {
     if (!window.confirm('Slot wirklich löschen?')) return;
     await supabase.from('availability_slots').delete().eq('id', slotId);
     toast.success('Slot gelöscht');
+    loadData();
+  };
+
+  const bulkDeleteSlots = async () => {
+    if (selectedSlotIds.size === 0) return;
+    const ids = [...selectedSlotIds];
+    const hasConfirmed = ids.some(id => requests.some(r => r.slot_id === id && r.status === 'confirmed'));
+    if (hasConfirmed) {
+      toast.error('Mindestens ein Slot hat bestätigte Buchungen und kann nicht gelöscht werden.');
+      return;
+    }
+    if (!window.confirm(`${ids.length} Slot${ids.length > 1 ? 's' : ''} wirklich löschen?`)) return;
+    const { error } = await supabase.from('availability_slots').delete().in('id', ids);
+    if (error) { toast.error('Fehler beim Löschen'); return; }
+    toast.success(`${ids.length} Slot${ids.length > 1 ? 's' : ''} gelöscht`);
+    setSelectedSlotIds(new Set());
+    setSelectionMode(false);
     loadData();
   };
 
@@ -475,9 +501,30 @@ const BookingsPage: React.FC = () => {
           <h1 className="text-2xl font-display font-bold">Buchungen</h1>
           <p className="text-sm text-muted-foreground">Verfügbarkeit, Anfragen & Sessions im Überblick</p>
         </div>
-        <Button className="gap-2" onClick={() => setSlotDialogOpen(true)}>
-          <Plus className="w-4 h-4" /> Slot erstellen
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectionMode ? (
+            <>
+              <span className="text-sm text-muted-foreground">{selectedSlotIds.size} ausgewählt</span>
+              {selectedSlotIds.size > 0 && (
+                <Button variant="destructive" size="sm" className="gap-1.5" onClick={bulkDeleteSlots}>
+                  <Trash2 className="w-3.5 h-3.5" /> {selectedSlotIds.size} löschen
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { setSelectionMode(false); setSelectedSlotIds(new Set()); }}>
+                Abbrechen
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setSelectionMode(true)}>
+                <Trash2 className="w-3.5 h-3.5" /> Auswählen
+              </Button>
+              <Button className="gap-2" onClick={() => setSlotDialogOpen(true)}>
+                <Plus className="w-4 h-4" /> Slot erstellen
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Legend */}
@@ -528,7 +575,7 @@ const BookingsPage: React.FC = () => {
             <div className="grid grid-cols-7">
               {calendarDays.map((day, i) => {
                 const key = format(day, 'yyyy-MM-dd');
-                const entries = entriesByDay[key] || { slots: [], sessions: [] };
+                const entries = entriesByDay[key] || [];
                 const inMonth = isSameMonth(day, currentMonth);
                 const today = isToday(day);
                 const isPast = isBefore(day, startOfDay(new Date())) && !isSameDay(day, new Date());
@@ -542,54 +589,75 @@ const BookingsPage: React.FC = () => {
                       {format(day, 'd')}
                     </p>
                     <div className="space-y-0.5">
-                      {entries.slots.map(slot => {
-                        const counts = slotBookingCounts[slot.id];
-                        const hasPending = (counts?.pending || 0) > 0;
-                        const isExpired = isPast;
-                        return (
-                          <button
-                            key={slot.id}
-                            onClick={() => openEditSlot(slot)}
-                            className={`w-full text-left rounded px-1 py-0.5 text-[10px] leading-tight transition-colors ${
-                              isExpired
-                                ? 'bg-muted/50 text-muted-foreground/50 border border-dashed border-muted-foreground/20'
-                                : hasPending
-                                ? 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
-                                : 'bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100'
-                            }`}
-                          >
-                            <span className="font-medium">{format(new Date(slot.start_time), 'HH:mm')}</span>
-                            {hasPending && <span className="ml-1 font-bold text-amber-700">●</span>}
-                            {isExpired && <span className="ml-1 opacity-50">abgel.</span>}
-                          </button>
-                        );
-                      })}
+                      {entries.map(entry => {
+                        if (entry.kind === 'slot') {
+                          const slot = entry.data;
+                          const counts = slotBookingCounts[slot.id];
+                          const hasPending = (counts?.pending || 0) > 0;
+                          const isExpired = isPast;
+                          const isSelected = selectedSlotIds.has(slot.id);
 
-                      {entries.sessions.map(session => {
-                        const isCancelled = session.status.startsWith('Cancelled') || session.status === 'No-Show';
-                        const isCompleted = session.status === 'Completed';
-                        const isScheduled = session.status === 'Scheduled';
-                        const clientName = session.clients?.full_name?.split(' ')[0] || '?';
-                        const secondClientName = session.second_client?.full_name?.split(' ')[0];
-                        const isDuoSession = session.session_type === 'Duo Training';
-                        return (
-                          <button
-                            key={session.id}
-                            onClick={() => { setEditSession(session); setEditSessionStatus(session.status); }}
-                            className={`w-full text-left rounded px-1 py-0.5 text-[10px] leading-tight transition-colors ${
-                              isScheduled
-                                ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                                : isCompleted
-                                ? 'bg-slate-300 text-slate-700 hover:bg-slate-400'
-                                : isCancelled
-                                ? 'bg-red-100 text-red-700 line-through hover:bg-red-200'
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            <span className="font-medium">{format(new Date(session.session_date), 'HH:mm')}</span>
-                            {' '}{clientName}{isDuoSession && secondClientName ? ' & ' + secondClientName : ''}
-                          </button>
-                        );
+                          const handleSlotClick = () => {
+                            if (selectionMode) {
+                              setSelectedSlotIds(prev => {
+                                const next = new Set(prev);
+                                next.has(slot.id) ? next.delete(slot.id) : next.add(slot.id);
+                                return next;
+                              });
+                            } else {
+                              openEditSlot(slot);
+                            }
+                          };
+
+                          return (
+                            <button
+                              key={slot.id}
+                              onClick={handleSlotClick}
+                              className={`w-full text-left rounded px-1 py-0.5 text-[10px] leading-tight transition-colors ${
+                                isSelected
+                                  ? 'bg-destructive/20 text-destructive border border-destructive/40 ring-1 ring-destructive/30'
+                                  : isExpired
+                                  ? 'bg-muted/50 text-muted-foreground/50 border border-dashed border-muted-foreground/20'
+                                  : hasPending
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
+                                  : 'bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100'
+                              }`}
+                            >
+                              {selectionMode && (
+                                <span className={`inline-block w-2.5 h-2.5 rounded-sm border mr-1 align-middle ${isSelected ? 'bg-destructive border-destructive' : 'border-muted-foreground/40'}`} />
+                              )}
+                              <span className="font-medium">{format(new Date(slot.start_time), 'HH:mm')}</span>
+                              {hasPending && !selectionMode && <span className="ml-1 font-bold text-amber-700">●</span>}
+                              {isExpired && !selectionMode && <span className="ml-1 opacity-50">abgel.</span>}
+                            </button>
+                          );
+                        } else {
+                          const session = entry.data;
+                          const isCancelled = session.status.startsWith('Cancelled') || session.status === 'No-Show';
+                          const isCompleted = session.status === 'Completed';
+                          const isScheduled = session.status === 'Scheduled';
+                          const clientName = session.clients?.full_name?.split(' ')[0] || '?';
+                          const secondClientName = session.second_client?.full_name?.split(' ')[0];
+                          const isDuoSession = session.session_type === 'Duo Training';
+                          return (
+                            <button
+                              key={session.id}
+                              onClick={() => { if (!selectionMode) { setEditSession(session); setEditSessionStatus(session.status); } }}
+                              className={`w-full text-left rounded px-1 py-0.5 text-[10px] leading-tight transition-colors ${
+                                isScheduled
+                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                  : isCompleted
+                                  ? 'bg-slate-300 text-slate-700 hover:bg-slate-400'
+                                  : isCancelled
+                                  ? 'bg-red-100 text-red-700 line-through hover:bg-red-200'
+                                  : 'bg-muted text-muted-foreground'
+                              } ${selectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              <span className="font-medium">{format(new Date(session.session_date), 'HH:mm')}</span>
+                              {' '}{clientName}{isDuoSession && secondClientName ? ' & ' + secondClientName : ''}
+                            </button>
+                          );
+                        }
                       })}
                     </div>
                   </div>
