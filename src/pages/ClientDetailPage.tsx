@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp,
   StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2, Camera,
-  Key, Copy, RefreshCw, CalendarCheck, Download   // ← Download neu
+  Key, Copy, RefreshCw, CalendarCheck, Download
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -25,7 +25,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Checkbox } from '@/components/ui/checkbox';
 import ProgressPhotos from '@/components/ProgressPhotos';
 import BookSessionDialog from '@/components/BookSessionDialog';
-import { exportSingleClient, exportDuoClients, type ExportClientData } from '@/lib/exportForClaude';
+import { exportSingleClient, type ExportClientData } from '@/lib/exportForClaude';
 
 interface PackageFeature {
   label: string;
@@ -276,7 +276,6 @@ const ClientDetailPage: React.FC = () => {
       mcMap[c.package_id].add(c.feature_key);
     });
     setManualCompletions(mcMap);
-    // Erstgespräch-Daten laden
     if (id) {
       const [convData, healthData] = await Promise.all([
         getLatestConversation(id),
@@ -366,7 +365,6 @@ const ClientDetailPage: React.FC = () => {
     setSessionDialogOpen(true);
   };
 
-  // ── Slot-Check: freien Slot löschen oder gebuchten Slot blockieren ──────
   const checkAndHandleSlot = async (sessionDateISO: string): Promise<boolean> => {
     const sessionTime = new Date(sessionDateISO);
     const windowStart = new Date(sessionTime.getTime() - 2 * 60000).toISOString();
@@ -391,7 +389,6 @@ const ClientDetailPage: React.FC = () => {
   const saveSession = async () => {
     if (!user || !id) return;
     const sessionDateISO = new Date(sessionForm.session_date).toISOString();
-    // Slot-Check nur bei neuen Einheiten, nicht beim Bearbeiten
     if (!editingSessionId) {
       const slotOk = await checkAndHandleSlot(sessionDateISO);
       if (!slotOk) return;
@@ -447,7 +444,6 @@ const ClientDetailPage: React.FC = () => {
       deal_reason: null,
       deal_discounted_price: null,
       deal_adjusted_terms: null,
-      // Testkunden haben keinen offenen Zahlungsstatus
       payment_status: isTestkunde ? 'Paid in full' : packageForm.payment_status,
       payment_date: isTestkunde ? packageForm.start_date : (packageForm.payment_date || null),
     });
@@ -483,6 +479,41 @@ const ClientDetailPage: React.FC = () => {
     loadAll();
   };
 
+  const handleExportForClaude = () => {
+    if (!conversation || !client) return;
+    const buildExportData = (c: any, conv: any, health: any): ExportClientData => ({
+      full_name: c.full_name,
+      date_of_birth: c.date_of_birth,
+      occupation: c.occupation,
+      fitness_goal: c.fitness_goal,
+      fitness_goal_text: conv.fitness_goal_text ?? c.fitness_goal_text,
+      starting_date: c.starting_date,
+      contact_source: conv.contact_source,
+      motivation: conv.motivation,
+      previous_experience: conv.previous_experience,
+      stress_level: conv.stress_level,
+      sleep_quality: conv.sleep_quality,
+      daily_activity: conv.daily_activity,
+      current_training: conv.current_training,
+      nutrition_habits: conv.nutrition_habits,
+      goal_importance: conv.goal_importance,
+      success_criteria: conv.success_criteria,
+      personality_type: conv.personality_type,
+      next_steps: conv.next_steps,
+      notes: conv.notes,
+      conversation_date: conv.conversation_date,
+      cardiovascular: health?.cardiovascular,
+      musculoskeletal: health?.musculoskeletal,
+      surgeries: health?.surgeries,
+      sports_injuries: health?.sports_injuries,
+      other_conditions: health?.other_conditions,
+      medications: health?.medications,
+      current_pain: health?.current_pain,
+      substances: health?.substances,
+    });
+    exportSingleClient(buildExportData(client, conversation, healthRecord));
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   }
@@ -491,47 +522,6 @@ const ClientDetailPage: React.FC = () => {
     return <div className="text-center py-12"><p className="text-muted-foreground">Kunde nicht gefunden</p></div>;
   }
 
-  const handleExportForClaude = () => {
-  if (!conversation || !client) return;
-
-  const buildExportData = (
-    c: any,
-    conv: any,
-    health: any
-  ): ExportClientData => ({
-    full_name: c.full_name,
-    date_of_birth: c.date_of_birth,
-    occupation: c.occupation,
-    fitness_goal: c.fitness_goal,
-    fitness_goal_text: conv.fitness_goal_text ?? c.fitness_goal_text,
-    starting_date: c.starting_date,
-    contact_source: conv.contact_source,
-    motivation: conv.motivation,
-    previous_experience: conv.previous_experience,
-    stress_level: conv.stress_level,
-    sleep_quality: conv.sleep_quality,
-    daily_activity: conv.daily_activity,
-    current_training: conv.current_training,
-    nutrition_habits: conv.nutrition_habits,
-    goal_importance: conv.goal_importance,
-    success_criteria: conv.success_criteria,
-    personality_type: conv.personality_type,
-    next_steps: conv.next_steps,
-    notes: conv.notes,
-    conversation_date: conv.conversation_date,
-    cardiovascular: health?.cardiovascular,
-    musculoskeletal: health?.musculoskeletal,
-    surgeries: health?.surgeries,
-    sports_injuries: health?.sports_injuries,
-    other_conditions: health?.other_conditions,
-    medications: health?.medications,
-    current_pain: health?.current_pain,
-    substances: health?.substances,
-  });
-
-  exportSingleClient(buildExportData(client, conversation, healthRecord));
-};
-  
   const activePackage = packages.find(p => {
     const sessionsUsed = sessions.filter(s => s.package_id === p.id && ['Completed', 'No-Show'].includes(s.status)).length;
     return sessionsUsed < p.sessions_included;
@@ -607,7 +597,6 @@ const ClientDetailPage: React.FC = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-display font-bold">{client.full_name}</h1>
             <Badge variant="outline" className={statusColor(client.status)}>{statusLabelsDE[client.status] || client.status}</Badge>
-            {/* Testkunde-Badge */}
             {activePackage?.package_name === 'Testkunde' && (
               <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300">
                 Testkunde
@@ -674,7 +663,19 @@ const ClientDetailPage: React.FC = () => {
               <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Kontakt</CardTitle></CardHeader>
               <CardContent className="text-sm space-y-1">
                 {client.email && <a href={`mailto:${client.email}`} className="text-primary hover:underline block">{client.email}</a>}
-                {client.phone && <div className="flex items-center gap-2"><a href={`tel:${client.phone}`} className="text-primary hover:underline text-sm">{client.phone}</a><a href={`https://wa.me/${client.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 rounded-full transition-colors"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.122.558 4.112 1.528 5.837L.057 23.882l6.233-1.636A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894c-1.868 0-3.618-.498-5.12-1.367l-.367-.217-3.801.997 1.014-3.7-.24-.381A9.879 9.879 0 012.106 12C2.106 6.58 6.58 2.106 12 2.106c5.42 0 9.894 4.474 9.894 9.894 0 5.42-4.474 9.894-9.894 9.894z"/></svg>WhatsApp</a></div>}
+                {client.phone && (
+                  <div className="flex items-center gap-2">
+                    <a href={`tel:${client.phone}`} className="text-primary hover:underline text-sm">{client.phone}</a>
+                    <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 rounded-full transition-colors">
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                        <path d="M12 0C5.373 0 0 5.373 0 12c0 2.122.558 4.112 1.528 5.837L.057 23.882l6.233-1.636A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894c-1.868 0-3.618-.498-5.12-1.367l-.367-.217-3.801.997 1.014-3.7-.24-.381A9.879 9.879 0 012.106 12C2.106 6.58 6.58 2.106 12 2.106c5.42 0 9.894 4.474 9.894 9.894 0 5.42-4.474 9.894-9.894 9.894z" />
+                      </svg>
+                      WhatsApp
+                    </a>
+                  </div>
+                )}
                 {client.date_of_birth && <p>Geb.: {format(new Date(client.date_of_birth), 'd. MMM yyyy', { locale: de })}</p>}
               </CardContent>
             </Card>
@@ -705,9 +706,7 @@ const ClientDetailPage: React.FC = () => {
                   <CardTitle className="text-sm font-display flex items-center gap-2">
                     Aktives Paket
                     {isTestPkg && (
-                      <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">
-                        Testkunde
-                      </Badge>
+                      <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">Testkunde</Badge>
                     )}
                   </CardTitle>
                 </CardHeader>
@@ -751,9 +750,7 @@ const ClientDetailPage: React.FC = () => {
                               ) : (
                                 <Circle className="w-4 h-4 flex-shrink-0 text-muted-foreground/30" />
                               )}
-                              <span className={status.done ? 'text-foreground' : 'text-muted-foreground'}>
-                                {feat.label}
-                              </span>
+                              <span className={status.done ? 'text-foreground' : 'text-muted-foreground'}>{feat.label}</span>
                               {status.detail && (
                                 <span className={`ml-auto text-xs font-medium ${status.done ? 'text-success' : 'text-muted-foreground'}`}>
                                   {status.detail}
@@ -831,14 +828,11 @@ const ClientDetailPage: React.FC = () => {
                       <p className="text-xs text-muted-foreground">{packageTemplates[packageForm.package_name].description}</p>
                     )}
                   </div>
-
-                  {/* Testkunde-Hinweis */}
                   {isTestkundeFormSelected && (
                     <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-xs text-violet-800">
                       🧪 Testkunde: Kein Zahlungsstatus erforderlich. Das Paket ist kostenlos.
                     </div>
                   )}
-
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Enthaltene Einheiten</Label>
@@ -849,8 +843,6 @@ const ClientDetailPage: React.FC = () => {
                       <Input type="number" value={packageForm.checkin_calls_included} onChange={e => setPackageForm(f => ({ ...f, checkin_calls_included: e.target.value }))} />
                     </div>
                   </div>
-
-                  {/* Preis nur bei Nicht-Testkunden */}
                   {!isTestkundeFormSelected && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -867,7 +859,6 @@ const ClientDetailPage: React.FC = () => {
                       </div>
                     </div>
                   )}
-
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Startdatum</Label>
@@ -878,8 +869,6 @@ const ClientDetailPage: React.FC = () => {
                       <Input type="number" value={packageForm.duration_weeks} onChange={e => setPackageForm(f => ({ ...f, duration_weeks: e.target.value }))} placeholder="Berechnet Enddatum" />
                     </div>
                   </div>
-
-                  {/* Zahlungsfelder nur bei Nicht-Testkunden */}
                   {!isTestkundeFormSelected && (
                     <>
                       <div className="flex items-center gap-2">
@@ -921,7 +910,6 @@ const ClientDetailPage: React.FC = () => {
                       </div>
                     </>
                   )}
-
                   <Button onClick={savePackage} className="w-full">Paket speichern</Button>
                 </div>
               </DialogContent>
@@ -944,12 +932,9 @@ const ClientDetailPage: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <p className="font-medium">{pkg.package_name}</p>
                             {isTestPkg && (
-                              <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">
-                                Testkunde
-                              </Badge>
+                              <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">Testkunde</Badge>
                             )}
                             {!isTestPkg && pkg.is_deal && <Badge variant="outline" className="text-primary border-primary/30">Angebot</Badge>}
-                            {/* Zahlungsstatus nur bei Nicht-Testkunden */}
                             {!isTestPkg && (
                               <Badge variant="outline" className={paymentColor(pkg.payment_status)}>{paymentStatusLabelsDE[pkg.payment_status] || pkg.payment_status}</Badge>
                             )}
@@ -964,14 +949,10 @@ const ClientDetailPage: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           {remaining <= 2 && remaining > 0 && (
-                            <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">
-                              {remaining} übrig
-                            </Badge>
+                            <Badge className="bg-warning/10 text-warning border-warning/20" variant="outline">{remaining} übrig</Badge>
                           )}
                           {remaining <= 0 && !hasFollowUp && (
-                            <Badge className="bg-destructive/10 text-destructive border-destructive/20" variant="outline">
-                              Verlängerung nötig
-                            </Badge>
+                            <Badge className="bg-destructive/10 text-destructive border-destructive/20" variant="outline">Verlängerung nötig</Badge>
                           )}
                         </div>
                       </div>
@@ -1126,7 +1107,6 @@ const ClientDetailPage: React.FC = () => {
               </CardContent>
             </Card>
           )}
-
           <div className="flex items-center justify-between">
             <h3 className="font-display font-semibold">Fitness-Benchmarks</h3>
             <Dialog open={benchmarkDialogOpen} onOpenChange={setBenchmarkDialogOpen}>
@@ -1159,7 +1139,6 @@ const ClientDetailPage: React.FC = () => {
               ))}
             </div>
           )}
-
           {id && <ProgressPhotos clientId={id} />}
         </TabsContent>
 
@@ -1176,18 +1155,12 @@ const ClientDetailPage: React.FC = () => {
             </Card>
           ) : (
             <>
-              {/* Header mit Datum und Persönlichkeitstyp */}
               <div className="flex items-start justify-between flex-wrap gap-2">
                 <p className="text-sm text-muted-foreground">
                   Erstgespräch vom {format(new Date(conversation.conversation_date), 'd. MMMM yyyy', { locale: de })}
                 </p>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={handleExportForClaude}
-                  >
+                  <Button variant="outline" size="sm" className="gap-2" onClick={handleExportForClaude}>
                     <Download className="w-4 h-4" /> Für Claude exportieren
                   </Button>
                   <Link to={`/onboarding?clientId=${id}`}>
@@ -1198,23 +1171,22 @@ const ClientDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Persönlichkeitstyp */}
               {conversation.personality_type && (
                 <Card className="border-primary/30 bg-primary/5">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3">
                       <span className="text-3xl">
-                        {conversation.personality_type === 'success_oriented' ? '⚡' : 
+                        {conversation.personality_type === 'success_oriented' ? '⚡' :
                          conversation.personality_type === 'avoidance_oriented' ? '🛡️' : '❓'}
                       </span>
                       <div>
                         <p className="font-medium">
-                          {conversation.personality_type === 'success_oriented' ? 'Erfolgsorientiert' : 
+                          {conversation.personality_type === 'success_oriented' ? 'Erfolgsorientiert' :
                            conversation.personality_type === 'avoidance_oriented' ? 'Meidungsorientiert' : 'Noch unklar'}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {conversation.personality_type === 'success_oriented' 
-                            ? 'Herausfordernde Ziele setzen, Eigenverantwortung betonen' 
+                          {conversation.personality_type === 'success_oriented'
+                            ? 'Herausfordernde Ziele setzen, Eigenverantwortung betonen'
                             : conversation.personality_type === 'avoidance_oriented'
                             ? 'Realistische Erwartungen, mehr Begleitung und Sicherheit geben'
                             : 'Im Training weiter beobachten'}
@@ -1225,148 +1197,59 @@ const ClientDetailPage: React.FC = () => {
                 </Card>
               )}
 
-              {/* Motivation & Ziele */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-display flex items-center gap-2">
-                    🎯 Motivation & Ziele
-                  </CardTitle>
+                  <CardTitle className="text-sm font-display flex items-center gap-2">🎯 Motivation & Ziele</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">
                   {conversation.contact_source && (
-                    <div>
-                      <span className="text-muted-foreground">Kontakt über:</span>{' '}
-                      <span>{conversation.contact_source}</span>
-                    </div>
+                    <div><span className="text-muted-foreground">Kontakt über:</span> <span>{conversation.contact_source}</span></div>
                   )}
                   {conversation.motivation && (
-                    <div>
-                      <span className="text-muted-foreground">Motivation:</span>
-                      <p className="mt-1 whitespace-pre-wrap">{conversation.motivation}</p>
-                    </div>
+                    <div><span className="text-muted-foreground">Motivation:</span><p className="mt-1 whitespace-pre-wrap">{conversation.motivation}</p></div>
                   )}
                   {conversation.previous_experience && (
-                    <div>
-                      <span className="text-muted-foreground">Bisherige Erfahrung:</span>
-                      <p className="mt-1 whitespace-pre-wrap">{conversation.previous_experience}</p>
-                    </div>
+                    <div><span className="text-muted-foreground">Bisherige Erfahrung:</span><p className="mt-1 whitespace-pre-wrap">{conversation.previous_experience}</p></div>
                   )}
                   {conversation.goal_importance && (
-                    <div>
-                      <span className="text-muted-foreground">Warum wichtig:</span>
-                      <p className="mt-1 whitespace-pre-wrap">{conversation.goal_importance}</p>
-                    </div>
+                    <div><span className="text-muted-foreground">Warum wichtig:</span><p className="mt-1 whitespace-pre-wrap">{conversation.goal_importance}</p></div>
                   )}
                   {conversation.success_criteria && (
-                    <div>
-                      <span className="text-muted-foreground">Erfolgskriterium:</span>
-                      <p className="mt-1">{conversation.success_criteria}</p>
-                    </div>
+                    <div><span className="text-muted-foreground">Erfolgskriterium:</span><p className="mt-1">{conversation.success_criteria}</p></div>
                   )}
                 </CardContent>
               </Card>
 
-              {/* Ist-Zustand */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-display flex items-center gap-2">
-                    📊 Ist-Zustand
-                  </CardTitle>
+                  <CardTitle className="text-sm font-display flex items-center gap-2">📊 Ist-Zustand</CardTitle>
                 </CardHeader>
                 <CardContent className="grid sm:grid-cols-2 gap-3 text-sm">
-                  {conversation.stress_level && (
-                    <div>
-                      <span className="text-muted-foreground">Stresslevel:</span>{' '}
-                      <span>{conversation.stress_level}</span>
-                    </div>
-                  )}
-                  {conversation.sleep_quality && (
-                    <div>
-                      <span className="text-muted-foreground">Schlaf:</span>{' '}
-                      <span>{conversation.sleep_quality}</span>
-                    </div>
-                  )}
-                  {conversation.daily_activity && (
-                    <div>
-                      <span className="text-muted-foreground">Bewegung im Alltag:</span>{' '}
-                      <span>{conversation.daily_activity}</span>
-                    </div>
-                  )}
-                  {conversation.current_training && (
-                    <div>
-                      <span className="text-muted-foreground">Aktuelles Training:</span>{' '}
-                      <span>{conversation.current_training}</span>
-                    </div>
-                  )}
-                  {conversation.nutrition_habits && (
-                    <div className="sm:col-span-2">
-                      <span className="text-muted-foreground">Ernährung:</span>{' '}
-                      <span>{conversation.nutrition_habits}</span>
-                    </div>
-                  )}
+                  {conversation.stress_level && <div><span className="text-muted-foreground">Stresslevel:</span> <span>{conversation.stress_level}</span></div>}
+                  {conversation.sleep_quality && <div><span className="text-muted-foreground">Schlaf:</span> <span>{conversation.sleep_quality}</span></div>}
+                  {conversation.daily_activity && <div><span className="text-muted-foreground">Bewegung im Alltag:</span> <span>{conversation.daily_activity}</span></div>}
+                  {conversation.current_training && <div><span className="text-muted-foreground">Aktuelles Training:</span> <span>{conversation.current_training}</span></div>}
+                  {conversation.nutrition_habits && <div className="sm:col-span-2"><span className="text-muted-foreground">Ernährung:</span> <span>{conversation.nutrition_habits}</span></div>}
                 </CardContent>
               </Card>
 
-              {/* Anamnese */}
               {healthRecord && (
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-display flex items-center gap-2 text-destructive">
-                      🩺 Anamnese / Gesundheit
-                    </CardTitle>
+                    <CardTitle className="text-sm font-display flex items-center gap-2 text-destructive">🩺 Anamnese / Gesundheit</CardTitle>
                   </CardHeader>
                   <CardContent className="grid sm:grid-cols-2 gap-3 text-sm">
-                    {healthRecord.cardiovascular && (
-                      <div>
-                        <span className="text-muted-foreground">Herz-Kreislauf:</span>{' '}
-                        <span>{healthRecord.cardiovascular}</span>
-                      </div>
-                    )}
-                    {healthRecord.musculoskeletal && (
-                      <div>
-                        <span className="text-muted-foreground">Bewegungsapparat:</span>{' '}
-                        <span>{healthRecord.musculoskeletal}</span>
-                      </div>
-                    )}
-                    {healthRecord.surgeries && (
-                      <div>
-                        <span className="text-muted-foreground">Operationen:</span>{' '}
-                        <span>{healthRecord.surgeries}</span>
-                      </div>
-                    )}
-                    {healthRecord.sports_injuries && (
-                      <div>
-                        <span className="text-muted-foreground">Sportverletzungen:</span>{' '}
-                        <span>{healthRecord.sports_injuries}</span>
-                      </div>
-                    )}
-                    {healthRecord.other_conditions && (
-                      <div>
-                        <span className="text-muted-foreground">Sonstige Erkrankungen:</span>{' '}
-                        <span>{healthRecord.other_conditions}</span>
-                      </div>
-                    )}
-                    {healthRecord.medications && (
-                      <div>
-                        <span className="text-muted-foreground">Medikamente:</span>{' '}
-                        <span>{healthRecord.medications}</span>
-                      </div>
-                    )}
-                    {healthRecord.current_pain && (
-                      <div>
-                        <span className="text-muted-foreground">Aktuelle Schmerzen:</span>{' '}
-                        <span>{healthRecord.current_pain}</span>
-                      </div>
-                    )}
-                    {healthRecord.substances && (
-                      <div>
-                        <span className="text-muted-foreground">Genussmittel:</span>{' '}
-                        <span>{healthRecord.substances}</span>
-                      </div>
-                    )}
-                    {!healthRecord.cardiovascular && !healthRecord.musculoskeletal && 
-                     !healthRecord.surgeries && !healthRecord.sports_injuries && 
-                     !healthRecord.other_conditions && !healthRecord.medications && 
+                    {healthRecord.cardiovascular && <div><span className="text-muted-foreground">Herz-Kreislauf:</span> <span>{healthRecord.cardiovascular}</span></div>}
+                    {healthRecord.musculoskeletal && <div><span className="text-muted-foreground">Bewegungsapparat:</span> <span>{healthRecord.musculoskeletal}</span></div>}
+                    {healthRecord.surgeries && <div><span className="text-muted-foreground">Operationen:</span> <span>{healthRecord.surgeries}</span></div>}
+                    {healthRecord.sports_injuries && <div><span className="text-muted-foreground">Sportverletzungen:</span> <span>{healthRecord.sports_injuries}</span></div>}
+                    {healthRecord.other_conditions && <div><span className="text-muted-foreground">Sonstige Erkrankungen:</span> <span>{healthRecord.other_conditions}</span></div>}
+                    {healthRecord.medications && <div><span className="text-muted-foreground">Medikamente:</span> <span>{healthRecord.medications}</span></div>}
+                    {healthRecord.current_pain && <div><span className="text-muted-foreground">Aktuelle Schmerzen:</span> <span>{healthRecord.current_pain}</span></div>}
+                    {healthRecord.substances && <div><span className="text-muted-foreground">Genussmittel:</span> <span>{healthRecord.substances}</span></div>}
+                    {!healthRecord.cardiovascular && !healthRecord.musculoskeletal &&
+                     !healthRecord.surgeries && !healthRecord.sports_injuries &&
+                     !healthRecord.other_conditions && !healthRecord.medications &&
                      !healthRecord.current_pain && !healthRecord.substances && (
                       <p className="text-muted-foreground sm:col-span-2">Keine Einschränkungen dokumentiert.</p>
                     )}
@@ -1374,27 +1257,14 @@ const ClientDetailPage: React.FC = () => {
                 </Card>
               )}
 
-              {/* Nächste Schritte & Notizen */}
               {(conversation.next_steps || conversation.notes) && (
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-display flex items-center gap-2">
-                      🚀 Vereinbarungen & Notizen
-                    </CardTitle>
+                    <CardTitle className="text-sm font-display flex items-center gap-2">🚀 Vereinbarungen & Notizen</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    {conversation.next_steps && (
-                      <div>
-                        <span className="text-muted-foreground">Nächste Schritte:</span>
-                        <p className="mt-1">{conversation.next_steps}</p>
-                      </div>
-                    )}
-                    {conversation.notes && (
-                      <div>
-                        <span className="text-muted-foreground">Notizen:</span>
-                        <p className="mt-1 whitespace-pre-wrap">{conversation.notes}</p>
-                      </div>
-                    )}
+                    {conversation.next_steps && <div><span className="text-muted-foreground">Nächste Schritte:</span><p className="mt-1">{conversation.next_steps}</p></div>}
+                    {conversation.notes && <div><span className="text-muted-foreground">Notizen:</span><p className="mt-1 whitespace-pre-wrap">{conversation.notes}</p></div>}
                   </CardContent>
                 </Card>
               )}
@@ -1428,7 +1298,6 @@ const ClientDetailPage: React.FC = () => {
               )}
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Allgemeine Notizen</CardTitle></CardHeader>
             <CardContent>
@@ -1444,6 +1313,7 @@ const ClientDetailPage: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
       <BookSessionDialog
         open={bookDialogOpen}
         onOpenChange={setBookDialogOpen}
