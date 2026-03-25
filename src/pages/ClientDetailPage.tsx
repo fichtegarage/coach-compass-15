@@ -26,6 +26,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import ProgressPhotos from '@/components/ProgressPhotos';
 import BookSessionDialog from '@/components/BookSessionDialog';
 import { exportSingleClient, type ExportClientData } from '@/lib/exportForClaude';
+import TrainingPlanTab from '@/components/TrainingPlanTab';
 
 interface PackageFeature {
   label: string;
@@ -654,6 +655,7 @@ const ClientDetailPage: React.FC = () => {
           <TabsTrigger value="progress">Fortschritt</TabsTrigger>
           <TabsTrigger value="erstgespraech">Erstgespräch</TabsTrigger>
           <TabsTrigger value="notes">Notizen</TabsTrigger>
+          <TabsTrigger value="plan">Trainingsplan</TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW TAB */}
@@ -1140,6 +1142,10 @@ const ClientDetailPage: React.FC = () => {
             </div>
           )}
           {id && <ProgressPhotos clientId={id} />}
+        </TabsContent>
+
+        <TabsContent value="plan" className="mt-4">
+           <TrainingPlanTab clientId={id!} clientName={client.full_name} />
         </TabsContent>
 
         {/* ERSTGESPRÄCH TAB */}
