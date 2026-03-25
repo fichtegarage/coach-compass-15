@@ -1,3 +1,4 @@
+import { getLatestConversation, getHealthRecord } from '@/lib/onboarding-api';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -6,13 +7,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  createConversation, 
+import {
+  createConversation,
   createHealthRecord,
-  getClient 
+  getClient
 } from '@/lib/onboarding-api';
 import type { ConversationForm, HealthRecordForm } from '@/types/onboarding';
 import { Users, UserPlus, ArrowLeft, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
@@ -71,15 +73,15 @@ const PHASES: PhaseConfig[] = [
       'Was hat funktioniert / was nicht?',
     ],
     fields: [
-      { 
-        id: 'contact_source', 
-        label: 'Kontakt über', 
-        placeholder: 'Empfehlung, Instagram, Studio...' 
+      {
+        id: 'contact_source',
+        label: 'Kontakt über',
+        placeholder: 'Empfehlung, Instagram, Studio...',
       },
-      { 
-        id: 'motivation', 
-        label: 'Motivation', 
-        placeholder: 'Was treibt ihn/sie an?', 
+      {
+        id: 'motivation',
+        label: 'Motivation',
+        placeholder: 'Was treibt ihn/sie an?',
         multiline: true,
         deepQuestions: {
           title: 'Tiefenfragen bei unklarer/oberflächlicher Motivation',
@@ -93,10 +95,10 @@ const PHASES: PhaseConfig[] = [
           ],
         },
       },
-      { 
-        id: 'previous_experience', 
-        label: 'Bisherige Erfahrung', 
-        placeholder: 'Was wurde schon versucht?', 
+      {
+        id: 'previous_experience',
+        label: 'Bisherige Erfahrung',
+        placeholder: 'Was wurde schon versucht?',
         multiline: true,
         deepQuestions: {
           title: 'Tiefenfragen bei "hat nicht funktioniert"',
@@ -125,15 +127,15 @@ const PHASES: PhaseConfig[] = [
       'Wie ernährst du dich so grob?',
     ],
     fields: [
-      { 
-        id: 'occupation', 
-        label: 'Beruf & Arbeitszeit', 
-        placeholder: 'Büro, Schichtdienst, körperlich...', 
-        isClientField: true 
+      {
+        id: 'occupation',
+        label: 'Beruf & Arbeitszeit',
+        placeholder: 'Büro, Schichtdienst, körperlich...',
+        isClientField: true,
       },
-      { 
-        id: 'stress_level', 
-        label: 'Stresslevel', 
+      {
+        id: 'stress_level',
+        label: 'Stresslevel',
         placeholder: 'niedrig / mittel / hoch – Ursachen?',
         deepQuestions: {
           title: 'Tiefenfragen wenn Stress unterschätzt wird',
@@ -146,9 +148,9 @@ const PHASES: PhaseConfig[] = [
           ],
         },
       },
-      { 
-        id: 'sleep_quality', 
-        label: 'Schlaf', 
+      {
+        id: 'sleep_quality',
+        label: 'Schlaf',
         placeholder: 'Stunden, Qualität, Probleme?',
         deepQuestions: {
           title: 'Tiefenfragen zur Schlafqualität',
@@ -161,14 +163,14 @@ const PHASES: PhaseConfig[] = [
           ],
         },
       },
-      { 
-        id: 'daily_activity', 
-        label: 'Bewegung im Alltag', 
-        placeholder: 'Schritte, Fahrrad, Treppen...' 
+      {
+        id: 'daily_activity',
+        label: 'Bewegung im Alltag',
+        placeholder: 'Schritte, Fahrrad, Treppen...',
       },
-      { 
-        id: 'current_training', 
-        label: 'Aktuelles Training', 
+      {
+        id: 'current_training',
+        label: 'Aktuelles Training',
         placeholder: 'Häufigkeit, Art, seit wann?',
         deepQuestions: {
           title: 'Tiefenfragen bei Selbstüberschätzung',
@@ -180,9 +182,9 @@ const PHASES: PhaseConfig[] = [
           ],
         },
       },
-      { 
-        id: 'nutrition_habits', 
-        label: 'Ernährung (grob)', 
+      {
+        id: 'nutrition_habits',
+        label: 'Ernährung (grob)',
         placeholder: 'Regelmäßig? Kantine? Selbst kochen?',
         deepQuestions: {
           title: 'Tiefenfragen bei "ich esse eigentlich gesund"',
@@ -227,16 +229,16 @@ const PHASES: PhaseConfig[] = [
       'Gibt es einen Zeitrahmen?',
     ],
     fields: [
-      { 
-        id: 'fitness_goal_text', 
-        label: 'Primärziel', 
-        placeholder: 'Das wichtigste Ziel...', 
-        isClientField: true 
+      {
+        id: 'fitness_goal_text',
+        label: 'Primärziel',
+        placeholder: 'Das wichtigste Ziel...',
+        isClientField: true,
       },
-      { 
-        id: 'goal_importance', 
-        label: 'Warum wichtig?', 
-        placeholder: 'Die tiefere Motivation...', 
+      {
+        id: 'goal_importance',
+        label: 'Warum wichtig?',
+        placeholder: 'Die tiefere Motivation...',
         multiline: true,
         deepQuestions: {
           title: 'Das "Warum hinter dem Warum" finden',
@@ -250,9 +252,9 @@ const PHASES: PhaseConfig[] = [
           ],
         },
       },
-      { 
-        id: 'success_criteria', 
-        label: 'Woran erkennbar?', 
+      {
+        id: 'success_criteria',
+        label: 'Woran erkennbar?',
         placeholder: 'Konkretes Erfolgskriterium...',
         deepQuestions: {
           title: 'Konkrete Erfolgskriterien herausarbeiten',
@@ -317,7 +319,6 @@ interface DeepQuestionsProps {
 
 const DeepQuestionsPanel: React.FC<DeepQuestionsProps> = ({ title, questions }) => {
   const [isOpen, setIsOpen] = useState(false);
-
   return (
     <div className="mt-2">
       <button
@@ -329,7 +330,6 @@ const DeepQuestionsPanel: React.FC<DeepQuestionsProps> = ({ title, questions }) 
         <span>{isOpen ? 'Tiefenfragen ausblenden' : 'Tiefenfragen anzeigen'}</span>
         {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
       </button>
-      
       {isOpen && (
         <div className="mt-2 p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
           <p className="text-xs font-medium text-primary">{title}</p>
@@ -342,6 +342,61 @@ const DeepQuestionsPanel: React.FC<DeepQuestionsProps> = ({ title, questions }) 
             ))}
           </ul>
         </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// DUO FIELD: renders one field for both clients interleaved
+// ============================================
+
+interface DuoFieldProps {
+  field: FieldConfig;
+  formData: Record<string, string>;
+  updateField: (id: string, value: string) => void;
+  nameA: string;
+  nameB: string;
+}
+
+const DuoField: React.FC<DuoFieldProps> = ({ field, formData, updateField, nameA, nameB }) => {
+  const idA = field.id + '_a';
+  const idB = field.id + '_b';
+
+  const renderInput = (id: string, suffix: 'a' | 'b') => {
+    const colorA = 'border-l-primary/60';
+    const colorB = 'border-l-emerald-500/60';
+    const labelColor = suffix === 'a' ? 'text-primary' : 'text-emerald-600';
+    const name = suffix === 'a' ? nameA : nameB;
+
+    return (
+      <div className={`pl-3 border-l-2 ${suffix === 'a' ? colorA : colorB} space-y-1`}>
+        <p className={`text-xs font-semibold ${labelColor}`}>{name}</p>
+        {field.multiline ? (
+          <Textarea
+            value={formData[id] || ''}
+            onChange={e => updateField(id, e.target.value)}
+            placeholder={field.placeholder}
+            rows={2}
+          />
+        ) : (
+          <Input
+            value={formData[id] || ''}
+            onChange={e => updateField(id, e.target.value)}
+            placeholder={field.placeholder}
+          />
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-muted-foreground">{field.label}</p>
+      {renderInput(idA, 'a')}
+      {renderInput(idB, 'b')}
+      {field.deepQuestions && (
+        <DeepQuestionsPanel title={field.deepQuestions.title} questions={field.deepQuestions.questions} />
       )}
     </div>
   );
@@ -362,14 +417,19 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
-  
+
   const clientIdFromUrl = propClientId || searchParams.get('clientId');
-  
+
   // Wizard state
   const [wizardStep, setWizardStep] = useState<WizardStep>(clientIdFromUrl ? 'conversation' : 'select');
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clientIdFromUrl);
   const [allClients, setAllClients] = useState<any[]>([]);
-  
+
+  // Duo state
+  const [isDuo, setIsDuo] = useState(false);
+  const [secondClientId, setSecondClientId] = useState<string | null>(null);
+  const [secondClientName, setSecondClientName] = useState('');
+
   // Client form state (for new clients)
   const [clientForm, setClientForm] = useState({
     full_name: '',
@@ -385,33 +445,31 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
     status: 'Active',
     acquisition_source: '',
   });
-  
+
   // Conversation state
   const [currentPhase, setCurrentPhase] = useState(0);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [clientName, setClientName] = useState('');
   const [personalityType, setPersonalityType] = useState<string | null>(null);
+  // Duo: separate personality type per client
+  const [personalityTypeA, setPersonalityTypeA] = useState<string | null>(null);
+  const [personalityTypeB, setPersonalityTypeB] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [existingClient, setExistingClient] = useState<any>(null);
 
-  // Load all clients for dropdown
-  useEffect(() => {
-    loadClients();
-  }, []);
+  useEffect(() => { loadClients(); }, []);
 
-  // Load existing client if ID provided
   useEffect(() => {
-    if (selectedClientId) {
-      loadClient(selectedClientId);
-    }
+    if (selectedClientId) loadClient(selectedClientId);
   }, [selectedClientId]);
 
+  useEffect(() => {
+    if (secondClientId) loadSecondClient(secondClientId);
+  }, [secondClientId]);
+
   const loadClients = async () => {
-    const { data } = await supabase
-      .from('clients')
-      .select('id, full_name, status')
-      .order('full_name');
+    const { data } = await supabase.from('clients').select('id, full_name, status').order('full_name');
     setAllClients(data || []);
   };
 
@@ -421,11 +479,24 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
       if (client) {
         setExistingClient(client);
         setClientName(client.full_name);
-        if (client.occupation) setFormData(prev => ({ ...prev, occupation: client.occupation }));
-        if (client.fitness_goal_text) setFormData(prev => ({ ...prev, fitness_goal_text: client.fitness_goal_text }));
+        if (client.occupation) setFormData(prev => ({ ...prev, occupation_a: client.occupation }));
+        if (client.fitness_goal_text) setFormData(prev => ({ ...prev, fitness_goal_text_a: client.fitness_goal_text }));
       }
     } catch (error) {
       console.error('Fehler beim Laden des Kunden:', error);
+    }
+  };
+
+  const loadSecondClient = async (id: string) => {
+    try {
+      const client = await getClient(id);
+      if (client) {
+        setSecondClientName(client.full_name);
+        if (client.occupation) setFormData(prev => ({ ...prev, occupation_b: client.occupation }));
+        if (client.fitness_goal_text) setFormData(prev => ({ ...prev, fitness_goal_text_b: client.fitness_goal_text }));
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden des zweiten Kunden:', error);
     }
   };
 
@@ -440,12 +511,57 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
   const phase = PHASES[currentPhase];
   const progress = ((currentPhase + 1) / PHASES.length) * 100;
 
+  // ── Helpers to extract A/B data from formData ────────────────────────────
+  const buildConversationData = (suffix: 'a' | 'b' | ''): ConversationForm => {
+    const s = suffix ? '_' + suffix : '';
+    return {
+      contact_source: formData[`contact_source${s}`],
+      motivation: formData[`motivation${s}`],
+      previous_experience: formData[`previous_experience${s}`],
+      stress_level: formData[`stress_level${s}`],
+      sleep_quality: formData[`sleep_quality${s}`],
+      daily_activity: formData[`daily_activity${s}`],
+      current_training: formData[`current_training${s}`],
+      nutrition_habits: formData[`nutrition_habits${s}`],
+      goal_importance: formData[`goal_importance${s}`],
+      success_criteria: formData[`success_criteria${s}`],
+      personality_type: (isDuo
+        ? suffix === 'a' ? personalityTypeA : personalityTypeB
+        : personalityType) as any,
+      next_steps: formData[`next_steps${s}`],
+      notes: formData[`notes${s}`],
+    };
+  };
+
+  const buildHealthData = (suffix: 'a' | 'b' | ''): HealthRecordForm => {
+    const s = suffix ? '_' + suffix : '';
+    return {
+      cardiovascular: formData[`cardiovascular${s}`],
+      musculoskeletal: formData[`musculoskeletal${s}`],
+      surgeries: formData[`surgeries${s}`],
+      sports_injuries: formData[`sports_injuries${s}`],
+      other_conditions: formData[`other_conditions${s}`],
+      medications: formData[`medications${s}`],
+      current_pain: formData[`current_pain${s}`],
+      substances: formData[`substances${s}`],
+    };
+  };
+
   // ============================================
   // HANDLE CLIENT SELECTION
   // ============================================
 
   const handleSelectExistingClient = (clientId: string) => {
     setSelectedClientId(clientId);
+    // Don't jump to conversation yet – wait to see if duo is toggled
+  };
+
+  const handleStartConversation = () => {
+    if (!selectedClientId) return;
+    if (isDuo && !secondClientId) {
+      toast({ title: 'Zweiten Kunden wählen', description: 'Bitte wähle auch den zweiten Teilnehmer.', variant: 'destructive' });
+      return;
+    }
     setWizardStep('conversation');
   };
 
@@ -455,14 +571,9 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
 
   const handleCreateClientAndContinue = async () => {
     if (!user || !clientForm.full_name.trim()) {
-      toast({
-        title: "Name erforderlich",
-        description: "Bitte gib mindestens den Namen des Kunden ein.",
-        variant: "destructive",
-      });
+      toast({ title: 'Name erforderlich', description: 'Bitte gib mindestens den Namen des Kunden ein.', variant: 'destructive' });
       return;
     }
-
     setIsSaving(true);
     try {
       const { data: newClient, error } = await supabase
@@ -491,27 +602,14 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
       setSelectedClientId(newClient.id);
       setExistingClient(newClient);
       setClientName(newClient.full_name);
-      
-      // Pre-fill conversation data from client form
-      if (clientForm.fitness_goal_text) {
-        setFormData(prev => ({ ...prev, fitness_goal_text: clientForm.fitness_goal_text }));
-      }
-      if (clientForm.acquisition_source) {
-        setFormData(prev => ({ ...prev, contact_source: clientForm.acquisition_source }));
-      }
-      
+      if (clientForm.fitness_goal_text) setFormData(prev => ({ ...prev, fitness_goal_text: clientForm.fitness_goal_text }));
+      if (clientForm.acquisition_source) setFormData(prev => ({ ...prev, contact_source: clientForm.acquisition_source }));
+
       setWizardStep('conversation');
-      toast({
-        title: "Kunde angelegt",
-        description: `${newClient.full_name} wurde erstellt. Du kannst jetzt das Erstgespräch führen.`,
-      });
+      toast({ title: 'Kunde angelegt', description: `${newClient.full_name} wurde erstellt.` });
     } catch (error) {
       console.error('Fehler:', error);
-      toast({
-        title: "Fehler",
-        description: "Kunde konnte nicht angelegt werden.",
-        variant: "destructive",
-      });
+      toast({ title: 'Fehler', description: 'Kunde konnte nicht angelegt werden.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -523,70 +621,55 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
 
   const handleSave = async () => {
     setIsSaving(true);
-    
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Nicht eingeloggt');
 
-      const conversationData: ConversationForm = {
-        contact_source: formData.contact_source,
-        motivation: formData.motivation,
-        previous_experience: formData.previous_experience,
-        stress_level: formData.stress_level,
-        sleep_quality: formData.sleep_quality,
-        daily_activity: formData.daily_activity,
-        current_training: formData.current_training,
-        nutrition_habits: formData.nutrition_habits,
-        goal_importance: formData.goal_importance,
-        success_criteria: formData.success_criteria,
-        personality_type: personalityType as any,
-        next_steps: formData.next_steps,
-        notes: formData.notes,
-      };
+      if (isDuo && secondClientId) {
+        // ── Duo: save two separate conversations ──────────────────────────
+        const suffix_a = 'a';
+        const suffix_b = 'b';
 
-      const healthData: HealthRecordForm = {
-        cardiovascular: formData.cardiovascular,
-        musculoskeletal: formData.musculoskeletal,
-        surgeries: formData.surgeries,
-        sports_injuries: formData.sports_injuries,
-        other_conditions: formData.other_conditions,
-        medications: formData.medications,
-        current_pain: formData.current_pain,
-        substances: formData.substances,
-      };
+        // Client A
+        await supabase.from('clients').update({
+          occupation: formData.occupation_a,
+          fitness_goal_text: formData.fitness_goal_text_a,
+          status: 'trial',
+        }).eq('id', selectedClientId!);
 
-      const finalClientId = selectedClientId!;
+        const convA = await createConversation(selectedClientId!, buildConversationData(suffix_a));
+        await createHealthRecord(selectedClientId!, buildHealthData(suffix_a), convA.id);
 
-      // Update client fields
-      await supabase
-        .from('clients')
-        .update({
+        // Client B
+        await supabase.from('clients').update({
+          occupation: formData.occupation_b,
+          fitness_goal_text: formData.fitness_goal_text_b,
+          status: 'trial',
+        }).eq('id', secondClientId);
+
+        const convB = await createConversation(secondClientId, buildConversationData(suffix_b));
+        await createHealthRecord(secondClientId, buildHealthData(suffix_b), convB.id);
+
+        toast({ title: 'Duo-Erstgespräch gespeichert', description: `Daten für ${clientName} & ${secondClientName} wurden gespeichert.` });
+        navigate(`/clients/${selectedClientId!}`);
+
+      } else {
+        // ── Solo ──────────────────────────────────────────────────────────
+        await supabase.from('clients').update({
           occupation: formData.occupation,
           fitness_goal_text: formData.fitness_goal_text,
           status: 'trial',
-        })
-        .eq('id', finalClientId);
+        }).eq('id', selectedClientId!);
 
-      // Save conversation
-      const conversation = await createConversation(finalClientId, conversationData);
+        const conversation = await createConversation(selectedClientId!, buildConversationData(''));
+        await createHealthRecord(selectedClientId!, buildHealthData(''), conversation.id);
 
-      // Save health data
-      await createHealthRecord(finalClientId, healthData, conversation.id);
-
-      toast({
-        title: "Erstgespräch gespeichert",
-        description: `Daten für ${clientName} wurden erfolgreich gespeichert.`,
-      });
-
-      navigate(`/clients/${finalClientId}`);
-      
+        toast({ title: 'Erstgespräch gespeichert', description: `Daten für ${clientName} wurden erfolgreich gespeichert.` });
+        navigate(`/clients/${selectedClientId!}`);
+      }
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
-      toast({
-        title: "Fehler",
-        description: "Beim Speichern ist ein Fehler aufgetreten.",
-        variant: "destructive",
-      });
+      toast({ title: 'Fehler', description: 'Beim Speichern ist ein Fehler aufgetreten.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -597,6 +680,8 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
   // ============================================
 
   if (wizardStep === 'select') {
+    const availableForSecond = allClients.filter(c => c.id !== selectedClientId);
+
     return (
       <div className="max-w-xl mx-auto p-4 space-y-6">
         <div>
@@ -606,17 +691,17 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
 
         <div className="grid gap-4">
           {/* Existing Client */}
-          <Card className="cursor-pointer hover:border-primary/50 transition-colors">
+          <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="w-5 h-5" />
-                Bestehenden Kunden auswählen
+                Kunden auswählen
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <Select onValueChange={handleSelectExistingClient}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Kunde auswählen..." />
+                  <SelectValue placeholder="Kunde A auswählen..." />
                 </SelectTrigger>
                 <SelectContent>
                   {allClients.map(client => (
@@ -629,17 +714,49 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* Duo toggle – only show if a client is selected */}
+              {selectedClientId && (
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <div className="flex items-center gap-3">
+                    <Switch checked={isDuo} onCheckedChange={v => { setIsDuo(v); if (!v) { setSecondClientId(null); setSecondClientName(''); } }} />
+                    <Label className="text-sm">Duo-Erstgespräch (zwei Personen)</Label>
+                  </div>
+                  {isDuo && (
+                    <Select onValueChange={setSecondClientId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Kunde B auswählen..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableForSecond.map(client => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+
+              {selectedClientId && (
+                <Button
+                  className="w-full"
+                  onClick={handleStartConversation}
+                  disabled={isDuo && !secondClientId}
+                >
+                  {isDuo ? `Duo-Erstgespräch starten →` : 'Erstgespräch starten →'}
+                </Button>
+              )}
+
               {allClients.length === 0 && (
-                <p className="text-sm text-muted-foreground mt-2">Noch keine Kunden vorhanden.</p>
+                <p className="text-sm text-muted-foreground">Noch keine Kunden vorhanden.</p>
               )}
             </CardContent>
           </Card>
 
           {/* New Client */}
-          <Card 
-            className="cursor-pointer hover:border-primary/50 transition-colors"
-            onClick={handleStartNewClient}
-          >
+          <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={handleStartNewClient}>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <UserPlus className="w-5 h-5" />
@@ -667,74 +784,48 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         <Button variant="ghost" onClick={() => setWizardStep('select')} className="gap-2">
           <ArrowLeft className="w-4 h-4" /> Zurück
         </Button>
-        
         <div>
           <h1 className="text-2xl font-bold">Neuer Kunde</h1>
           <p className="text-muted-foreground mt-1">Erfasse die Stammdaten, dann geht's zum Erstgespräch.</p>
         </div>
-
         <Card>
           <CardHeader><CardTitle className="text-base">Persönliche Daten</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Vollständiger Name *</Label>
-                <Input 
-                  value={clientForm.full_name} 
-                  onChange={e => updateClientForm('full_name', e.target.value)} 
-                  placeholder="Max Mustermann"
-                />
+                <Input value={clientForm.full_name} onChange={e => updateClientForm('full_name', e.target.value)} placeholder="Max Mustermann" />
               </div>
               <div className="space-y-2">
                 <Label>Geburtsdatum</Label>
-                <Input 
-                  type="date" 
-                  value={clientForm.date_of_birth} 
-                  onChange={e => updateClientForm('date_of_birth', e.target.value)} 
-                />
+                <Input type="date" value={clientForm.date_of_birth} onChange={e => updateClientForm('date_of_birth', e.target.value)} />
               </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>E-Mail</Label>
-                <Input 
-                  type="email" 
-                  value={clientForm.email} 
-                  onChange={e => updateClientForm('email', e.target.value)} 
-                />
+                <Input type="email" value={clientForm.email} onChange={e => updateClientForm('email', e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Telefon (mit Vorwahl)</Label>
-                <Input 
-                  value={clientForm.phone} 
-                  onChange={e => updateClientForm('phone', e.target.value)} 
-                  placeholder="+49..." 
-                />
+                <Input value={clientForm.phone} onChange={e => updateClientForm('phone', e.target.value)} placeholder="+49..." />
               </div>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader><CardTitle className="text-base">Notfallkontakt</CardTitle></CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Name</Label>
-              <Input 
-                value={clientForm.emergency_contact_name} 
-                onChange={e => updateClientForm('emergency_contact_name', e.target.value)} 
-              />
+              <Input value={clientForm.emergency_contact_name} onChange={e => updateClientForm('emergency_contact_name', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Telefon</Label>
-              <Input 
-                value={clientForm.emergency_contact_phone} 
-                onChange={e => updateClientForm('emergency_contact_phone', e.target.value)} 
-              />
+              <Input value={clientForm.emergency_contact_phone} onChange={e => updateClientForm('emergency_contact_phone', e.target.value)} />
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader><CardTitle className="text-base">Trainingsdetails</CardTitle></CardHeader>
           <CardContent className="space-y-4">
@@ -743,33 +834,23 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                 <Label>Fitnessziel</Label>
                 <Select value={clientForm.fitness_goal} onValueChange={v => updateClientForm('fitness_goal', v)}>
                   <SelectTrigger><SelectValue placeholder="Ziel wählen" /></SelectTrigger>
-                  <SelectContent>
-                    {FITNESS_GOALS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                  </SelectContent>
+                  <SelectContent>{FITNESS_GOALS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Wie hat er/sie mich gefunden?</Label>
                 <Select value={clientForm.acquisition_source} onValueChange={v => updateClientForm('acquisition_source', v)}>
                   <SelectTrigger><SelectValue placeholder="Quelle wählen" /></SelectTrigger>
-                  <SelectContent>
-                    {ACQUISITION_SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
+                  <SelectContent>{ACQUISITION_SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-2">
               <Label>Ziel-Details (Freitext)</Label>
-              <Textarea 
-                value={clientForm.fitness_goal_text} 
-                onChange={e => updateClientForm('fitness_goal_text', e.target.value)} 
-                rows={2} 
-                placeholder="Was möchte der Kunde erreichen?"
-              />
+              <Textarea value={clientForm.fitness_goal_text} onChange={e => updateClientForm('fitness_goal_text', e.target.value)} rows={2} placeholder="Was möchte der Kunde erreichen?" />
             </div>
           </CardContent>
         </Card>
-
         <div className="flex justify-end">
           <Button onClick={handleCreateClientAndContinue} disabled={isSaving || !clientForm.full_name.trim()}>
             {isSaving ? 'Wird angelegt...' : 'Kunde anlegen & Erstgespräch starten →'}
@@ -784,56 +865,108 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
   // ============================================
 
   if (showSummary) {
-    const selectedType = PERSONALITY_TYPES.find(t => t.id === personalityType);
-    
     return (
       <div className="max-w-2xl mx-auto p-4 space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Zusammenfassung: {clientName}</CardTitle>
+            <CardTitle>
+              Zusammenfassung: {clientName}{isDuo && secondClientName ? ` & ${secondClientName}` : ''}
+            </CardTitle>
             <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString('de-DE')}</p>
           </CardHeader>
           <CardContent className="space-y-6">
-            
-            {selectedType && (
-              <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">{selectedType.icon}</span>
-                  <span className="font-semibold">{selectedType.label}</span>
-                </div>
-                <p className="text-sm text-muted-foreground">{selectedType.strategy}</p>
+
+            {/* Personality types */}
+            {isDuo ? (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {[
+                  { name: clientName, type: personalityTypeA, color: 'border-primary/30 bg-primary/5' },
+                  { name: secondClientName, type: personalityTypeB, color: 'border-emerald-300 bg-emerald-50' },
+                ].map(({ name, type, color }) => {
+                  const pt = PERSONALITY_TYPES.find(t => t.id === type);
+                  return pt ? (
+                    <div key={name} className={`p-3 rounded-lg border ${color}`}>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">{name}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{pt.icon}</span>
+                        <span className="font-medium text-sm">{pt.label}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{pt.strategy}</p>
+                    </div>
+                  ) : null;
+                })}
               </div>
+            ) : (
+              (() => {
+                const selectedType = PERSONALITY_TYPES.find(t => t.id === personalityType);
+                return selectedType ? (
+                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-2xl">{selectedType.icon}</span>
+                      <span className="font-semibold">{selectedType.label}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{selectedType.strategy}</p>
+                  </div>
+                ) : null;
+              })()
             )}
 
+            {/* Field summary */}
             {PHASES.filter(p => p.fields.length > 0 || p.isHealthSection).map(p => (
               <div key={p.id} className="space-y-2">
-                <h3 className="font-medium flex items-center gap-2">
-                  <span>{p.icon}</span> {p.title}
-                </h3>
-                <div className="pl-6 space-y-1 text-sm">
+                <h3 className="font-medium flex items-center gap-2"><span>{p.icon}</span> {p.title}</h3>
+                <div className="pl-4 space-y-2 text-sm">
                   {p.isHealthSection ? (
-                    HEALTH_QUESTIONS.filter(q => formData[q.id]).map(q => (
-                      <div key={q.id}>
-                        <span className="text-muted-foreground">{q.label}:</span>{' '}
-                        <span>{formData[q.id]}</span>
-                      </div>
-                    ))
+                    isDuo ? (
+                      HEALTH_QUESTIONS.map(q => {
+                        const vA = formData[q.id + '_a'];
+                        const vB = formData[q.id + '_b'];
+                        if (!vA && !vB) return null;
+                        return (
+                          <div key={q.id}>
+                            <p className="text-muted-foreground text-xs font-medium">{q.label}</p>
+                            {vA && <p className="ml-2"><span className="text-primary text-xs">{clientName}:</span> {vA}</p>}
+                            {vB && <p className="ml-2"><span className="text-emerald-600 text-xs">{secondClientName}:</span> {vB}</p>}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      HEALTH_QUESTIONS.filter(q => formData[q.id]).map(q => (
+                        <div key={q.id}>
+                          <span className="text-muted-foreground">{q.label}:</span>{' '}
+                          <span>{formData[q.id]}</span>
+                        </div>
+                      ))
+                    )
                   ) : (
-                    p.fields.map(field => (
-                      <div key={field.id}>
-                        <span className="text-muted-foreground">{field.label}:</span>{' '}
-                        <span>{formData[field.id] || '—'}</span>
-                      </div>
-                    ))
+                    isDuo ? (
+                      p.fields.map(field => {
+                        const vA = formData[field.id + '_a'];
+                        const vB = formData[field.id + '_b'];
+                        if (!vA && !vB) return null;
+                        return (
+                          <div key={field.id}>
+                            <p className="text-muted-foreground text-xs font-medium">{field.label}</p>
+                            {vA && <p className="ml-2"><span className="text-primary text-xs">{clientName}:</span> {vA}</p>}
+                            {vB && <p className="ml-2"><span className="text-emerald-600 text-xs">{secondClientName}:</span> {vB}</p>}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      p.fields.map(field => (
+                        <div key={field.id}>
+                          <span className="text-muted-foreground">{field.label}:</span>{' '}
+                          <span>{formData[field.id] || '—'}</span>
+                        </div>
+                      ))
+                    )
                   )}
                 </div>
               </div>
             ))}
 
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" onClick={() => setShowSummary(false)} className="flex-1">
-                ← Zurück bearbeiten
-              </Button>
+              <Button variant="outline" onClick={() => setShowSummary(false)} className="flex-1">← Zurück bearbeiten</Button>
               <Button onClick={handleSave} disabled={isSaving} className="flex-1">
                 {isSaving ? 'Speichert...' : '💾 Speichern'}
               </Button>
@@ -850,25 +983,35 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
-      
+
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold">Erstgespräch</h1>
-            <p className="text-sm text-muted-foreground">{clientName}</p>
+            <h1 className="text-xl font-bold">
+              {isDuo ? 'Duo-Erstgespräch' : 'Erstgespräch'}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {clientName}{isDuo && secondClientName ? ` & ${secondClientName}` : ''}
+            </p>
           </div>
-          <span className="text-sm text-muted-foreground">
-            {new Date().toLocaleDateString('de-DE')}
-          </span>
+          <span className="text-sm text-muted-foreground">{new Date().toLocaleDateString('de-DE')}</span>
         </div>
-        
-        {/* Progress */}
+
+        {/* Duo badge */}
+        {isDuo && (
+          <div className="flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">
+              <span className="w-2 h-2 rounded-full bg-primary inline-block" /> {clientName}
+            </span>
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> {secondClientName}
+            </span>
+          </div>
+        )}
+
         <div className="h-2 bg-secondary rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-primary transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
+          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
@@ -899,12 +1042,10 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                 <p className="text-sm text-muted-foreground">{phase.description}</p>
               </div>
             </div>
-            <span className="text-sm bg-secondary px-3 py-1 rounded-full">
-              {phase.duration}
-            </span>
+            <span className="text-sm bg-secondary px-3 py-1 rounded-full">{phase.duration}</span>
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           {/* Prompts */}
           <div className="p-4 bg-secondary/50 rounded-lg">
@@ -918,34 +1059,45 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
 
           {/* Input Fields */}
           {phase.fields.length > 0 && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <h3 className="text-sm font-medium">✏️ Quick-Capture</h3>
-              {phase.fields.map(field => (
-                <div key={field.id}>
-                  <label className="text-sm text-muted-foreground">{field.label}</label>
-                  {field.multiline ? (
-                    <Textarea
-                      value={formData[field.id] || ''}
-                      onChange={(e) => updateField(field.id, e.target.value)}
-                      placeholder={field.placeholder}
-                      rows={3}
-                    />
-                  ) : (
-                    <Input
-                      value={formData[field.id] || ''}
-                      onChange={(e) => updateField(field.id, e.target.value)}
-                      placeholder={field.placeholder}
-                    />
-                  )}
-                  {/* Deep Questions Panel */}
-                  {field.deepQuestions && (
-                    <DeepQuestionsPanel 
-                      title={field.deepQuestions.title} 
-                      questions={field.deepQuestions.questions} 
-                    />
-                  )}
-                </div>
-              ))}
+              {isDuo ? (
+                // ── DUO: interleaved A/B per field ──────────────────────
+                phase.fields.map(field => (
+                  <DuoField
+                    key={field.id}
+                    field={field}
+                    formData={formData}
+                    updateField={updateField}
+                    nameA={clientName}
+                    nameB={secondClientName}
+                  />
+                ))
+              ) : (
+                // ── SOLO ─────────────────────────────────────────────────
+                phase.fields.map(field => (
+                  <div key={field.id}>
+                    <label className="text-sm text-muted-foreground">{field.label}</label>
+                    {field.multiline ? (
+                      <Textarea
+                        value={formData[field.id] || ''}
+                        onChange={e => updateField(field.id, e.target.value)}
+                        placeholder={field.placeholder}
+                        rows={3}
+                      />
+                    ) : (
+                      <Input
+                        value={formData[field.id] || ''}
+                        onChange={e => updateField(field.id, e.target.value)}
+                        placeholder={field.placeholder}
+                      />
+                    )}
+                    {field.deepQuestions && (
+                      <DeepQuestionsPanel title={field.deepQuestions.title} questions={field.deepQuestions.questions} />
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           )}
 
@@ -954,47 +1106,105 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
             <div className="space-y-4">
               <h3 className="text-sm font-medium">🩺 Anamnese-Erfassung</h3>
               <p className="text-xs text-muted-foreground">Nur ausfüllen, was relevant ist.</p>
-              {HEALTH_QUESTIONS.map(q => (
-                <div key={q.id}>
-                  <label className="text-sm text-muted-foreground">{q.label}</label>
-                  <Input
-                    value={formData[q.id] || ''}
-                    onChange={(e) => updateField(q.id, e.target.value)}
-                    placeholder={q.placeholder}
-                  />
-                  <p className="text-xs text-muted-foreground mt-0.5">{q.examples}</p>
-                </div>
-              ))}
+              {isDuo ? (
+                // ── DUO: interleaved A/B per health question ─────────────
+                HEALTH_QUESTIONS.map(q => (
+                  <div key={q.id} className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">{q.label}</p>
+                    <p className="text-xs text-muted-foreground/70">{q.examples}</p>
+                    {/* A */}
+                    <div className="pl-3 border-l-2 border-primary/60 space-y-1">
+                      <p className="text-xs font-semibold text-primary">{clientName}</p>
+                      <Input
+                        value={formData[q.id + '_a'] || ''}
+                        onChange={e => updateField(q.id + '_a', e.target.value)}
+                        placeholder={q.placeholder}
+                      />
+                    </div>
+                    {/* B */}
+                    <div className="pl-3 border-l-2 border-emerald-500/60 space-y-1">
+                      <p className="text-xs font-semibold text-emerald-600">{secondClientName}</p>
+                      <Input
+                        value={formData[q.id + '_b'] || ''}
+                        onChange={e => updateField(q.id + '_b', e.target.value)}
+                        placeholder={q.placeholder}
+                      />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                // ── SOLO ─────────────────────────────────────────────────
+                HEALTH_QUESTIONS.map(q => (
+                  <div key={q.id}>
+                    <label className="text-sm text-muted-foreground">{q.label}</label>
+                    <Input
+                      value={formData[q.id] || ''}
+                      onChange={e => updateField(q.id, e.target.value)}
+                      placeholder={q.placeholder}
+                    />
+                    <p className="text-xs text-muted-foreground mt-0.5">{q.examples}</p>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
           {/* Personality Type (last phase) */}
           {currentPhase === PHASES.length - 1 && (
             <div className="space-y-3 pt-4 border-t">
-              <h3 className="text-sm font-medium">🧠 Persönlichkeitstyp-Einschätzung</h3>
-              {PERSONALITY_TYPES.map(type => (
-                <button
-                  key={type.id}
-                  onClick={() => setPersonalityType(type.id)}
-                  className={`w-full p-4 rounded-lg text-left border transition ${
-                    personalityType === type.id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">{type.icon}</span>
-                    <span className="font-medium">{type.label}</span>
-                  </div>
-                  <div className="flex gap-1 mt-1">
-                    {type.traits.map(trait => (
-                      <span key={trait} className="text-xs bg-secondary px-2 py-0.5 rounded">
-                        {trait}
-                      </span>
-                    ))}
-                  </div>
-                </button>
-              ))}
+              {isDuo ? (
+                // ── DUO: one picker per client ───────────────────────────
+                <>
+                  <h3 className="text-sm font-medium">🧠 Persönlichkeitstyp-Einschätzung</h3>
+                  {[
+                    { label: clientName, value: personalityTypeA, setter: setPersonalityTypeA, color: 'border-primary bg-primary/10', activeColor: 'border-primary bg-primary/10' },
+                    { label: secondClientName, value: personalityTypeB, setter: setPersonalityTypeB, color: 'border-emerald-500 bg-emerald-50', activeColor: 'border-emerald-500 bg-emerald-50' },
+                  ].map(({ label, value, setter, activeColor }) => (
+                    <div key={label} className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
+                      {PERSONALITY_TYPES.map(type => (
+                        <button
+                          key={type.id}
+                          onClick={() => setter(type.id)}
+                          className={`w-full p-3 rounded-lg text-left border transition ${value === type.id ? activeColor : 'border-border hover:border-primary/50'}`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">{type.icon}</span>
+                            <span className="font-medium text-sm">{type.label}</span>
+                          </div>
+                          <div className="flex gap-1 mt-1">
+                            {type.traits.map(trait => (
+                              <span key={trait} className="text-xs bg-secondary px-2 py-0.5 rounded">{trait}</span>
+                            ))}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                // ── SOLO ─────────────────────────────────────────────────
+                <>
+                  <h3 className="text-sm font-medium">🧠 Persönlichkeitstyp-Einschätzung</h3>
+                  {PERSONALITY_TYPES.map(type => (
+                    <button
+                      key={type.id}
+                      onClick={() => setPersonalityType(type.id)}
+                      className={`w-full p-4 rounded-lg text-left border transition ${personalityType === type.id ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xl">{type.icon}</span>
+                        <span className="font-medium">{type.label}</span>
+                      </div>
+                      <div className="flex gap-1 mt-1">
+                        {type.traits.map(trait => (
+                          <span key={trait} className="text-xs bg-secondary px-2 py-0.5 rounded">{trait}</span>
+                        ))}
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </CardContent>
@@ -1010,21 +1220,10 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         >
           ← Zurück
         </Button>
-        
         {currentPhase < PHASES.length - 1 ? (
-          <Button
-            onClick={() => setCurrentPhase(currentPhase + 1)}
-            className="flex-1"
-          >
-            Weiter →
-          </Button>
+          <Button onClick={() => setCurrentPhase(currentPhase + 1)} className="flex-1">Weiter →</Button>
         ) : (
-          <Button
-            onClick={() => setShowSummary(true)}
-            className="flex-1"
-          >
-            Zusammenfassung →
-          </Button>
+          <Button onClick={() => setShowSummary(true)} className="flex-1">Zusammenfassung →</Button>
         )}
       </div>
     </div>
