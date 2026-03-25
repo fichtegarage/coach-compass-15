@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp,
   StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2, Camera,
-  Key, Copy, RefreshCw, CalendarCheck
+  Key, Copy, RefreshCw, CalendarCheck, Download   // ← Download neu
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -25,6 +25,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Checkbox } from '@/components/ui/checkbox';
 import ProgressPhotos from '@/components/ProgressPhotos';
 import BookSessionDialog from '@/components/BookSessionDialog';
+import { exportSingleClient, exportDuoClients, type ExportClientData } from '@/lib/exportForClaude';
 
 interface PackageFeature {
   label: string;
@@ -490,6 +491,47 @@ const ClientDetailPage: React.FC = () => {
     return <div className="text-center py-12"><p className="text-muted-foreground">Kunde nicht gefunden</p></div>;
   }
 
+  const handleExportForClaude = () => {
+  if (!conversation || !client) return;
+
+  const buildExportData = (
+    c: any,
+    conv: any,
+    health: any
+  ): ExportClientData => ({
+    full_name: c.full_name,
+    date_of_birth: c.date_of_birth,
+    occupation: c.occupation,
+    fitness_goal: c.fitness_goal,
+    fitness_goal_text: conv.fitness_goal_text ?? c.fitness_goal_text,
+    starting_date: c.starting_date,
+    contact_source: conv.contact_source,
+    motivation: conv.motivation,
+    previous_experience: conv.previous_experience,
+    stress_level: conv.stress_level,
+    sleep_quality: conv.sleep_quality,
+    daily_activity: conv.daily_activity,
+    current_training: conv.current_training,
+    nutrition_habits: conv.nutrition_habits,
+    goal_importance: conv.goal_importance,
+    success_criteria: conv.success_criteria,
+    personality_type: conv.personality_type,
+    next_steps: conv.next_steps,
+    notes: conv.notes,
+    conversation_date: conv.conversation_date,
+    cardiovascular: health?.cardiovascular,
+    musculoskeletal: health?.musculoskeletal,
+    surgeries: health?.surgeries,
+    sports_injuries: health?.sports_injuries,
+    other_conditions: health?.other_conditions,
+    medications: health?.medications,
+    current_pain: health?.current_pain,
+    substances: health?.substances,
+  });
+
+  exportSingleClient(buildExportData(client, conversation, healthRecord));
+};
+  
   const activePackage = packages.find(p => {
     const sessionsUsed = sessions.filter(s => s.package_id === p.id && ['Completed', 'No-Show'].includes(s.status)).length;
     return sessionsUsed < p.sessions_included;
@@ -1135,17 +1177,25 @@ const ClientDetailPage: React.FC = () => {
           ) : (
             <>
               {/* Header mit Datum und Persönlichkeitstyp */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Erstgespräch vom {format(new Date(conversation.conversation_date), 'd. MMMM yyyy', { locale: de })}
-                  </p>
-                </div>
-                <Link to={`/onboarding?clientId=${id}`}>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Edit className="w-4 h-4" /> Neues Gespräch
+              <div className="flex items-start justify-between flex-wrap gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Erstgespräch vom {format(new Date(conversation.conversation_date), 'd. MMMM yyyy', { locale: de })}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleExportForClaude}
+                  >
+                    <Download className="w-4 h-4" /> Für Claude exportieren
                   </Button>
-                </Link>
+                  <Link to={`/onboarding?clientId=${id}`}>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Edit className="w-4 h-4" /> Neues Gespräch
+                    </Button>
+                  </Link>
+                </div>
               </div>
 
               {/* Persönlichkeitstyp */}
