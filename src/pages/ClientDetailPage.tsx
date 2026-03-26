@@ -27,6 +27,7 @@ import ProgressPhotos from '@/components/ProgressPhotos';
 import BookSessionDialog from '@/components/BookSessionDialog';
 import { exportSingleClient, type ExportClientData } from '@/lib/exportForClaude';
 import TrainingPlanTab from '@/components/TrainingPlanTab';
+import WorkoutHistoryTab from '@/components/WorkoutHistoryTab';
 
 interface PackageFeature {
   label: string;
@@ -656,6 +657,7 @@ const ClientDetailPage: React.FC = () => {
           <TabsTrigger value="erstgespraech">Erstgespräch</TabsTrigger>
           <TabsTrigger value="notes">Notizen</TabsTrigger>
           <TabsTrigger value="plan">Trainingsplan</TabsTrigger>
+          <TabsTrigger value="workouts">Workouts</TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW TAB */}
@@ -1146,6 +1148,9 @@ const ClientDetailPage: React.FC = () => {
 
         <TabsContent value="plan" className="mt-4">
            <TrainingPlanTab clientId={id!} clientName={client.full_name} />
+        </TabsContent>
+        <TabsContent value="workouts" className="mt-4">
+          <WorkoutHistoryTab clientId={id!} />
         </TabsContent>
 
         {/* ERSTGESPRÄCH TAB */}
