@@ -9,8 +9,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Dumbbell, ChevronDown, ChevronUp, Target, Calendar } from 'lucide-react';
+import { Loader2, Dumbbell, ChevronDown, ChevronUp, Target, Calendar, Play } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import WorkoutLogger from '@/components/WorkoutLogger';
+import WorkoutSummaryView from '@/components/WorkoutSummaryView';
+
+interface WorkoutSummary {
+  duration: number;
+  totalSets: number;
+  totalVolume: number;
+  prs: string[];
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -149,6 +158,8 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
   const [plan, setPlan] = useState<TrainingPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const [activeWorkout, setActiveWorkout] = useState<PlanWorkout | null>(null);
+  const [completedSummary, setCompletedSummary] = useState<WorkoutSummary | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -226,6 +237,29 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
   const currentWeekLabel = currentWorkouts[0]?.week_label;
 
   return (
+    <>
+      {/* Workout Logger overlay */}
+      {activeWorkout && (
+        <WorkoutLogger
+          workout={activeWorkout}
+          clientId={clientId}
+          onClose={() => setActiveWorkout(null)}
+          onComplete={(summary) => {
+            setActiveWorkout(null);
+            setCompletedSummary(summary);
+          }}
+        />
+      )}
+
+      {/* Zusammenfassung nach Abschluss */}
+      {completedSummary && (
+        <WorkoutSummaryView
+          summary={completedSummary}
+          workoutName={completedSummary.prs.length > 0 ? '🏆 Stark!' : 'Gut gemacht!'}
+          onClose={() => setCompletedSummary(null)}
+        />
+      )}
+
     <div className="space-y-5">
 
       {/* Plan-Header */}
@@ -288,7 +322,16 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       {/* Workouts */}
       <div className="space-y-3">
         {currentWorkouts.map(workout => (
-          <WorkoutBlock key={workout.id} workout={workout} />
+          <div key={workout.id} className="space-y-2">
+            <WorkoutBlock workout={workout} />
+            <button
+              onClick={() => setActiveWorkout(workout)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-semibold text-sm transition-all"
+            >
+              <Play className="w-4 h-4" />
+              {workout.day_label} starten
+            </button>
+          </div>
         ))}
       </div>
 
@@ -302,6 +345,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
         </div>
       )}
     </div>
+    </>
   );
 };
 
