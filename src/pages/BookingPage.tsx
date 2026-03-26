@@ -521,7 +521,7 @@ const BookingPage: React.FC = () => {
       )}
 
       {/* Trainer-cancellation notifications */}
-        clientNotifications.length > 0 && activeView === 'calendar' && (
+        {clientNotifications.length > 0 && activeView === 'calendar' && (
         <div className="max-w-4xl mx-auto px-4 mt-2 space-y-2 w-full">
           {clientNotifications.map(n => (
             <div key={n.id} className="rounded-lg px-4 py-2 text-sm border flex items-center justify-between gap-2 bg-red-50 border-red-200 text-red-800">
