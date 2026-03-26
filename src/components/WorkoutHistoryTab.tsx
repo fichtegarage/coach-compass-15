@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import VolumeChart from '@/components/VolumeChart';
 import ClaudeBriefing from '@/components/ClaudeBriefing';
+import AdherenceWidget from '@/components/AdherenceWidget';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ interface WorkoutHistoryTabProps {
   clientId: string;
 }
 
-type ActiveTab = 'history' | 'chart' | 'prs' | 'briefing';
+type ActiveTab = 'history' | 'chart' | 'prs' | 'briefing' | 'adherence';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -184,6 +185,7 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [conversation, setConversation] = useState<any>(null);
   const [clientName, setClientName] = useState('');
+  const [sessionsPerWeek, setSessionsPerWeek] = useState(3);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>('history');
 
@@ -238,6 +240,15 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
       .single();
     setClientName(clientData?.full_name || '');
 
+    // sessions_per_week aus aktivem Plan
+    const { data: planData } = await supabase
+      .from('training_plans')
+      .select('sessions_per_week')
+      .eq('client_id', clientId)
+      .eq('is_active', true)
+      .maybeSingle();
+    setSessionsPerWeek(planData?.sessions_per_week || 3);
+
     setLoading(false);
   }, [clientId]);
 
@@ -256,6 +267,7 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
     { id: 'history', label: 'Verlauf' },
     { id: 'chart', label: 'Progression 📈' },
     { id: 'prs', label: `PRs${personalRecords.length > 0 ? ` 🏆` : ''}` },
+    { id: 'adherence', label: 'Adherence' },
     { id: 'briefing', label: 'KI-Briefing ✨' },
   ];
 
@@ -363,6 +375,14 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
             ))}
           </div>
         )
+      )}
+
+      {/* ── ADHERENCE ── */}
+      {activeTab === 'adherence' && (
+        <AdherenceWidget
+          workoutLogs={workoutLogs}
+          targetPerWeek={sessionsPerWeek}
+        />
       )}
 
       {/* ── KI-BRIEFING ── */}
