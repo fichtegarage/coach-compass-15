@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   CalendarDays, AlertTriangle, DollarSign, Plus, Clock,
   ChevronRight, Package, Cake, Users, TrendingUp, Trophy, BarChart3,
-  CalendarCheck, Dumbbell,
+  CalendarCheck, Dumbbell, AlertCircle,
 } from 'lucide-react';
 import BookSessionDialog from '@/components/BookSessionDialog';
 import {
@@ -96,6 +96,7 @@ const DashboardPage: React.FC = () => {
   const [birthdaysByDay, setBirthdaysByDay] = useState<Record<string, BirthdayInfo[]>>({});
   const [yearStats, setYearStats] = useState<YearStats | null>(null);
   const [workoutFeed, setWorkoutFeed] = useState<any[]>([]);
+  const [stagnationAlerts, setStagnationAlerts] = useState<{ clientId: string; clientName: string; exercise: string }[]>([]);
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
   const getSessionsForDay = (day: Date) =>
@@ -310,6 +311,75 @@ const DashboardPage: React.FC = () => {
       .order('completed_at', { ascending: false })
       .limit(10);
     setWorkoutFeed(feedData || []);
+
+          {stagnationAlerts.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-500" /> Stagnation erkannt
+          </h2>
+          <div className="space-y-2">
+            {stagnationAlerts.map((alert, i) => (
+              <Link key={i} to={`/clients/${alert.clientId}`}>
+                <Card className="hover:bg-accent/50 transition-colors cursor-pointer border-amber-200">
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-500/10 shrink-0">
+                      <AlertCircle className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{alert.clientName}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        Keine Progression bei: <strong>{alert.exercise}</strong>
+                      </p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+    // Stagnations-Alert: Übung ohne Progression in letzten 3 Workouts
+    const alerts: { clientId: string; clientName: string; exercise: string }[] = [];
+    const recentLogs = (feedData || []).slice(0, 20);
+    const clientGroups: Record<string, { clientId: string; clientName: string; logs: any[] }> = {};
+    
+    for (const log of recentLogs) {
+      const cid = log.client_id;
+      const cname = Array.isArray(log.clients) ? log.clients[0]?.full_name : log.clients?.full_name || '';
+      if (!clientGroups[cid]) clientGroups[cid] = { clientId: cid, clientName: cname, logs: [] };
+      clientGroups[cid].logs.push(log);
+    }
+    
+    for (const { clientId, clientName, logs } of Object.values(clientGroups)) {
+      if (logs.length < 3) continue;
+      const logIds = logs.map((l: any) => l.id);
+      const { data: recentSets } = await supabase
+        .from('set_logs')
+        .select('exercise_name, weight_kg, reps_done, logged_at')
+        .in('workout_log_id', logIds)
+        .order('logged_at', { ascending: false });
+    
+      if (!recentSets) continue;
+    
+      const byExercise: Record<string, number[]> = {};
+      for (const s of recentSets) {
+        if (!byExercise[s.exercise_name]) byExercise[s.exercise_name] = [];
+        byExercise[s.exercise_name].push(Number(s.weight_kg) * Number(s.reps_done));
+      }
+    
+      for (const [exercise, volumes] of Object.entries(byExercise)) {
+        if (volumes.length < 3) continue;
+        const last3 = volumes.slice(0, 3);
+        const isStagnating = last3.every(v => v <= last3[last3.length - 1] * 1.02);
+        if (isStagnating) {
+          alerts.push({ clientId, clientName, exercise });
+          break; // max 1 Alert pro Kunde
+        }
+      }
+    }
+    setStagnationAlerts(alerts.slice(0, 5));
 
     setLoading(false);   // ← diese Zeile kommt zuletzt
   };                     // ← dann erst die schließende Klammer
