@@ -98,6 +98,8 @@ const DashboardPage: React.FC = () => {
   const [workoutFeed, setWorkoutFeed] = useState<any[]>([]);
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
+  const getSessionsForDay = (day: Date) =>
+    timelineSessions.filter(s => isSameDay(new Date(s.sessionDate), day));
   const currentYear = new Date().getFullYear();
   const yearStart = `${currentYear}-01-01T00:00:00`;
   const yearEnd = `${currentYear}-12-31T23:59:59`;
