@@ -297,21 +297,21 @@ const DashboardPage: React.FC = () => {
       clientSessionRanking,
       clientRevenueRanking,
     });
+// Workout-Feed
+    const { data: feedData } = await supabase
+      .from('workout_logs')
+      .select(`id, started_at, completed_at, client_id,
+        clients ( full_name ),
+        plan_workouts ( day_label ),
+        set_logs ( id )`)
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false })
+      .limit(10);
+    setWorkoutFeed(feedData || []);
 
-    setLoading(false);
-  };
-  const { data: feedData } = await supabase
-    .from('workout_logs')
-    .select(`id, started_at, completed_at, client_id,
-      clients ( full_name ),
-      plan_workouts ( day_label ),
-      set_logs ( id )`)
-    .not('completed_at', 'is', null)
-    .order('completed_at', { ascending: false })
-    .limit(10);
-  setWorkoutFeed(feedData || []);
-  const getSessionsForDay = (day: Date) =>
-    timelineSessions.filter(s => isSameDay(new Date(s.sessionDate), day));
+    setLoading(false);   // ← diese Zeile kommt zuletzt
+  };                     // ← dann erst die schließende Klammer
+     
 
   if (loading) {
     return (
