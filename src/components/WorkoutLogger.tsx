@@ -326,7 +326,13 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, onClos
     const exercise = currentLog.exercise;
 
     // Satz in DB speichern
-    const { data: setData } = await supabase
+    const { data: setData, error: setError } = await supabase
+        if (setError) {
+    console.error('set_logs insert error:', setError);
+    toast.error('Satz konnte nicht gespeichert werden.');
+    setSaving(false);
+    return;
+  }
       .from('set_logs')
       .insert({
         workout_log_id: workoutLogId,
