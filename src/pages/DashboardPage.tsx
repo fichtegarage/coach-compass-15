@@ -305,7 +305,7 @@ const DashboardPage: React.FC = () => {
       .select(`id, started_at, completed_at, client_id,
         clients ( full_name ),
         plan_workouts ( day_label ),
-        set_logs ( id )`)
+        set_logs ( id, weight_kg, reps_done )`)
       .not('completed_at', 'is', null)
       .order('completed_at', { ascending: false })
       .limit(10);
@@ -495,7 +495,9 @@ const DashboardPage: React.FC = () => {
             {workoutFeed.map((log: any) => {
               const clientName = Array.isArray(log.clients) ? log.clients[0]?.full_name : log.clients?.full_name || 'Unbekannt';
               const workoutName = Array.isArray(log.plan_workouts) ? log.plan_workouts[0]?.day_label : log.plan_workouts?.day_label || 'Freies Training';
-              const setCount = Array.isArray(log.set_logs) ? log.set_logs.length : 0;
+              const sets = Array.isArray(log.set_logs) ? log.set_logs : [];
+              const setCount = sets.length;
+              const volume = sets.reduce((sum: number, s: any) => sum + (Number(s.weight_kg) || 0) * (Number(s.reps_done) || 0), 0);
               const mins = log.completed_at ? Math.round((new Date(log.completed_at).getTime() - new Date(log.started_at).getTime()) / 60000) : null;
               return (
                 <Link key={log.id} to={`/clients/${log.client_id}`}>
@@ -511,7 +513,12 @@ const DashboardPage: React.FC = () => {
                         </p>
                       </div>
                       <div className="text-right shrink-0 space-y-0.5">
-                        {setCount > 0 && <p className="text-xs font-medium">{setCount} Sätze</p>}
+                        {setCount > 0 && (
+                          <p className="text-xs font-medium">
+                            {volume >= 1000 ? `${(volume / 1000).toFixed(1)}t` : `${Math.round(volume)}kg`}
+                          </p>
+                        )}
+                        {setCount > 0 && <p className="text-xs text-muted-foreground">{setCount} Sätze</p>}
                         {mins !== null && <p className="text-xs text-muted-foreground">{mins} Min.</p>}
                       </div>
                       <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
