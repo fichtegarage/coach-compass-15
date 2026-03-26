@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut } from 'lucide-react';
 import { buildEmail } from '@/lib/emailTemplate';
+import ClientPlanView from '@/components/ClientPlanView';
 
 // ── E-Mail helper ─────────────────────────────────────────────────────────────
 const sendEmail = async (to: string, subject: string, html: string) => {
@@ -178,6 +179,7 @@ const BookingPage: React.FC = () => {
   const [bookingMessage, setBookingMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
+  const [showPlan, setShowPlan] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [clientNotifications, setClientNotifications] = useState<any[]>([]);
@@ -485,6 +487,11 @@ const BookingPage: React.FC = () => {
             <Button variant="ghost" size="sm" onClick={() => setShowRequests(!showRequests)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-100">
               {showRequests ? 'Kalender' : 'Meine Buchungen'}
             </Button>
+            <Button variant="ghost" size="sm"
+              onClick={() => { setShowPlan(v => !v); setShowRequests(false); }}
+              className={`text-slate-600 hover:text-slate-900 hover:bg-slate-100 ${showPlan ? 'font-semibold' : ''}`}>
+              Mein Plan
+            </Button>
             <Button variant="ghost" size="icon" onClick={handleLogout} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100">
               <LogOut className="w-4 h-4" />
             </Button>
@@ -528,7 +535,9 @@ const BookingPage: React.FC = () => {
       )}
 
       <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
-        {showRequests ? (
+        {showPlan ? (
+          <ClientPlanView clientId={clientId} />
+        ) : showRequests ? (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-slate-900">Meine Buchungen</h2>
 
