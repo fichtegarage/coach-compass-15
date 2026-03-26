@@ -180,22 +180,23 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
 
     const { data: logsData, error } = await supabase
       .from('workout_logs')
-      .select(`
-        id, started_at, completed_at, notes, rating, energy_level,
-        plan_workouts ( day_label ),
-        set_logs ( id, exercise_name, set_number, reps_done, weight_kg, is_pr, logged_at )
-      `)
+      .select(`id, started_at, completed_at, notes, rating, energy_level, plan_workout_id, plan_workouts ( day_label )`)
       .eq('client_id', clientId)
       .order('started_at', { ascending: false })
       .limit(50);
+    
+    const logIds = (logsData || []).map(l => l.id);
+    const { data: setsData } = logIds.length > 0
+      ? await supabase.from('set_logs').select('*').in('workout_log_id', logIds)
+      : { data: [] };
 
     if (error) console.error('WorkoutHistoryTab:', error);
 
     const normalised: WorkoutLog[] = (logsData || []).map(log => ({
       ...log,
       plan_workouts: Array.isArray(log.plan_workouts) ? (log.plan_workouts[0] ?? null) : log.plan_workouts,
-      set_logs: ((log.set_logs as SetLog[]) || [])
-        .slice()
+      set_logs: ((setsData || []) as SetLog[])
+        .filter(s => s.workout_log_id === log.id)
         .sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()),
     }));
 
