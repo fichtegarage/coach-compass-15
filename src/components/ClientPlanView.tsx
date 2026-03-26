@@ -290,21 +290,22 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       // Workout-Logs mit nested set_logs
       const { data: logsData } = await supabase
         .from('workout_logs')
-        .select(`
-          id, started_at, completed_at,
-          plan_workouts ( day_label ),
-          set_logs ( id, exercise_name, set_number, reps_done, weight_kg, is_pr, logged_at )
-        `)
+        .select(`id, started_at, completed_at, plan_workouts ( day_label )`)
         .eq('client_id', clientId)
         .order('started_at', { ascending: false })
         .limit(30);
+      
+      const logIds2 = (logsData || []).map(l => l.id);
+      const { data: setsData2 } = logIds2.length > 0
+        ? await supabase.from('set_logs').select('*').in('workout_log_id', logIds2)
+        : { data: [] };
 
       const normalisedLogs: WorkoutLog[] = (logsData || []).map(log => ({
         ...log,
         plan_workouts: Array.isArray(log.plan_workouts) ? (log.plan_workouts[0] ?? null) : log.plan_workouts,
-        set_logs: ((log.set_logs as SetLog[]) || []).sort(
-          (a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
-        ),
+        set_logs: ((setsData2 || []) as SetLog[])
+          .filter(s => s.workout_log_id === log.id)
+          .sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()),
       }));
       setWorkoutLogs(normalisedLogs);
 
