@@ -35,8 +35,8 @@ Milchberg 8
 Deutschland
 
 Kontakt
-Telefon: 015154823993
-E-Mail: jakob.neumann@posteo.de
+Telefon: 015567 251 650
+E-Mail: hallo@jakob-neumann.net
 Website: buchung.jakob-neumann.net`;
 
 const datenschutzText = `Diese Datenschutzerklärung gilt für die Webanwendung unter buchung.jakob-neumann.net.
