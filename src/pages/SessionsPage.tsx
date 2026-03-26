@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, CalendarDays, ChevronLeft, ChevronRight, RefreshCw, MapPin, List, LayoutGrid, Copy, Check, Users } from 'lucide-react';
+import { Plus, CalendarDays, ChevronLeft, ChevronRight, RefreshCw, MapPin, List, LayoutGrid, Copy, Check, Users, Dumbbell } from 'lucide-react';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, eachDayOfInterval, isSameMonth, isSameDay, isToday,
@@ -18,6 +18,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import WorkoutLogger from '@/components/WorkoutLogger';
+import WorkoutSummaryView from '@/components/WorkoutSummaryView';
 
 const sessionTypes = ['Präsenz-Training', 'Online-Training', 'Telefonat', 'Check-In Call', 'Kostenloses Erstgespräch', 'Duo Training'];
 const sessionStatuses = ['Scheduled', 'Completed', 'No-Show', 'Cancelled by Client', 'Cancelled by Trainer'];
@@ -49,6 +51,13 @@ const sessionTypeToDb: Record<string, string> = {
   'Duo Training': 'Duo Training',
 };
 
+interface WorkoutSummary {
+  duration: number;
+  totalSets: number;
+  totalVolume: number;
+  prs: string[];
+}
+
 const SessionsPage: React.FC = () => {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<any[]>([]);
@@ -64,6 +73,15 @@ const SessionsPage: React.FC = () => {
   const [selectedSession, setSelectedSession] = useState<any | null>(null);
   const [editForm, setEditForm] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // ── Phase 3: Session-Begleiter ────────────────────────────────────────────
+  const [planWorkouts, setPlanWorkouts] = useState<any[]>([]);
+  const [workoutPickerOpen, setWorkoutPickerOpen] = useState(false);
+  const [activeLoggerWorkout, setActiveLoggerWorkout] = useState<any | null>(null);
+  const [activeLoggerSessionId, setActiveLoggerSessionId] = useState<string | null>(null);
+  const [activeLoggerClientId, setActiveLoggerClientId] = useState<string | null>(null);
+  const [completedSummary, setCompletedSummary] = useState<WorkoutSummary | null>(null);
+
   const [form, setForm] = useState({
     client_id: '', second_client_id: '', package_id: '',
     session_date: new Date().toISOString().slice(0, 16),
@@ -94,7 +112,6 @@ const SessionsPage: React.FC = () => {
     const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
     const monthEnd = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
     const [sRes, cRes, pRes] = await Promise.all([
-      // ── FIX: explizite FK-Namen wegen second_client_id ──
       supabase.from('sessions')
         .select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)')
         .gte('session_date', monthStart)
@@ -107,6 +124,55 @@ const SessionsPage: React.FC = () => {
     setClients(cRes.data || []);
     setPackages(pRes.data || []);
     setLoading(false);
+  };
+
+  // ── Phase 3: Plan-Workouts des Kunden laden ───────────────────────────────
+  const loadPlanWorkouts = async (clientId: string) => {
+    const { data: planData } = await supabase
+      .from('training_plans')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!planData) {
+      toast.error('Kein aktiver Trainingsplan für diesen Kunden.');
+      return;
+    }
+
+    const { data: workoutsData } = await supabase
+      .from('plan_workouts')
+      .select('*, plan_exercises(*)')
+      .eq('plan_id', planData.id)
+      .order('week_number')
+      .order('order_in_week');
+
+    if (!workoutsData || workoutsData.length === 0) {
+      toast.error('Keine Einheiten im Plan gefunden.');
+      return;
+    }
+
+    // exercises normalisieren
+    const workoutsWithEx = workoutsData.map(w => ({
+      ...w,
+      exercises: (w.plan_exercises || []).sort((a: any, b: any) => a.order_in_workout - b.order_in_workout),
+    }));
+
+    setPlanWorkouts(workoutsWithEx);
+    setWorkoutPickerOpen(true);
+  };
+
+  const handleStartSessionLogger = async () => {
+    if (!selectedSession) return;
+    await loadPlanWorkouts(selectedSession.client_id);
+    setActiveLoggerSessionId(selectedSession.id);
+    setActiveLoggerClientId(selectedSession.client_id);
+  };
+
+  const handleSelectWorkout = (workout: any) => {
+    setWorkoutPickerOpen(false);
+    setActiveLoggerWorkout(workout);
+    setSelectedSession(null); // Edit-Dialog schließen
   };
 
   const getSessionCount = (clientId: string, packageId: string | null) => {
@@ -125,7 +191,6 @@ const SessionsPage: React.FC = () => {
     loadData();
   };
 
-  // ── Slot-Check: freien Slot löschen oder gebuchten Slot blockieren ──────
   const checkAndHandleSlot = async (sessionDateISO: string): Promise<boolean> => {
     const sessionTime = new Date(sessionDateISO);
     const windowStart = new Date(sessionTime.getTime() - 2 * 60000).toISOString();
@@ -175,11 +240,9 @@ const SessionsPage: React.FC = () => {
   const saveEdit = async () => {
     if (!selectedSession || !editForm) return;
     setSaving(true);
-
     const wasScheduled = selectedSession.status === 'Scheduled';
     const isCancelledByTrainer = editForm.status === 'Cancelled by Trainer';
     const isDuo = editForm.session_type === 'Duo Training';
-
     const { error } = await supabase.from('sessions').update({
       status: editForm.status,
       session_date: new Date(editForm.session_date).toISOString(),
@@ -190,16 +253,13 @@ const SessionsPage: React.FC = () => {
       late_cancellation: editForm.late_cancellation,
       second_client_id: isDuo && editForm.second_client_id ? editForm.second_client_id : null,
     }).eq('id', selectedSession.id);
-
     if (error) { toast.error('Fehler: ' + error.message); setSaving(false); return; }
-
     if (wasScheduled && isCancelledByTrainer && selectedSession.client_id) {
       const sessionDate = format(new Date(editForm.session_date), "EEEE, d. MMMM · HH:mm", { locale: de });
       await supabase.from('client_notifications').insert({
         client_id: selectedSession.client_id,
         message: `Deine Einheit am ${sessionDate} Uhr wurde vom Trainer abgesagt.`,
       });
-      // Auch zweiten Kunden benachrichtigen
       if (isDuo && editForm.second_client_id) {
         await supabase.from('client_notifications').insert({
           client_id: editForm.second_client_id,
@@ -207,7 +267,6 @@ const SessionsPage: React.FC = () => {
         });
       }
     }
-
     toast.success('Einheit gespeichert');
     setSaving(false);
     setSelectedSession(null);
@@ -259,6 +318,58 @@ const SessionsPage: React.FC = () => {
   }
 
   return (
+    <>
+      {/* ── Phase 3: WorkoutLogger Overlay ── */}
+      {activeLoggerWorkout && activeLoggerClientId && (
+        <WorkoutLogger
+          workout={activeLoggerWorkout}
+          clientId={activeLoggerClientId}
+          sessionId={activeLoggerSessionId || undefined}
+          onClose={() => { setActiveLoggerWorkout(null); setActiveLoggerSessionId(null); setActiveLoggerClientId(null); }}
+          onComplete={(summary) => {
+            setActiveLoggerWorkout(null);
+            setActiveLoggerSessionId(null);
+            setActiveLoggerClientId(null);
+            setCompletedSummary(summary);
+          }}
+        />
+      )}
+
+      {/* ── Zusammenfassung nach Logger ── */}
+      {completedSummary && (
+        <WorkoutSummaryView
+          summary={completedSummary}
+          workoutName="Training abgeschlossen"
+          onClose={() => { setCompletedSummary(null); loadData(); }}
+        />
+      )}
+
+      {/* ── Workout-Picker Dialog ── */}
+      <Dialog open={workoutPickerOpen} onOpenChange={setWorkoutPickerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <Dumbbell className="w-5 h-5" /> Einheit aus Plan wählen
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {planWorkouts.map(workout => (
+              <button
+                key={workout.id}
+                onClick={() => handleSelectWorkout(workout)}
+                className="w-full text-left rounded-xl border border-border p-3 hover:bg-accent transition-colors"
+              >
+                <p className="font-medium text-sm">{workout.day_label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {workout.week_label && `${workout.week_label} · `}
+                  {workout.exercises?.length || 0} Übungen
+                </p>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
     <div className="space-y-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h1 className="text-2xl md:text-3xl font-display font-bold">Einheiten</h1>
@@ -273,7 +384,7 @@ const SessionsPage: React.FC = () => {
               <DialogHeader>
                 <DialogTitle className="font-display">Kalender synchronisieren</DialogTitle>
                 <DialogDescription>
-                  Füge diese URL als Kalender-Abonnement in deiner Kalender-App hinzu. Der Kalender aktualisiert sich automatisch.
+                  Füge diese URL als Kalender-Abonnement in deiner Kalender-App hinzu.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
@@ -352,7 +463,6 @@ const SessionsPage: React.FC = () => {
                     </Select>
                   </div>
                 </div>
-                {/* Zweiter Kunde nur bei Duo Training */}
                 {isDuoForm && (
                   <div className="space-y-2">
                     <Label className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Zweiter Teilnehmer</Label>
@@ -548,6 +658,17 @@ const SessionsPage: React.FC = () => {
                 </p>
               </div>
 
+              {/* ── Phase 3: Training loggen Button ── */}
+              {selectedSession.status === 'Scheduled' && (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5"
+                  onClick={handleStartSessionLogger}
+                >
+                  <Dumbbell className="w-4 h-4" /> Training jetzt loggen
+                </Button>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Status</Label>
@@ -637,6 +758,7 @@ const SessionsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 };
 
