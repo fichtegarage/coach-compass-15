@@ -312,34 +312,7 @@ const DashboardPage: React.FC = () => {
       .limit(10);
     setWorkoutFeed(feedData || []);
 
-          {stagnationAlerts.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-500" /> Stagnation erkannt
-          </h2>
-          <div className="space-y-2">
-            {stagnationAlerts.map((alert, i) => (
-              <Link key={i} to={`/clients/${alert.clientId}`}>
-                <Card className="hover:bg-accent/50 transition-colors cursor-pointer border-amber-200">
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-amber-500/10 shrink-0">
-                      <AlertCircle className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{alert.clientName}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        Keine Progression bei: <strong>{alert.exercise}</strong>
-                      </p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
+          
     // Stagnations-Alert: Übung ohne Progression in letzten 3 Workouts
     const alerts: { clientId: string; clientName: string; exercise: string }[] = [];
     const recentLogs = (feedData || []).slice(0, 20);
@@ -454,6 +427,34 @@ const DashboardPage: React.FC = () => {
           </div>
         </section>
       )}
+
+      {stagnationAlerts.length > 0 && (
+  <section className="space-y-3">
+    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+      <AlertCircle className="w-4 h-4 text-amber-500" /> Stagnation erkannt
+    </h2>
+    <div className="space-y-2">
+      {stagnationAlerts.map((alert, i) => (
+        <Link key={i} to={`/clients/${alert.clientId}`}>
+          <Card className="hover:bg-accent/50 transition-colors cursor-pointer border-amber-200">
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/10 shrink-0">
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{alert.clientName}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  Keine Progression bei: <strong>{alert.exercise}</strong>
+                </p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </CardContent>
+          </Card>
+        </Link>
+      ))}
+    </div>
+  </section>
+)}
 
       {/* 7-Day Timeline */}
       <section className="space-y-3">
