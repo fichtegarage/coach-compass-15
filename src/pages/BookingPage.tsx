@@ -178,8 +178,7 @@ const BookingPage: React.FC = () => {
   const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
   const [bookingMessage, setBookingMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [showRequests, setShowRequests] = useState(false);
-  const [showPlan, setShowPlan] = useState(false);
+  const [activeView, setActiveView] = useState<'calendar' | 'bookings' | 'plan'>('calendar');
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [clientNotifications, setClientNotifications] = useState<any[]>([]);
@@ -484,17 +483,16 @@ const BookingPage: React.FC = () => {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowRequests(!showRequests)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-100">
-              {showRequests ? 'Kalender' : 'Meine Buchungen'}
-            </Button>
             <Button variant="ghost" size="sm"
-              onClick={() => { setShowPlan(v => !v); setShowRequests(false); }}
-              className={`text-slate-600 hover:text-slate-900 hover:bg-slate-100 ${showPlan ? 'font-semibold' : ''}`}>
-              Mein Plan
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-              <LogOut className="w-4 h-4" />
-            </Button>
+            onClick={() => setActiveView(v => v === 'bookings' ? 'calendar' : 'bookings')}
+            className={`text-slate-600 hover:text-slate-900 hover:bg-slate-100 ${activeView === 'bookings' ? 'font-semibold text-slate-900' : ''}`}>
+            {activeView === 'bookings' ? 'Kalender' : 'Meine Buchungen'}
+          </Button>
+          <Button variant="ghost" size="sm"
+            onClick={() => setActiveView(v => v === 'plan' ? 'calendar' : 'plan')}
+            className={`text-slate-600 hover:text-slate-900 hover:bg-slate-100 ${activeView === 'plan' ? 'font-semibold text-slate-900' : ''}`}>
+            {activeView === 'plan' ? '← Zurück' : 'Mein Plan'}
+          </Button>
           </div>
         </div>
       </header>
@@ -535,9 +533,9 @@ const BookingPage: React.FC = () => {
       )}
 
       <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
-        {showPlan ? (
+        {activeView === 'plan' ? (
           <ClientPlanView clientId={clientId} />
-        ) : showRequests ? (
+        ) : activeView === 'bookings' ? (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-slate-900">Meine Buchungen</h2>
 
