@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   CalendarDays, AlertTriangle, DollarSign, Plus, Clock,
   ChevronRight, Package, Cake, Users, TrendingUp, Trophy, BarChart3,
-  CalendarCheck,
+  CalendarCheck, Dumbbell,
 } from 'lucide-react';
 import BookSessionDialog from '@/components/BookSessionDialog';
 import {
@@ -95,6 +95,7 @@ const DashboardPage: React.FC = () => {
   const [bookPrefillDate, setBookPrefillDate] = useState<string | undefined>();
   const [birthdaysByDay, setBirthdaysByDay] = useState<Record<string, BirthdayInfo[]>>({});
   const [yearStats, setYearStats] = useState<YearStats | null>(null);
+  const [workoutFeed, setWorkoutFeed] = useState<any[]>([]);
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
   const currentYear = new Date().getFullYear();
@@ -299,7 +300,16 @@ const DashboardPage: React.FC = () => {
 
     setLoading(false);
   };
-
+  const { data: feedData } = await supabase
+    .from('workout_logs')
+    .select(`id, started_at, completed_at, client_id,
+      clients ( full_name ),
+      plan_workouts ( day_label ),
+      set_logs ( id )`)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
+    .limit(10);
+  setWorkoutFeed(feedData || []);
   const getSessionsForDay = (day: Date) =>
     timelineSessions.filter(s => isSameDay(new Date(s.sessionDate), day));
 
@@ -473,6 +483,44 @@ const DashboardPage: React.FC = () => {
           })}
         </div>
       </section>
+
+      {workoutFeed.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Dumbbell className="w-4 h-4" /> Eigenständige Workouts
+          </h2>
+          <div className="space-y-2">
+            {workoutFeed.map((log: any) => {
+              const clientName = Array.isArray(log.clients) ? log.clients[0]?.full_name : log.clients?.full_name || 'Unbekannt';
+              const workoutName = Array.isArray(log.plan_workouts) ? log.plan_workouts[0]?.day_label : log.plan_workouts?.day_label || 'Freies Training';
+              const setCount = Array.isArray(log.set_logs) ? log.set_logs.length : 0;
+              const mins = log.completed_at ? Math.round((new Date(log.completed_at).getTime() - new Date(log.started_at).getTime()) / 60000) : null;
+              return (
+                <Link key={log.id} to={`/clients/${log.client_id}`}>
+                  <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                        <Dumbbell className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{clientName}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {workoutName} · {format(new Date(log.completed_at), "d. MMM · HH:mm", { locale: de })} Uhr
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0 space-y-0.5">
+                        {setCount > 0 && <p className="text-xs font-medium">{setCount} Sätze</p>}
+                        {mins !== null && <p className="text-xs text-muted-foreground">{mins} Min.</p>}
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Reminders */}
       {reminders.length > 0 && (
