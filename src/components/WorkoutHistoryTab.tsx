@@ -1,10 +1,8 @@
 /**
- * WorkoutHistoryTab.tsx – FIXED
+ * WorkoutHistoryTab.tsx
  *
- * Fixes:
- * 1. set_logs per nested select geladen (ein Query statt zwei)
- * 2. Explizite Number()-Konvertierung in calcVolume
- * 3. Details-Ansicht korrekt
+ * Coach-seitiger Tab: Workout-Verlauf, PR-Board, Volumen-Chart, KI-Briefing.
+ * Phase 2 + Phase 4 (Analytics + Claude).
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -14,6 +12,10 @@ import { de } from 'date-fns/locale';
 import { Loader2, Trophy, ChevronDown, ChevronUp, Dumbbell, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import VolumeChart from '@/components/VolumeChart';
+import ClaudeBriefing from '@/components/ClaudeBriefing';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SetLog {
   id: string;
@@ -46,6 +48,10 @@ interface PersonalRecord {
 interface WorkoutHistoryTabProps {
   clientId: string;
 }
+
+type ActiveTab = 'history' | 'chart' | 'prs' | 'briefing';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function calcVolume(sets: SetLog[]): number {
   return sets.reduce((sum, s) => sum + (Number(s.weight_kg) || 0) * (Number(s.reps_done) || 0), 0);
@@ -81,6 +87,8 @@ const RatingStars: React.FC<{ value: number | null; label: string }> = ({ value,
     </div>
   );
 };
+
+// ── Workout Log Card ──────────────────────────────────────────────────────────
 
 const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
   const [open, setOpen] = useState(false);
@@ -169,28 +177,31 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
   );
 };
 
+// ── Main Component ─────────────────────────────────────────────────────────────
+
 const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
+  const [conversation, setConversation] = useState<any>(null);
+  const [clientName, setClientName] = useState('');
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'history' | 'prs'>('history');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('history');
 
   const load = useCallback(async () => {
     setLoading(true);
 
-    const { data: logsData, error } = await supabase
+    // Workout-Logs (zwei Queries wegen nested select Problem)
+    const { data: logsData } = await supabase
       .from('workout_logs')
-      .select(`id, started_at, completed_at, notes, rating, energy_level, plan_workout_id, plan_workouts ( day_label )`)
+      .select('id, started_at, completed_at, notes, rating, energy_level, plan_workout_id, plan_workouts ( day_label )')
       .eq('client_id', clientId)
       .order('started_at', { ascending: false })
       .limit(50);
-    
+
     const logIds = (logsData || []).map(l => l.id);
     const { data: setsData } = logIds.length > 0
       ? await supabase.from('set_logs').select('*').in('workout_log_id', logIds)
       : { data: [] };
-
-    if (error) console.error('WorkoutHistoryTab:', error);
 
     const normalised: WorkoutLog[] = (logsData || []).map(log => ({
       ...log,
@@ -199,16 +210,34 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
         .filter(s => s.workout_log_id === log.id)
         .sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()),
     }));
-
     setWorkoutLogs(normalised);
 
+    // PRs
     const { data: prsData } = await supabase
       .from('personal_records')
       .select('exercise_name, weight_kg, reps, achieved_at')
       .eq('client_id', clientId)
       .order('exercise_name');
-
     setPersonalRecords(prsData || []);
+
+    // Erstgespräch für Claude-Briefing
+    const { data: convData } = await supabase
+      .from('onboarding_conversations')
+      .select('motivation, fitness_goal_text, stress_level, sleep_quality, current_training, personality_type, goal_importance, success_criteria')
+      .eq('client_id', clientId)
+      .order('conversation_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setConversation(convData || null);
+
+    // Kundenname für Briefing
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('full_name')
+      .eq('id', clientId)
+      .single();
+    setClientName(clientData?.full_name || '');
+
     setLoading(false);
   }, [clientId]);
 
@@ -223,8 +252,17 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
   const totalSets = completedLogs.reduce((sum, l) => sum + (l.set_logs?.length || 0), 0);
   const lastWorkout = completedLogs[0];
 
+  const tabs: { id: ActiveTab; label: string }[] = [
+    { id: 'history', label: 'Verlauf' },
+    { id: 'chart', label: 'Progression 📈' },
+    { id: 'prs', label: `PRs${personalRecords.length > 0 ? ` 🏆` : ''}` },
+    { id: 'briefing', label: 'KI-Briefing ✨' },
+  ];
+
   return (
     <div className="space-y-4">
+
+      {/* Zusammenfassung */}
       <div className="grid grid-cols-4 gap-2">
         {[
           { value: completedLogs.length, label: 'Workouts' },
@@ -241,6 +279,7 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
         ))}
       </div>
 
+      {/* Letztes Workout */}
       {lastWorkout && (
         <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-sm flex items-center gap-2">
           <Dumbbell className="w-4 h-4 text-primary flex-shrink-0" />
@@ -254,21 +293,25 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
         </div>
       )}
 
-      <div className="flex gap-2">
-        {(['history', 'prs'] as const).map(v => (
+      {/* Tabs */}
+      <div className="flex gap-1 bg-muted/50 rounded-lg p-1 overflow-x-auto">
+        {tabs.map(tab => (
           <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              view === v ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap px-2 ${
+              activeTab === tab.id
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {v === 'history' ? 'Verlauf' : 'PR-Board 🏆'}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {view === 'history' && (
+      {/* ── VERLAUF ── */}
+      {activeTab === 'history' && (
         workoutLogs.length === 0 ? (
           <div className="text-center py-10 space-y-2">
             <Dumbbell className="w-8 h-8 text-muted-foreground/30 mx-auto" />
@@ -282,7 +325,19 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
         )
       )}
 
-      {view === 'prs' && (
+      {/* ── PROGRESSION CHART ── */}
+      {activeTab === 'chart' && (
+        completedLogs.length === 0 ? (
+          <div className="text-center py-10 space-y-2">
+            <p className="text-sm text-muted-foreground">Noch keine abgeschlossenen Workouts.</p>
+          </div>
+        ) : (
+          <VolumeChart workoutLogs={completedLogs} />
+        )
+      )}
+
+      {/* ── PR-BOARD ── */}
+      {activeTab === 'prs' && (
         personalRecords.length === 0 ? (
           <div className="text-center py-10 space-y-2">
             <Trophy className="w-8 h-8 text-muted-foreground/30 mx-auto" />
@@ -308,6 +363,16 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
             ))}
           </div>
         )
+      )}
+
+      {/* ── KI-BRIEFING ── */}
+      {activeTab === 'briefing' && (
+        <ClaudeBriefing
+          clientName={clientName}
+          workoutLogs={workoutLogs}
+          personalRecords={personalRecords}
+          conversation={conversation}
+        />
       )}
     </div>
   );
