@@ -295,16 +295,15 @@ const BookingPage: React.FC = () => {
       .eq('is_read', false)
       .order('created_at', { ascending: false });
     setClientNotifications(clientNotifs || []);
-    setLoading(false);
-  };
-  
-  const weekStart = formatDate(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const weekStart = formatDate(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
     if (!sessionStorage.getItem(`checkin_skipped_${weekStart}`)) {
       const { data: existingCheckin } = await supabase
         .from('weekly_checkins').select('id')
         .eq('client_id', clientId).eq('week_start', weekStart).maybeSingle();
       if (!existingCheckin) setShowCheckin(true);
     }
+    setLoading(false);
+  };
   
   useEffect(() => {
     if (clientId) loadData();
@@ -457,6 +456,13 @@ const BookingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col" style={{ fontFamily: "'Montserrat', sans-serif" }}>
       <meta name="robots" content="noindex" />
+          {showCheckin && clientId && (
+      <WeeklyCheckin
+        clientId={clientId}
+        clientName={clientName}
+        onDone={() => setShowCheckin(false)}
+      />
+    )}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-8 w-auto" />
