@@ -97,6 +97,7 @@ const DashboardPage: React.FC = () => {
   const [yearStats, setYearStats] = useState<YearStats | null>(null);
   const [workoutFeed, setWorkoutFeed] = useState<any[]>([]);
   const [stagnationAlerts, setStagnationAlerts] = useState<{ clientId: string; clientName: string; exercise: string }[]>([]);
+  const [inactiveClients, setInactiveClients] = useState<{ clientId: string; clientName: string; daysSince: number }[]>([]);
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
   const getSessionsForDay = (day: Date) =>
@@ -353,6 +354,33 @@ const DashboardPage: React.FC = () => {
       }
     }
     setStagnationAlerts(alerts.slice(0, 5));
+        // Inaktivitäts-Nudge: Kunden ohne Workout seit 5+ Tagen
+    const { data: recentWorkouts } = await supabase
+      .from('workout_logs')
+      .select('client_id, started_at, clients ( full_name )')
+      .not('completed_at', 'is', null)
+      .order('started_at', { ascending: false });
+    
+    const latestByClient: Record<string, { name: string; date: Date }> = {};
+    for (const w of (recentWorkouts || [])) {
+      const cid = w.client_id;
+      const name = Array.isArray(w.clients) ? w.clients[0]?.full_name : (w.clients as any)?.full_name || '';
+      if (!latestByClient[cid]) {
+        latestByClient[cid] = { name, date: new Date(w.started_at) };
+      }
+    }
+    
+    const inactive = Object.entries(latestByClient)
+      .map(([clientId, { name, date }]) => ({
+        clientId,
+        clientName: name,
+        daysSince: differenceInDays(new Date(), date),
+      }))
+      .filter(c => c.daysSince >= 5)
+      .sort((a, b) => b.daysSince - a.daysSince)
+      .slice(0, 3);
+    
+    setInactiveClients(inactive);
 
     setLoading(false);   // ← diese Zeile kommt zuletzt
   };                     // ← dann erst die schließende Klammer
@@ -598,6 +626,34 @@ const DashboardPage: React.FC = () => {
                 </Link>
               );
             })}
+          </div>
+        </section>
+      )}
+      
+            {inactiveClients.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Clock className="w-4 h-4 text-muted-foreground" /> Lange nicht trainiert
+          </h2>
+          <div className="space-y-2">
+            {inactiveClients.map((c, i) => (
+              <Link key={i} to={`/clients/${c.clientId}`}>
+                <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-muted shrink-0">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{c.clientName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Letztes Workout vor <strong>{c.daysSince} Tagen</strong>
+                      </p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
           </div>
         </section>
       )}
