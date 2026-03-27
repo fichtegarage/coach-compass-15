@@ -297,6 +297,7 @@ const BookingPage: React.FC = () => {
     setClientNotifications(clientNotifs || []);
     setLoading(false);
   };
+  
   const weekStart = formatDate(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
     if (!sessionStorage.getItem(`checkin_skipped_${weekStart}`)) {
       const { data: existingCheckin } = await supabase
@@ -304,6 +305,7 @@ const BookingPage: React.FC = () => {
         .eq('client_id', clientId).eq('week_start', weekStart).maybeSingle();
       if (!existingCheckin) setShowCheckin(true);
     }
+  
   useEffect(() => {
     if (clientId) loadData();
   }, [clientId, weekStart]);
