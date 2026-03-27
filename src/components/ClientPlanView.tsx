@@ -64,6 +64,7 @@ interface WorkoutLog {
   completed_at: string | null;
   plan_workouts: { day_label: string } | null;
   set_logs: SetLog[];
+  feedback?: { message: string; created_at: string } | null;
 }
 
 interface PersonalRecord {
@@ -203,6 +204,7 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold text-slate-900 truncate">{workoutName}</p>
               {prCount > 0 && <span className="text-xs font-bold text-amber-500">🏆 {prCount} PR{prCount > 1 ? 's' : ''}</span>}
+              {log.feedback && <span className="text-xs text-emerald-600 font-medium">💬 Feedback</span>}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
               {format(new Date(log.started_at), "EEE, d. MMM · HH:mm", { locale: de })} Uhr
@@ -234,6 +236,13 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
               </div>
             </div>
           ))}
+          {/* Coach-Feedback anzeigen */}
+          {log.feedback && (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2.5">
+              <p className="text-xs font-semibold text-emerald-700 mb-1">💬 Feedback von Jakob</p>
+              <p className="text-sm text-slate-800">{log.feedback.message}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -290,22 +299,27 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       // Workout-Logs mit nested set_logs
       const { data: logsData } = await supabase
         .from('workout_logs')
-        .select(`id, started_at, completed_at, plan_workouts ( day_label )`)
+        .select(`
+          id, started_at, completed_at,
+          plan_workouts ( day_label ),
+          set_logs ( id, exercise_name, set_number, reps_done, weight_kg, is_pr, logged_at )
+        `)
         .eq('client_id', clientId)
         .order('started_at', { ascending: false })
         .limit(30);
-      
-      const logIds2 = (logsData || []).map(l => l.id);
-      const { data: setsData2 } = logIds2.length > 0
-        ? await supabase.from('set_logs').select('*').in('workout_log_id', logIds2)
+
+      const logIds = (logsData || []).map(l => l.id);
+      const { data: feedbackData } = logIds.length > 0
+        ? await supabase.from('workout_feedback').select('workout_log_id, message, created_at').in('workout_log_id', logIds)
         : { data: [] };
 
       const normalisedLogs: WorkoutLog[] = (logsData || []).map(log => ({
         ...log,
         plan_workouts: Array.isArray(log.plan_workouts) ? (log.plan_workouts[0] ?? null) : log.plan_workouts,
-        set_logs: ((setsData2 || []) as SetLog[])
-          .filter(s => s.workout_log_id === log.id)
-          .sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()),
+        set_logs: ((log.set_logs as SetLog[]) || []).sort(
+          (a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+        ),
+        feedback: (feedbackData || []).find(f => f.workout_log_id === log.id) ?? null,
       }));
       setWorkoutLogs(normalisedLogs);
 
