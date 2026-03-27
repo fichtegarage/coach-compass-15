@@ -176,6 +176,7 @@ const BookingPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [activeView, setActiveView] = useState<'calendar' | 'bookings' | 'plan'>('calendar');
   const [summaryEnabled, setSummaryEnabled] = useState(true);
+  const [showCheckin, setShowCheckin] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [clientNotifications, setClientNotifications] = useState<any[]>([]);
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => {
