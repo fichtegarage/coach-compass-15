@@ -253,6 +253,7 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
 
 const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
   const [plan, setPlan] = useState<TrainingPlan | null>(null);
+  const [nextWorkout, setNextWorkout] = useState<PlanWorkout | null>(null);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [prs, setPrs] = useState<PersonalRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -265,10 +266,10 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
     const load = async () => {
       setLoading(true);
 
-      // Plan
+      // Plan inkl. next_plan_workout_id
       const { data: planData } = await supabase
         .from('training_plans')
-        .select('id, name, goal, weeks_total, sessions_per_week, progression_notes')
+        .select('id, name, goal, weeks_total, sessions_per_week, progression_notes, next_plan_workout_id')
         .eq('client_id', clientId)
         .eq('is_active', true)
         .maybeSingle();
@@ -293,6 +294,15 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
           }));
           setPlan({ ...planData, workouts: workoutsWithEx });
           setSelectedWeek(workoutsWithEx[0]?.week_number ?? null);
+
+          // Nächstes Workout ermitteln
+          if (planData.next_plan_workout_id) {
+            const found = workoutsWithEx.find(w => w.id === planData.next_plan_workout_id);
+            setNextWorkout(found ?? workoutsWithEx[0] ?? null);
+          } else {
+            // Noch kein Zeiger gesetzt → erstes Workout
+            setNextWorkout(workoutsWithEx[0] ?? null);
+          }
         }
       }
 
@@ -363,6 +373,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
         <WorkoutLogger
           workout={activeWorkout}
           clientId={clientId}
+          planId={plan?.id}
           onClose={() => setActiveWorkout(null)}
           onComplete={(summary) => { setActiveWorkout(null); setCompletedSummary(summary); }}
         />
@@ -406,6 +417,50 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
             </div>
           ) : (
             <div className="space-y-4">
+
+              {/* ── Nächstes Training Karte ── */}
+              {nextWorkout && (
+                <div className="rounded-2xl bg-emerald-500 p-4 space-y-3 shadow-sm">
+                  <div>
+                    <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wide">Nächstes Training</p>
+                    <p className="text-white text-xl font-bold mt-0.5">{nextWorkout.day_label}</p>
+                    <p className="text-emerald-100 text-sm">
+                      {nextWorkout.week_label && `${nextWorkout.week_label} · `}
+                      {nextWorkout.exercises?.length || 0} Übungen
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setActiveWorkout(nextWorkout)}
+                      className="flex-1 bg-white text-emerald-600 font-bold py-3 rounded-xl text-sm active:scale-95 transition-all"
+                    >
+                      ▶ Jetzt starten
+                    </button>
+                    {/* Workout wechseln */}
+                    {plan.workouts && plan.workouts.length > 1 && (
+                      <select
+                        value={nextWorkout.id}
+                        onChange={async e => {
+                          const selected = plan.workouts!.find(w => w.id === e.target.value);
+                          if (!selected) return;
+                          setNextWorkout(selected);
+                          await supabase
+                            .from('training_plans')
+                            .update({ next_plan_workout_id: selected.id })
+                            .eq('id', plan.id);
+                        }}
+                        className="bg-emerald-600 text-white text-xs rounded-xl px-3 border border-emerald-400 focus:outline-none"
+                      >
+                        {plan.workouts.map(w => (
+                          <option key={w.id} value={w.id}>
+                            {w.week_label ? w.week_label.split(':')[0] : `W${w.week_number}`} · {w.day_label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Plan-Header */}
               <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
                 <p className="text-base font-bold text-slate-900">{plan.name}</p>
