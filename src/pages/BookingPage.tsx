@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut } from 'lucide-react';
 import { buildEmail } from '@/lib/emailTemplate';
 import ClientPlanView from '@/components/ClientPlanView';
+import WeeklyCheckin from '@/components/WeeklyCheckin';
+import { startOfWeek, format as formatDate } from 'date-fns';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
