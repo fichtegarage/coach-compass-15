@@ -21,6 +21,7 @@ interface TrainingPlan {
   sessions_per_week: number | null; progression_notes: string | null;
   coaching_notes: string | null; nutrition_notes: string | null;
   is_active: boolean; start_date: string | null; created_at: string;
+  next_plan_workout_id?: string | null;
   workouts?: PlanWorkout[];
 }
 
@@ -386,6 +387,34 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
               {currentWeekWorkouts[0]?.week_label && <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{currentWeekWorkouts[0].week_label}</p>}
               {currentWeekWorkouts.map(workout => <WorkoutCard key={workout.id} workout={workout} onExerciseUpdated={handleExerciseUpdated} />)}
             </div>
+          )}
+
+          {/* Nächstes Training – Coach-Kontrolle */}
+          {activePlan.workouts && activePlan.workouts.length > 0 && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="p-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Nächstes Training des Kunden</p>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={activePlan.next_plan_workout_id || activePlan.workouts[0]?.id || ''}
+                    onChange={async e => {
+                      const newId = e.target.value;
+                      await supabase.from('training_plans').update({ next_plan_workout_id: newId }).eq('id', activePlan.id);
+                      setActivePlan(prev => prev ? { ...prev, next_plan_workout_id: newId } : prev);
+                      toast.success('Nächstes Training aktualisiert.');
+                    }}
+                    className="flex-1 text-sm border border-border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {activePlan.workouts.map(w => (
+                      <option key={w.id} value={w.id}>
+                        {w.week_label ? w.week_label.split(':')[0] : `Woche ${w.week_number}`} · {w.day_label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1.5">Der Zeiger rückt nach jedem abgeschlossenen Workout automatisch vor.</p>
+              </CardContent>
+            </Card>
           )}
 
           {(activePlan.progression_notes || activePlan.coaching_notes) && (
