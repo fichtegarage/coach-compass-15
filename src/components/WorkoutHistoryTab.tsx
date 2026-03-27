@@ -1,17 +1,24 @@
 /**
  * WorkoutHistoryTab.tsx
  *
- * Coach-seitiger Tab: Workout-Verlauf, PR-Board, Volumen-Chart, KI-Briefing.
- * Phase 2 + Phase 4 (Analytics + Claude).
+ * Coach-seitiger Tab: Workout-Verlauf, PR-Board, Volumen-Chart,
+ * Adherence, KI-Briefing, Coach-Feedback (Phase 5A).
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { format, formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Loader2, Trophy, ChevronDown, ChevronUp, Dumbbell, Star } from 'lucide-react';
+import {
+  Loader2, Trophy, ChevronDown, ChevronUp,
+  Dumbbell, Star, MessageSquare, Send, Check,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import VolumeChart from '@/components/VolumeChart';
 import ClaudeBriefing from '@/components/ClaudeBriefing';
 import AdherenceWidget from '@/components/AdherenceWidget';
@@ -28,6 +35,12 @@ interface SetLog {
   logged_at: string;
 }
 
+interface WorkoutFeedback {
+  id: string;
+  message: string;
+  created_at: string;
+}
+
 interface WorkoutLog {
   id: string;
   started_at: string;
@@ -37,6 +50,7 @@ interface WorkoutLog {
   energy_level: number | null;
   plan_workouts: { day_label: string } | null;
   set_logs: SetLog[];
+  feedback?: WorkoutFeedback | null;
 }
 
 interface PersonalRecord {
@@ -50,12 +64,15 @@ interface WorkoutHistoryTabProps {
   clientId: string;
 }
 
-type ActiveTab = 'history' | 'chart' | 'prs' | 'briefing' | 'adherence';
+type ActiveTab = 'history' | 'chart' | 'prs' | 'adherence' | 'briefing';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function calcVolume(sets: SetLog[]): number {
-  return sets.reduce((sum, s) => sum + (Number(s.weight_kg) || 0) * (Number(s.reps_done) || 0), 0);
+  return sets.reduce(
+    (sum, s) => sum + (Number(s.weight_kg) || 0) * (Number(s.reps_done) || 0),
+    0
+  );
 }
 
 function calcDuration(log: WorkoutLog): string {
@@ -82,7 +99,10 @@ const RatingStars: React.FC<{ value: number | null; label: string }> = ({ value,
       <span className="text-xs text-muted-foreground">{label}:</span>
       <div className="flex gap-0.5">
         {[1, 2, 3, 4, 5].map(i => (
-          <Star key={i} className={`w-3 h-3 ${i <= value ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30'}`} />
+          <Star
+            key={i}
+            className={`w-3 h-3 ${i <= value ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30'}`}
+          />
         ))}
       </div>
     </div>
@@ -91,8 +111,16 @@ const RatingStars: React.FC<{ value: number | null; label: string }> = ({ value,
 
 // ── Workout Log Card ──────────────────────────────────────────────────────────
 
-const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
+const WorkoutLogCard: React.FC<{
+  log: WorkoutLog;
+  trainerId: string;
+  onFeedbackSaved: (logId: string, feedback: WorkoutFeedback) => void;
+}> = ({ log, trainerId, onFeedbackSaved }) => {
   const [open, setOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [savingFeedback, setSavingFeedback] = useState(false);
+  const [showFeedbackInput, setShowFeedbackInput] = useState(false);
+
   const sets = log.set_logs || [];
   const volume = calcVolume(sets);
   const duration = calcDuration(log);
@@ -100,9 +128,40 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
   const exerciseGroups = groupSetsByExercise(sets);
   const workoutName = log.plan_workouts?.day_label || 'Freies Training';
 
+  const handleSaveFeedback = async () => {
+    if (!feedbackText.trim()) return;
+    setSavingFeedback(true);
+
+    // Bestehendes Feedback ersetzen falls vorhanden
+    if (log.feedback?.id) {
+      await supabase.from('workout_feedback').delete().eq('id', log.feedback.id);
+    }
+
+    const { data, error } = await supabase
+      .from('workout_feedback')
+      .insert({
+        workout_log_id: log.id,
+        trainer_id: trainerId,
+        message: feedbackText.trim(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast.error('Feedback konnte nicht gespeichert werden.');
+    } else if (data) {
+      onFeedbackSaved(log.id, data);
+      setFeedbackText('');
+      setShowFeedbackInput(false);
+      toast.success('Feedback gespeichert ✓');
+    }
+    setSavingFeedback(false);
+  };
+
   return (
     <Card className={prCount > 0 ? 'border-amber-200 bg-amber-50/30' : ''}>
       <CardContent className="p-0">
+        {/* Header */}
         <button onClick={() => setOpen(o => !o)} className="w-full p-4 text-left">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -111,6 +170,11 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
                 {prCount > 0 && (
                   <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-xs gap-1">
                     <Trophy className="w-3 h-3" /> {prCount} PR{prCount > 1 ? 's' : ''}
+                  </Badge>
+                )}
+                {log.feedback && (
+                  <Badge variant="outline" className="text-primary border-primary/30 text-xs gap-1">
+                    <MessageSquare className="w-3 h-3" /> Feedback
                   </Badge>
                 )}
                 {!log.completed_at && (
@@ -136,7 +200,9 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
                 <p className="text-xs font-medium">{duration}</p>
                 <p className="text-[10px] text-muted-foreground">Dauer</p>
               </div>
-              {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+              {open
+                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
             </div>
           </div>
           {(log.rating || log.energy_level) && (
@@ -147,8 +213,10 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
           )}
         </button>
 
+        {/* Details */}
         {open && (
           <div className="border-t border-border px-4 pb-4 pt-3 space-y-4">
+            {/* Sätze */}
             {sets.length === 0 ? (
               <p className="text-sm text-muted-foreground">Keine Sätze aufgezeichnet.</p>
             ) : (
@@ -160,7 +228,9 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
                       <div key={set.id} className="flex items-center gap-3 text-sm">
                         <span className="text-muted-foreground text-xs w-14 flex-shrink-0">Satz {set.set_number}</span>
                         <span className="font-medium tabular-nums">{Number(set.weight_kg)}kg × {set.reps_done}</span>
-                        <span className="text-xs text-muted-foreground">= {Math.round(Number(set.weight_kg) * set.reps_done)}kg</span>
+                        <span className="text-xs text-muted-foreground">
+                          = {Math.round(Number(set.weight_kg) * set.reps_done)}kg
+                        </span>
                         {set.is_pr && <span className="text-xs text-amber-500 font-bold ml-auto">🏆 PR</span>}
                       </div>
                     ))}
@@ -168,8 +238,78 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
                 </div>
               ))
             )}
+
             {log.notes && (
               <p className="text-xs text-muted-foreground italic border-t border-border pt-2">{log.notes}</p>
+            )}
+
+            {/* ── Coach-Feedback ── */}
+            {log.completed_at && (
+              <div className="border-t border-border pt-3 space-y-2">
+                {log.feedback ? (
+                  <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-semibold text-primary flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" /> Dein Feedback
+                      </p>
+                      <button
+                        onClick={() => {
+                          setFeedbackText(log.feedback!.message);
+                          setShowFeedbackInput(true);
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Bearbeiten
+                      </button>
+                    </div>
+                    <p className="text-sm text-foreground">{log.feedback.message}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {formatDistanceToNow(new Date(log.feedback.created_at), { locale: de, addSuffix: true })}
+                    </p>
+                  </div>
+                ) : !showFeedbackInput ? (
+                  <button
+                    onClick={() => setShowFeedbackInput(true)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Feedback hinterlassen
+                  </button>
+                ) : null}
+
+                {showFeedbackInput && (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={feedbackText}
+                      onChange={e => setFeedbackText(e.target.value)}
+                      placeholder="Super Progression beim Bankdrücken! Nächste Woche 2.5kg mehr versuchen..."
+                      rows={3}
+                      className="text-sm"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleSaveFeedback}
+                        disabled={savingFeedback || !feedbackText.trim()}
+                        className="gap-1.5"
+                      >
+                        {savingFeedback
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Send className="w-3.5 h-3.5" />}
+                        Senden
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => { setShowFeedbackInput(false); setFeedbackText(''); }}
+                      >
+                        Abbrechen
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -181,6 +321,7 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
+  const { user } = useAuth();
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [conversation, setConversation] = useState<any>(null);
@@ -192,7 +333,7 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
   const load = useCallback(async () => {
     setLoading(true);
 
-    // Workout-Logs (zwei Queries wegen nested select Problem)
+    // Workout-Logs
     const { data: logsData } = await supabase
       .from('workout_logs')
       .select('id, started_at, completed_at, notes, rating, energy_level, plan_workout_id, plan_workouts ( day_label )')
@@ -201,17 +342,28 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
       .limit(50);
 
     const logIds = (logsData || []).map(l => l.id);
-    const { data: setsData } = logIds.length > 0
-      ? await supabase.from('set_logs').select('*').in('workout_log_id', logIds)
-      : { data: [] };
+
+    // Set-Logs + Feedback parallel laden
+    const [setsRes, feedbackRes] = await Promise.all([
+      logIds.length > 0
+        ? supabase.from('set_logs').select('*').in('workout_log_id', logIds)
+        : { data: [] },
+      logIds.length > 0
+        ? supabase.from('workout_feedback').select('*').in('workout_log_id', logIds)
+        : { data: [] },
+    ]);
 
     const normalised: WorkoutLog[] = (logsData || []).map(log => ({
       ...log,
-      plan_workouts: Array.isArray(log.plan_workouts) ? (log.plan_workouts[0] ?? null) : log.plan_workouts,
-      set_logs: ((setsData || []) as SetLog[])
+      plan_workouts: Array.isArray(log.plan_workouts)
+        ? (log.plan_workouts[0] ?? null)
+        : log.plan_workouts,
+      set_logs: ((setsRes.data || []) as SetLog[])
         .filter(s => s.workout_log_id === log.id)
         .sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()),
+      feedback: (feedbackRes.data || []).find(f => f.workout_log_id === log.id) ?? null,
     }));
+
     setWorkoutLogs(normalised);
 
     // PRs
@@ -222,7 +374,7 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
       .order('exercise_name');
     setPersonalRecords(prsData || []);
 
-    // Erstgespräch für Claude-Briefing
+    // Erstgespräch
     const { data: convData } = await supabase
       .from('onboarding_conversations')
       .select('motivation, fitness_goal_text, stress_level, sleep_quality, current_training, personality_type, goal_importance, success_criteria')
@@ -232,7 +384,7 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
       .maybeSingle();
     setConversation(convData || null);
 
-    // Kundenname für Briefing
+    // Kundenname
     const { data: clientData } = await supabase
       .from('clients')
       .select('full_name')
@@ -254,8 +406,19 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
 
   useEffect(() => { load(); }, [load]);
 
+  // Feedback lokal updaten ohne reload
+  const handleFeedbackSaved = (logId: string, feedback: WorkoutFeedback) => {
+    setWorkoutLogs(prev => prev.map(log =>
+      log.id === logId ? { ...log, feedback } : log
+    ));
+  };
+
   if (loading) {
-    return <div className="flex items-center justify-center h-40"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
+    return (
+      <div className="flex items-center justify-center h-40">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   const completedLogs = workoutLogs.filter(l => l.completed_at);
@@ -266,7 +429,7 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
   const tabs: { id: ActiveTab; label: string }[] = [
     { id: 'history', label: 'Verlauf' },
     { id: 'chart', label: 'Progression 📈' },
-    { id: 'prs', label: `PRs${personalRecords.length > 0 ? ` 🏆` : ''}` },
+    { id: 'prs', label: `PRs${personalRecords.length > 0 ? ' 🏆' : ''}` },
     { id: 'adherence', label: 'Adherence' },
     { id: 'briefing', label: 'KI-Briefing ✨' },
   ];
@@ -279,7 +442,12 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
         {[
           { value: completedLogs.length, label: 'Workouts' },
           { value: totalSets, label: 'Sätze' },
-          { value: totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(0)}t` : `${Math.round(totalVolume)}kg`, label: 'Volumen' },
+          {
+            value: totalVolume >= 1000
+              ? `${(totalVolume / 1000).toFixed(0)}t`
+              : `${Math.round(totalVolume)}kg`,
+            label: 'Volumen',
+          },
           { value: `${personalRecords.length} 🏆`, label: 'PRs' },
         ].map(({ value, label }) => (
           <Card key={label}>
@@ -328,19 +496,25 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
           <div className="text-center py-10 space-y-2">
             <Dumbbell className="w-8 h-8 text-muted-foreground/30 mx-auto" />
             <p className="text-sm text-muted-foreground">Noch keine Workouts geloggt.</p>
-            <p className="text-xs text-muted-foreground">Sobald der Kunde über „Mein Plan" trainiert, erscheinen die Logs hier.</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {workoutLogs.map(log => <WorkoutLogCard key={log.id} log={log} />)}
+            {workoutLogs.map(log => (
+              <WorkoutLogCard
+                key={log.id}
+                log={log}
+                trainerId={user?.id || ''}
+                onFeedbackSaved={handleFeedbackSaved}
+              />
+            ))}
           </div>
         )
       )}
 
-      {/* ── PROGRESSION CHART ── */}
+      {/* ── PROGRESSION ── */}
       {activeTab === 'chart' && (
         completedLogs.length === 0 ? (
-          <div className="text-center py-10 space-y-2">
+          <div className="text-center py-10">
             <p className="text-sm text-muted-foreground">Noch keine abgeschlossenen Workouts.</p>
           </div>
         ) : (
@@ -362,7 +536,9 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
                 <CardContent className="p-3 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold">{pr.exercise_name}</p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(pr.achieved_at), "d. MMM yyyy", { locale: de })}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(pr.achieved_at), "d. MMM yyyy", { locale: de })}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-base font-display font-bold text-primary tabular-nums">
