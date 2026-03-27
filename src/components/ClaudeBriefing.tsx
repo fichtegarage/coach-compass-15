@@ -49,6 +49,7 @@ interface ClaudeBriefingProps {
   workoutLogs: WorkoutLog[];
   personalRecords: PersonalRecord[];
   conversation: ConversationData | null;
+  recentCheckins?: { week_start: string; energy_level: number; sleep_quality: number; mood: number; notes: string | null }[];
 }
 
 // ── Prompt aufbauen ───────────────────────────────────────────────────────────
@@ -57,7 +58,8 @@ function buildPrompt(
   clientName: string,
   logs: WorkoutLog[],
   prs: PersonalRecord[],
-  conv: ConversationData | null
+  conv: ConversationData | null,
+  checkins?: ClaudeBriefingProps['recentCheckins']
 ): string {
   const completedLogs = logs.filter(l => l.completed_at).slice(0, 8);
   const totalSets = completedLogs.reduce((s, l) => s + (l.set_logs?.length || 0), 0);
@@ -105,6 +107,9 @@ ${workoutSummary || '— Noch keine Workouts'}
 ### Personal Records
 ${prSummary || '— Noch keine PRs'}
 
+${checkins && checkins.length > 0 ? `### Wöchentliche Check-ins (letzte ${checkins.length} Wochen)
+${checkins.map(c => `- KW ab ${c.week_start}: Energie ${c.energy_level}/5, Schlaf ${c.sleep_quality}/5, Stimmung ${c.mood}/5${c.notes ? ` · Notiz: „${c.notes}"` : ''}`).join('\n')}` : ''}
+
 ---
 
 Antworte auf Deutsch. Strukturiere deine Antwort in genau diese Abschnitte:
@@ -132,6 +137,7 @@ const ClaudeBriefing: React.FC<ClaudeBriefingProps> = ({
   workoutLogs,
   personalRecords,
   conversation,
+  recentCheckins,
 }) => {
   const [briefing, setBriefing] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -143,7 +149,7 @@ const ClaudeBriefing: React.FC<ClaudeBriefingProps> = ({
     setError(null);
     setBriefing(null);
 
-    const prompt = buildPrompt(clientName, workoutLogs, personalRecords, conversation);
+    const prompt = buildPrompt(clientName, workoutLogs, personalRecords, conversation, recentCheckins);
 
     try {
       const response = await fetch('/api/claude-proxy', {
