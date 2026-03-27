@@ -94,6 +94,20 @@ const LegalFooter: React.FC = () => {
       </footer>
       {modal === 'impressum' && <LegalModal title="Impressum" content={impressumText} onClose={() => setModal(null)} />}
       {modal === 'datenschutz' && <LegalModal title="Datenschutzerklärung" content={datenschutzText} onClose={() => setModal(null)} />}
+      <footer className="py-2 flex justify-center">
+  <button
+    onClick={async () => {
+      if (!clientId) return;
+      const newVal = !summaryEnabled;
+      setSummaryEnabled(newVal);
+      await supabase.from('clients').update({ email_weekly_summary: newVal }).eq('id', clientId);
+      toast.success(newVal ? 'Wöchentliche Zusammenfassung aktiviert.' : 'Wöchentliche Zusammenfassung deaktiviert.');
+    }}
+    className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+  >
+    {summaryEnabled ? '🔔 Wöchentliche Mail aktiv – abmelden' : '🔕 Wöchentliche Mail deaktiviert – wieder anmelden'}
+  </button>
+</footer>
     </>
   );
 };
@@ -179,6 +193,7 @@ const BookingPage: React.FC = () => {
   const [bookingMessage, setBookingMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [activeView, setActiveView] = useState<'calendar' | 'bookings' | 'plan'>('calendar');
+  const [summaryEnabled, setSummaryEnabled] = useState(true);
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [clientNotifications, setClientNotifications] = useState<any[]>([]);
@@ -279,6 +294,9 @@ const BookingPage: React.FC = () => {
           });
         }
       }
+    }
+        if (typeof clientData?.email_weekly_summary === 'boolean') {
+      setSummaryEnabled(clientData.email_weekly_summary);
     }
 
     const { data: sessionsData } = await supabase
