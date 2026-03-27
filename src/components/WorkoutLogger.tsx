@@ -26,6 +26,7 @@ interface PlanExercise {
   reps_target: string;
   rest_seconds: number | null;
   notes: string | null;
+  alternative_name: string | null;
 }
 
 interface PlanWorkout {
@@ -486,6 +487,27 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, sessio
                     <p className="text-xs text-slate-400 mt-1">
                       Letztes Mal: {currentLog.previousBest.weight}kg × {currentLog.previousBest.reps}
                     </p>
+                  )}
+                  {/* Ersatzübung */}
+                  {currentLog.exercise.alternative_name && !currentLog.sets.some(s => s.logged) && (
+                    <button
+                      onClick={() => {
+                        setExerciseLogs(prev => {
+                          const next = [...prev];
+                          const log = { ...next[currentExerciseIndex] };
+                          log.exercise = {
+                            ...log.exercise,
+                            name: log.exercise.alternative_name!,
+                            alternative_name: log.exercise.name,
+                          };
+                          next[currentExerciseIndex] = log;
+                          return next;
+                        });
+                      }}
+                      className="mt-1.5 flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                    >
+                      ⇄ Ersetzen durch: {currentLog.exercise.alternative_name}
+                    </button>
                   )}
                 </div>
                 <div className="flex gap-1">
