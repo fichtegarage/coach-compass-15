@@ -82,7 +82,21 @@ const LegalModal: React.FC<{ title: string; content: string; onClose: () => void
     </div>
   </div>
 );
-
+{clientId && (
+  <div className="py-2 flex justify-center">
+    <button
+      onClick={async () => {
+        const newVal = !summaryEnabled;
+        setSummaryEnabled(newVal);
+        await supabase.from('clients').update({ email_weekly_summary: newVal }).eq('id', clientId);
+        toast.success(newVal ? 'Wöchentliche Zusammenfassung aktiviert.' : 'Wöchentliche Zusammenfassung deaktiviert.');
+      }}
+      className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+    >
+      {summaryEnabled ? '🔔 Wöchentliche Mail aktiv – abmelden' : '🔕 Wöchentliche Mail deaktiviert – wieder anmelden'}
+    </button>
+  </div>
+)}
 // ── Legal Footer ──────────────────────────────────────────────────────────────
 const LegalFooter: React.FC = () => {
   const [modal, setModal] = useState<'impressum' | 'datenschutz' | null>(null);
@@ -94,20 +108,6 @@ const LegalFooter: React.FC = () => {
       </footer>
       {modal === 'impressum' && <LegalModal title="Impressum" content={impressumText} onClose={() => setModal(null)} />}
       {modal === 'datenschutz' && <LegalModal title="Datenschutzerklärung" content={datenschutzText} onClose={() => setModal(null)} />}
-      <footer className="py-2 flex justify-center">
-  <button
-    onClick={async () => {
-      if (!clientId) return;
-      const newVal = !summaryEnabled;
-      setSummaryEnabled(newVal);
-      await supabase.from('clients').update({ email_weekly_summary: newVal }).eq('id', clientId);
-      toast.success(newVal ? 'Wöchentliche Zusammenfassung aktiviert.' : 'Wöchentliche Zusammenfassung deaktiviert.');
-    }}
-    className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-  >
-    {summaryEnabled ? '🔔 Wöchentliche Mail aktiv – abmelden' : '🔕 Wöchentliche Mail deaktiviert – wieder anmelden'}
-  </button>
-</footer>
     </>
   );
 };
