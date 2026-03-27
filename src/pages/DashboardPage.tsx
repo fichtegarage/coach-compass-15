@@ -98,6 +98,7 @@ const DashboardPage: React.FC = () => {
   const [workoutFeed, setWorkoutFeed] = useState<any[]>([]);
   const [stagnationAlerts, setStagnationAlerts] = useState<{ clientId: string; clientName: string; exercise: string }[]>([]);
   const [inactiveClients, setInactiveClients] = useState<{ clientId: string; clientName: string; daysSince: number }[]>([]);
+  const [planEndAlerts, setPlanEndAlerts] = useState<{ clientId: string; clientName: string; planName: string }[]>([]);
 
   const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
   const getSessionsForDay = (day: Date) =>
@@ -381,6 +382,19 @@ const DashboardPage: React.FC = () => {
       .slice(0, 3);
     
     setInactiveClients(inactive);
+    // Plan-Ende-Alerts laden
+    const { data: alertsData } = await supabase
+      .from('plan_end_alerts')
+      .select('client_id, plan_id, clients ( full_name ), training_plans ( name )')
+      .is('dismissed_at', null)
+      .order('alerted_at', { ascending: false })
+      .limit(5);
+    
+    setPlanEndAlerts((alertsData || []).map((a: any) => ({
+      clientId: a.client_id,
+      clientName: Array.isArray(a.clients) ? a.clients[0]?.full_name : a.clients?.full_name || 'Unbekannt',
+      planName: Array.isArray(a.training_plans) ? a.training_plans[0]?.name : a.training_plans?.name || '',
+    })));
 
     setLoading(false);   // ← diese Zeile kommt zuletzt
   };                     // ← dann erst die schließende Klammer
@@ -657,6 +671,34 @@ const DashboardPage: React.FC = () => {
           </div>
         </section>
       )}
+
+      {planEndAlerts.length > 0 && (
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-orange-500" /> Plan läuft aus
+        </h2>
+        <div className="space-y-2">
+          {planEndAlerts.map((alert, i) => (
+            <Link key={i} to={`/clients/${alert.clientId}`}>
+              <Card className="hover:bg-accent/50 transition-colors cursor-pointer border-orange-200">
+                <CardContent className="p-3 flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-orange-500/10 shrink-0">
+                    <AlertCircle className="w-4 h-4 text-orange-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{alert.clientName}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      Letzte Woche: <strong>{alert.planName}</strong> · Neuen Plan vorbereiten
+                    </p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </section>
+    )}
 
       {/* Reminders */}
       {reminders.length > 0 && (
