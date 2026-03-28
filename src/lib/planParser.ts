@@ -10,11 +10,15 @@
  *   ## Ziel: [Text]
  *   ## Trainingstage pro Woche: [Zahl]
  *
- *   ## Woche 1–2: Fundament
+ *   ## Zyklus 1: Aufbauphase (optional)
+ *   ## Woche 1–2: Load – Fundament
  *   ### Einheit A – Push
  *   | Übung | Sätze | Wdh. | Pause | Hinweis |
  *   |-------|-------|------|-------|---------|
  *   | Bankdrücken | 4 | 8-10 | 90s | Ellbogen nicht voll strecken |
+ *
+ *   ## Woche 3: Deload
+ *   ...
  *
  *   ## Progressionslogik
  *   [Text]
@@ -22,9 +26,14 @@
  *   ## Coaching-Hinweise
  *   [Text]
  *
- *   ## Ernährungs-Empfehlungen (optional)
- *   [Text]
+ * Phase Types:
+ *   - 'load': Normale Trainingswochen (default)
+ *   - 'deload': Entlastungswoche
+ *   - 'test': Testwochen (1RM, Assessment)
+ *   - 'intro': Einführungswoche (Technik, leicht)
  */
+
+export type PhaseType = 'load' | 'deload' | 'test' | 'intro';
 
 export interface ParsedExercise {
   name: string;
@@ -43,6 +52,10 @@ export interface ParsedWorkout {
   notes: string;
   order_in_week: number;
   exercises: ParsedExercise[];
+  // New fields for cycles
+  session_order: number;      // Global position in plan (1, 2, 3, ...)
+  phase_type: PhaseType;      // Type of training phase
+  cycle_number: number;       // Which cycle this belongs to
 }
 
 export interface ParsedPlan {
@@ -50,6 +63,7 @@ export interface ParsedPlan {
   goal: string;
   weeks_total: number | null;
   sessions_per_week: number | null;
+  total_cycles: number;        // NEW: Total number of cycles
   progression_notes: string;
   coaching_notes: string;
   nutrition_notes: string;
@@ -81,16 +95,6 @@ function parseSets(setsStr: string): number | null {
   return isNaN(n) ? null : n;
 }
 
-function parseWeeksTotal(planName: string, lines: string[]): number | null {
-  // Try to find "## Zeitraum: ..." line
-  for (const line of lines) {
-    const m = line.match(/^##\s*Zeitraum[:\s]/i);
-    if (m) return null; // date range, not week count
-  }
-  // Try to infer from highest week_number in workouts
-  return null; // will be calculated after parsing workouts
-}
-
 function extractTextBlock(lines: string[], startPattern: RegExp): string {
   let inBlock = false;
   const collected: string[] = [];
@@ -112,11 +116,36 @@ function parseTableRow(row: string): string[] {
   return row
     .split('|')
     .map(cell => cell.trim())
-    .filter((_, i, arr) => i > 0 && i < arr.length - 1); // remove empty first/last from leading/trailing |
+    .filter((_, i, arr) => i > 0 && i < arr.length - 1);
 }
 
 function isTableSeparator(row: string): boolean {
   return /^\|[\s\-|]+\|$/.test(row.trim());
+}
+
+/**
+ * Detect phase type from week label
+ * Examples:
+ *   "Woche 1–2: Load – Fundament" → 'load'
+ *   "Woche 3: Deload" → 'deload'
+ *   "Woche 4: Test" → 'test'
+ *   "Woche 5: Intro – Technikfokus" → 'intro'
+ *   "Woche 6: Entlastung" → 'deload'
+ */
+function detectPhaseType(weekLabel: string): PhaseType {
+  const lower = weekLabel.toLowerCase();
+  
+  if (lower.includes('deload') || lower.includes('entlastung') || lower.includes('recovery') || lower.includes('erholung')) {
+    return 'deload';
+  }
+  if (lower.includes('test') || lower.includes('1rm') || lower.includes('max')) {
+    return 'test';
+  }
+  if (lower.includes('intro') || lower.includes('einführung') || lower.includes('technik') || lower.includes('onboarding')) {
+    return 'intro';
+  }
+  // Default to load
+  return 'load';
 }
 
 // ── Main Parser ───────────────────────────────────────────────────────────────
@@ -125,7 +154,6 @@ export function parsePlan(markdown: string): ParsedPlan | null {
   if (!markdown || markdown.trim() === '') return null;
 
   // Strip the system prompt section before the actual plan
-  // The Claude output format starts with "# Trainingsplan:"
   const planStart = markdown.indexOf('# Trainingsplan:');
   const cleanedMarkdown = planStart >= 0 ? markdown.slice(planStart) : markdown;
 
@@ -154,23 +182,38 @@ export function parsePlan(markdown: string): ParsedPlan | null {
   const coaching_notes = extractTextBlock(lines, /^##\s*Coaching-Hinweise/i);
   const nutrition_notes = extractTextBlock(lines, /^##\s*Ernährungs/i);
 
-  // ── Parse workouts ─────────────────────────────────────────────────────────
+  // ── Parse workouts with cycle tracking ─────────────────────────────────────
   const workouts: ParsedWorkout[] = [];
   let currentWeekNumber = 0;
   let currentWeekLabel = '';
+  let currentPhaseType: PhaseType = 'load';
+  let currentCycleNumber = 1;
   let currentWorkout: ParsedWorkout | null = null;
   let inTable = false;
   let tableHeaderParsed = false;
   let exerciseOrder = 0;
   let workoutOrder = 0;
+  let globalSessionOrder = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
+    // ## Zyklus X: Label  →  new cycle
+    const cycleMatch = line.match(/^##\s*Zyklus\s+(\d+)/i);
+    if (cycleMatch) {
+      if (currentWorkout) {
+        workouts.push(currentWorkout);
+        currentWorkout = null;
+      }
+      currentCycleNumber = parseInt(cycleMatch[1]);
+      inTable = false;
+      tableHeaderParsed = false;
+      continue;
+    }
+
     // ## Woche X–Y: Label  →  new week block
     const weekMatch = line.match(/^##\s*(Woche\s+[\d\-–]+[:\s]+.+)/i);
     if (weekMatch) {
-      // Save previous workout
       if (currentWorkout) {
         workouts.push(currentWorkout);
         currentWorkout = null;
@@ -179,18 +222,38 @@ export function parsePlan(markdown: string): ParsedPlan | null {
       // Extract week number from "Woche 1–2" or "Woche 3–4"
       const wnMatch = currentWeekLabel.match(/\d+/);
       currentWeekNumber = wnMatch ? parseInt(wnMatch[0]) : currentWeekNumber + 1;
+      // Detect phase type from label
+      currentPhaseType = detectPhaseType(currentWeekLabel);
       inTable = false;
       tableHeaderParsed = false;
+      workoutOrder = 0; // Reset workout order within week
+      continue;
+    }
+
+    // Also handle simplified format: ## Woche 1 (without colon)
+    const simpleWeekMatch = line.match(/^##\s*(Woche\s+\d+)\s*$/i);
+    if (simpleWeekMatch) {
+      if (currentWorkout) {
+        workouts.push(currentWorkout);
+        currentWorkout = null;
+      }
+      currentWeekLabel = simpleWeekMatch[1].trim();
+      const wnMatch = currentWeekLabel.match(/\d+/);
+      currentWeekNumber = wnMatch ? parseInt(wnMatch[0]) : currentWeekNumber + 1;
+      currentPhaseType = 'load'; // Default for unlabeled weeks
+      inTable = false;
+      tableHeaderParsed = false;
+      workoutOrder = 0;
       continue;
     }
 
     // ### Einheit A – Push  →  new workout within week
     const workoutMatch = line.match(/^###\s*(.+)/);
     if (workoutMatch) {
-      // Save previous workout
       if (currentWorkout) {
         workouts.push(currentWorkout);
       }
+      globalSessionOrder++;
       currentWorkout = {
         week_number: currentWeekNumber,
         week_label: currentWeekLabel,
@@ -198,6 +261,9 @@ export function parsePlan(markdown: string): ParsedPlan | null {
         notes: '',
         order_in_week: workoutOrder++,
         exercises: [],
+        session_order: globalSessionOrder,
+        phase_type: currentPhaseType,
+        cycle_number: currentCycleNumber,
       };
       exerciseOrder = 0;
       inTable = false;
@@ -212,7 +278,7 @@ export function parsePlan(markdown: string): ParsedPlan | null {
     if (line.trim().startsWith('|') && !inTable) {
       inTable = true;
       tableHeaderParsed = false;
-      continue; // this is the header row, skip it
+      continue;
     }
 
     // Separator row: |---|---|...
@@ -246,7 +312,6 @@ export function parsePlan(markdown: string): ParsedPlan | null {
     if (inTable && !line.trim().startsWith('|') && line.trim() !== '') {
       inTable = false;
       tableHeaderParsed = false;
-      // Could be workout-level notes
       if (!/^##/.test(line) && !/^###/.test(line)) {
         currentWorkout.notes += (currentWorkout.notes ? '\n' : '') + line.trim();
       }
@@ -258,15 +323,17 @@ export function parsePlan(markdown: string): ParsedPlan | null {
     workouts.push(currentWorkout);
   }
 
-  // Calculate weeks_total from parsed data
+  // Calculate weeks_total and total_cycles from parsed data
   const maxWeek = workouts.reduce((max, w) => Math.max(max, w.week_number), 0);
-  const weeks_total = maxWeek > 0 ? maxWeek + 1 : null; // e.g. week 3–4 → 4 weeks total
+  const weeks_total = maxWeek > 0 ? maxWeek : null;
+  const total_cycles = workouts.reduce((max, w) => Math.max(max, w.cycle_number), 1);
 
   return {
     name,
     goal,
     weeks_total,
     sessions_per_week,
+    total_cycles,
     progression_notes,
     coaching_notes,
     nutrition_notes,
@@ -283,6 +350,8 @@ export interface ParseValidation {
     workouts: number;
     exercises: number;
     weeks: number[];
+    cycles: number;
+    phases: { load: number; deload: number; test: number; intro: number };
   };
 }
 
@@ -299,6 +368,10 @@ export function validateParsedPlan(plan: ParsedPlan): ParseValidation {
 
   const weeks = [...new Set(plan.workouts.map(w => w.week_number))].sort((a, b) => a - b);
   const totalExercises = plan.workouts.reduce((sum, w) => sum + w.exercises.length, 0);
+  
+  // Count phase types
+  const phases = { load: 0, deload: 0, test: 0, intro: 0 };
+  plan.workouts.forEach(w => phases[w.phase_type]++);
 
   return {
     valid: warnings.length === 0 || (plan.workouts.length > 0 && totalExercises > 0),
@@ -307,6 +380,8 @@ export function validateParsedPlan(plan: ParsedPlan): ParseValidation {
       workouts: plan.workouts.length,
       exercises: totalExercises,
       weeks,
+      cycles: plan.total_cycles,
+      phases,
     },
   };
 }
