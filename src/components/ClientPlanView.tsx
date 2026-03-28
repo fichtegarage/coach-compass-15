@@ -39,6 +39,8 @@ interface PlanWorkout {
   is_assessment?: boolean;
   status?: 'pending' | 'in_progress' | 'completed' | 'skipped';
   session_order?: number;
+  phase_type?: 'load' | 'deload' | 'test' | 'intro';
+  cycle_number?: number;
 }
 
 interface TrainingPlan {
@@ -47,6 +49,7 @@ interface TrainingPlan {
   goal: string | null;
   weeks_total: number | null;
   sessions_per_week: number | null;
+  total_cycles?: number;
   progression_notes: string | null;
   workouts: PlanWorkout[];
 }
@@ -272,7 +275,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       // Plan inkl. next_plan_workout_id
       const { data: planData } = await supabase
         .from('training_plans')
-        .select('id, name, goal, weeks_total, sessions_per_week, progression_notes, next_plan_workout_id')
+        .select('id, name, goal, weeks_total, sessions_per_week, total_cycles, progression_notes, next_plan_workout_id')
         .eq('client_id', clientId)
         .eq('is_active', true)
         .maybeSingle();
@@ -426,14 +429,49 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                 <div className={`rounded-2xl p-4 space-y-3 shadow-sm ${
                   nextWorkout.is_assessment && nextWorkout.status !== 'completed'
                     ? 'bg-slate-800'
-                    : 'bg-primary'
+                    : nextWorkout.phase_type === 'deload'
+                    ? 'bg-blue-600'
+                    : nextWorkout.phase_type === 'test'
+                    ? 'bg-amber-600'
+                    : 'bg-orange-600'
                 }`}>
+                  {/* Fortschrittsanzeige */}
+                  {nextWorkout.session_order && plan.workouts && plan.workouts.length > 1 && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-white/80 font-medium">
+                          Session {nextWorkout.session_order} von {plan.workouts.length}
+                        </span>
+                        {nextWorkout.phase_type && nextWorkout.phase_type !== 'load' && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            nextWorkout.phase_type === 'deload' ? 'bg-white/20 text-white' :
+                            nextWorkout.phase_type === 'test' ? 'bg-white/20 text-white' :
+                            'bg-white/20 text-white'
+                          }`}>
+                            {nextWorkout.phase_type === 'deload' && '🔄 Deload'}
+                            {nextWorkout.phase_type === 'test' && '📊 Test'}
+                            {nextWorkout.phase_type === 'intro' && '🎯 Intro'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-white/80 rounded-full transition-all duration-500"
+                          style={{ width: `${(nextWorkout.session_order / plan.workouts.length) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div>
-                    <p className="text-primary-foreground/80 text-xs font-semibold uppercase tracking-wide">
-                      {nextWorkout.is_assessment ? 'Assessment mit Coach' : 'Nächstes Training'}
+                    <p className="text-white/80 text-xs font-semibold uppercase tracking-wide">
+                      {nextWorkout.is_assessment ? 'Assessment mit Coach' : 
+                       nextWorkout.phase_type === 'deload' ? 'Deload-Woche' :
+                       nextWorkout.phase_type === 'test' ? 'Test-Woche' :
+                       'Nächstes Training'}
                     </p>
                     <p className="text-white text-xl font-bold mt-0.5">{nextWorkout.day_label}</p>
-                    <p className="text-primary-foreground/80 text-sm">
+                    <p className="text-white/80 text-sm">
                       {nextWorkout.week_label && `${nextWorkout.week_label} · `}
                       {nextWorkout.is_assessment
                         ? 'Bewegungsanalyse & Zielsetzung'
