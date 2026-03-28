@@ -3,53 +3,68 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 @layer base {
   :root {
-    --background: 220 20% 7%;
-    --foreground: 210 20% 92%;
+    /* ============================================
+       STRONGER EVERY DAY – Dark Theme
+       Kupfer/Orange Akzent auf Slate-Basis
+       ============================================ */
+    
+    /* Backgrounds - Slate-Töne */
+    --background: 222.2 84% 4.9%;          /* #0F172A - Slate 900 */
+    --foreground: 210 40% 98%;             /* #F8FAFC - Slate 50 */
 
-    --card: 220 18% 10%;
-    --card-foreground: 210 20% 92%;
+    --card: 222.2 47.4% 11.2%;             /* #1E293B - Slate 800 */
+    --card-foreground: 210 40% 98%;        /* #F8FAFC */
 
-    --popover: 220 18% 12%;
-    --popover-foreground: 210 20% 92%;
+    --popover: 222.2 47.4% 11.2%;          /* #1E293B - Slate 800 */
+    --popover-foreground: 210 40% 98%;     /* #F8FAFC */
 
-    --primary: 84 81% 44%;
-    --primary-foreground: 220 20% 7%;
+    /* Primary - Kupfer/Orange (Brand) */
+    --primary: 20 89% 40%;                 /* #C2410C - Orange 700 */
+    --primary-foreground: 33 100% 96%;     /* #FFF7ED - Orange 50 */
 
-    --secondary: 220 16% 16%;
-    --secondary-foreground: 210 20% 85%;
+    /* Secondary - Slate 700 */
+    --secondary: 217.2 32.6% 17.5%;        /* #334155 - Slate 700 */
+    --secondary-foreground: 210 40% 98%;   /* #F8FAFC */
 
-    --muted: 220 14% 14%;
-    --muted-foreground: 215 15% 55%;
+    /* Muted - Slate 700 */
+    --muted: 217.2 32.6% 17.5%;            /* #334155 - Slate 700 */
+    --muted-foreground: 215 20.2% 65.1%;   /* #94A3B8 - Slate 400 */
 
-    --accent: 220 16% 18%;
-    --accent-foreground: 210 20% 92%;
+    /* Accent - Orange 500 (hellere Variante) */
+    --accent: 24.6 95% 53.1%;              /* #F97316 - Orange 500 */
+    --accent-foreground: 20.5 14.3% 4.1%;  /* #431407 - Orange 950 */
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    /* Destructive - Red */
+    --destructive: 0 84.2% 60.2%;          /* #EF4444 - Red 500 */
+    --destructive-foreground: 0 0% 98%;    /* White */
 
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
-    --ring: 84 81% 44%;
+    /* Border & Input - Slate 600 */
+    --border: 215.4 20.2% 35%;             /* #475569 - Slate 600 */
+    --input: 217.2 32.6% 17.5%;            /* #334155 - Slate 700 */
+    --ring: 20 89% 40%;                    /* #C2410C - Orange 700 (Focus) */
 
     --radius: 0.625rem;
 
-    --sidebar-background: 220 20% 9%;
-    --sidebar-foreground: 210 20% 75%;
-    --sidebar-primary: 84 81% 44%;
-    --sidebar-primary-foreground: 220 20% 7%;
-    --sidebar-accent: 220 16% 14%;
-    --sidebar-accent-foreground: 210 20% 92%;
-    --sidebar-border: 220 14% 15%;
-    --sidebar-ring: 84 81% 44%;
+    /* Sidebar - Slate Varianten */
+    --sidebar-background: 222.2 84% 4.9%;  /* #0F172A - Slate 900 */
+    --sidebar-foreground: 215 20.2% 65.1%; /* #94A3B8 - Slate 400 */
+    --sidebar-primary: 20 89% 40%;         /* #C2410C - Orange 700 */
+    --sidebar-primary-foreground: 33 100% 96%; /* #FFF7ED */
+    --sidebar-accent: 217.2 32.6% 17.5%;   /* #334155 - Slate 700 */
+    --sidebar-accent-foreground: 210 40% 98%; /* #F8FAFC */
+    --sidebar-border: 215.4 20.2% 25%;     /* Slate 700 border */
+    --sidebar-ring: 20 89% 40%;            /* #C2410C */
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 220 20% 7%;
-    --success: 142 71% 45%;
-    --success-foreground: 220 20% 7%;
-    --info: 217 91% 60%;
-    --info-foreground: 210 40% 98%;
+    /* Semantic Colors */
+    --warning: 48 96% 53%;                 /* #EAB308 - Yellow 500 */
+    --warning-foreground: 28 73% 12%;      /* Dark brown */
+    --success: 142 71% 45%;                /* #22C55E - Green 500 */
+    --success-foreground: 138 76% 10%;     /* Dark green */
+    --info: 217 91% 60%;                   /* #3B82F6 - Blue 500 */
+    --info-foreground: 214 100% 97%;       /* Light blue */
   }
 }
 
@@ -72,7 +87,23 @@
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl;
   }
+  
   .stat-glow {
     box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.15);
+  }
+  
+  /* Accent Button Glow */
+  .accent-glow {
+    box-shadow: 0 0 20px -5px hsl(var(--accent) / 0.3);
+  }
+  
+  /* Primary Button Hover Glow */
+  .primary-glow:hover {
+    box-shadow: 0 4px 20px -5px hsl(var(--primary) / 0.4);
+  }
+  
+  /* Success Indicator */
+  .success-glow {
+    box-shadow: 0 0 12px -3px hsl(var(--success) / 0.4);
   }
 }
