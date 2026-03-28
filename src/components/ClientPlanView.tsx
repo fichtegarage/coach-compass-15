@@ -124,25 +124,25 @@ function groupSetsByExercise(sets: SetLog[]): Map<string, SetLog[]> {
 // ── Plan: Exercise Row ────────────────────────────────────────────────────────
 
 const ExerciseRow: React.FC<{ exercise: PlanExercise; index: number }> = ({ exercise, index }) => (
-  <div className={`px-4 py-3 ${index > 0 ? 'border-t border-slate-100' : ''}`}>
+  <div className={`px-4 py-3 ${index > 0 ? 'border-t border-slate-700' : ''}`}>
     <div className="flex items-start justify-between gap-3">
       <div className="flex-1">
-        <p className="text-sm font-semibold text-slate-900">{exercise.name}</p>
-        {exercise.notes && <p className="text-xs text-slate-400 mt-0.5 italic">{exercise.notes}</p>}
+        <p className="text-sm font-semibold text-white">{exercise.name}</p>
+        {exercise.notes && <p className="text-xs text-slate-500 mt-0.5 italic">{exercise.notes}</p>}
       </div>
       <div className="flex items-center gap-3 text-right flex-shrink-0">
         {exercise.sets && exercise.reps_target && (
           <div className="text-center">
-            <p className="text-sm font-bold text-primary tabular-nums">
+            <p className="text-sm font-bold text-orange-400 tabular-nums">
               {exercise.sets} × {exercise.reps_target}
             </p>
-            <p className="text-[10px] text-slate-400">Sätze × Wdh.</p>
+            <p className="text-[10px] text-slate-500">Sätze × Wdh.</p>
           </div>
         )}
         {exercise.rest_seconds && (
           <div className="text-center">
-            <p className="text-sm font-medium text-slate-500 tabular-nums">{formatRest(exercise.rest_seconds)}</p>
-            <p className="text-[10px] text-slate-400">Pause</p>
+            <p className="text-sm font-medium text-slate-400 tabular-nums">{formatRest(exercise.rest_seconds)}</p>
+            <p className="text-[10px] text-slate-500">Pause</p>
           </div>
         )}
       </div>
@@ -155,30 +155,30 @@ const ExerciseRow: React.FC<{ exercise: PlanExercise; index: number }> = ({ exer
 const WorkoutBlock: React.FC<{ workout: PlanWorkout }> = ({ workout }) => {
   const [open, setOpen] = useState(true);
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+        className="w-full flex items-center justify-between px-4 py-3 bg-slate-700/50 hover:bg-slate-700 transition-colors text-left"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
-            <Dumbbell className="w-3.5 h-3.5 text-primary" />
+          <div className="w-7 h-7 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+            <Dumbbell className="w-3.5 h-3.5 text-orange-400" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-slate-900">{workout.day_label}</p>
+            <p className="text-sm font-semibold text-white">{workout.day_label}</p>
             <p className="text-xs text-slate-400">{workout.exercises.length} Übungen</p>
           </div>
         </div>
-        {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        {open ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
       </button>
       {open && (
         <div>
           {workout.exercises.map((ex, i) => <ExerciseRow key={ex.id} exercise={ex} index={i} />)}
           {workout.exercises.length === 0 && (
-            <p className="px-4 py-3 text-sm text-slate-400">Keine Übungen hinterlegt.</p>
+            <p className="px-4 py-3 text-sm text-slate-500">Keine Übungen hinterlegt.</p>
           )}
           {workout.notes && (
-            <p className="px-4 py-2 pb-3 text-xs text-slate-400 italic border-t border-slate-100">{workout.notes}</p>
+            <p className="px-4 py-2 pb-3 text-xs text-slate-500 italic border-t border-slate-700">{workout.notes}</p>
           )}
         </div>
       )}
@@ -200,40 +200,40 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
     : null;
 
   return (
-    <div className={`rounded-xl border bg-white overflow-hidden ${prCount > 0 ? 'border-amber-200' : 'border-slate-200'}`}>
+    <div className={`rounded-xl border bg-slate-800 overflow-hidden ${prCount > 0 ? 'border-amber-500/30' : 'border-slate-700'}`}>
       <button onClick={() => setOpen(o => !o)} className="w-full text-left px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-slate-900 truncate">{workoutName}</p>
-              {prCount > 0 && <span className="text-xs font-bold text-amber-500">🏆 {prCount} PR{prCount > 1 ? 's' : ''}</span>}
-              {log.feedback && <span className="text-xs text-primary font-medium">💬 Feedback</span>}
+              <p className="text-sm font-semibold text-white truncate">{workoutName}</p>
+              {prCount > 0 && <span className="text-xs font-bold text-amber-400">🏆 {prCount} PR{prCount > 1 ? 's' : ''}</span>}
+              {log.feedback && <span className="text-xs text-orange-400 font-medium">💬 Feedback</span>}
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               {format(new Date(log.started_at), "EEE, d. MMM · HH:mm", { locale: de })} Uhr
               {mins !== null && ` · ${mins} Min.`}
             </p>
           </div>
           <div className="text-right flex-shrink-0">
-            <p className="text-sm font-bold text-slate-700 tabular-nums">
+            <p className="text-sm font-bold text-slate-300 tabular-nums">
               {volume >= 1000 ? `${(volume / 1000).toFixed(1)}t` : `${Math.round(volume)}kg`}
             </p>
-            <p className="text-[10px] text-slate-400">{sets.length} Sätze</p>
+            <p className="text-[10px] text-slate-500">{sets.length} Sätze</p>
           </div>
-          {open ? <ChevronUp className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+          {open ? <ChevronUp className="w-4 h-4 text-slate-500 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0" />}
         </div>
       </button>
       {open && sets.length > 0 && (
-        <div className="border-t border-slate-100 px-4 pb-3 pt-2 space-y-3">
+        <div className="border-t border-slate-700 px-4 pb-3 pt-2 space-y-3">
           {[...exerciseGroups.entries()].map(([name, exSets]) => (
             <div key={name}>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">{name}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{name}</p>
               <div className="space-y-1">
                 {exSets.map(s => (
                   <div key={s.id} className="flex items-center gap-3 text-sm">
-                    <span className="text-slate-400 text-xs w-12">Satz {s.set_number}</span>
-                    <span className="font-medium text-slate-800 tabular-nums">{Number(s.weight_kg)}kg × {s.reps_done}</span>
-                    {s.is_pr && <span className="text-xs text-amber-500 font-bold ml-auto">🏆 PR</span>}
+                    <span className="text-slate-500 text-xs w-12">Satz {s.set_number}</span>
+                    <span className="font-medium text-slate-300 tabular-nums">{Number(s.weight_kg)}kg × {s.reps_done}</span>
+                    {s.is_pr && <span className="text-xs text-amber-400 font-bold ml-auto">🏆 PR</span>}
                   </div>
                 ))}
               </div>
@@ -241,9 +241,9 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
           ))}
           {/* Coach-Feedback anzeigen */}
           {log.feedback && (
-            <div className="rounded-xl bg-primary/10 border border-primary/30 px-3 py-2.5">
-              <p className="text-xs font-semibold text-primary mb-1">💬 Feedback von Jakob</p>
-              <p className="text-sm text-slate-800">{log.feedback.message}</p>
+            <div className="rounded-xl bg-orange-500/10 border border-orange-500/30 px-3 py-2.5">
+              <p className="text-xs font-semibold text-orange-400 mb-1">💬 Feedback von Jakob</p>
+              <p className="text-sm text-slate-300">{log.feedback.message}</p>
             </div>
           )}
         </div>
@@ -392,15 +392,15 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       <div className="space-y-4">
 
         {/* Tab-Navigation */}
-        <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+        <div className="flex gap-1 bg-slate-700/50 rounded-xl p-1">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               {tab.label}
@@ -412,11 +412,11 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
         {activeTab === 'plan' && (
           !plan ? (
             <div className="py-10 text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto">
-                <Dumbbell className="w-6 h-6 text-slate-300" />
+              <div className="w-12 h-12 rounded-2xl bg-slate-700 flex items-center justify-center mx-auto">
+                <Dumbbell className="w-6 h-6 text-slate-500" />
               </div>
-              <p className="text-sm font-medium text-slate-500">Noch kein Trainingsplan hinterlegt</p>
-              <p className="text-xs text-slate-400">Dein Coach teilt deinen Plan sobald er fertig ist.</p>
+              <p className="text-sm font-medium text-slate-400">Noch kein Trainingsplan hinterlegt</p>
+              <p className="text-xs text-slate-500">Dein Coach teilt deinen Plan sobald er fertig ist.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -497,14 +497,14 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                 </div>
               )}
               {/* Plan-Header */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
-                <p className="text-base font-bold text-slate-900">{plan.name}</p>
+              <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 space-y-2">
+                <p className="text-base font-bold text-white">{plan.name}</p>
                 {plan.goal && (
-                  <p className="text-sm text-slate-500 flex items-center gap-1.5">
+                  <p className="text-sm text-slate-400 flex items-center gap-1.5">
                     <Target className="w-3.5 h-3.5 flex-shrink-0" /> {plan.goal}
                   </p>
                 )}
-                <div className="flex gap-4 text-xs text-slate-400">
+                <div className="flex gap-4 text-xs text-slate-500">
                   {plan.weeks_total && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {plan.weeks_total} Wochen</span>}
                   {plan.sessions_per_week && <span className="flex items-center gap-1"><Dumbbell className="w-3.5 h-3.5" /> {plan.sessions_per_week}× pro Woche</span>}
                 </div>
@@ -521,7 +521,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                         key={wn}
                         onClick={() => setSelectedWeek(wn)}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                          selectedWeek === wn ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          selectedWeek === wn ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                         }`}
                       >
                         {short}
@@ -532,7 +532,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
               )}
 
               {currentWeekLabel && (
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{currentWeekLabel}</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{currentWeekLabel}</p>
               )}
 
               <div className="space-y-3">
@@ -541,7 +541,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                     <WorkoutBlock workout={workout} />
                     <button
                       onClick={() => setActiveWorkout(workout)}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 active:scale-95 text-white font-semibold text-sm transition-all"
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-semibold text-sm transition-all"
                     >
                       <Play className="w-4 h-4" /> {workout.day_label} starten
                     </button>
@@ -550,9 +550,9 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
               </div>
 
               {plan.progression_notes && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Progressionslogik</p>
-                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{plan.progression_notes}</p>
+                  <p className="text-sm text-slate-400 whitespace-pre-wrap">{plan.progression_notes}</p>
                 </div>
               )}
             </div>
@@ -563,9 +563,9 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
         {activeTab === 'history' && (
           workoutLogs.length === 0 ? (
             <div className="py-10 text-center space-y-2">
-              <Dumbbell className="w-10 h-10 text-slate-200 mx-auto" />
-              <p className="text-sm text-slate-500">Noch keine Workouts geloggt.</p>
-              <p className="text-xs text-slate-400">Starte dein erstes Training über „Mein Plan".</p>
+              <Dumbbell className="w-10 h-10 text-slate-600 mx-auto" />
+              <p className="text-sm text-slate-400">Noch keine Workouts geloggt.</p>
+              <p className="text-xs text-slate-500">Starte dein erstes Training über „Mein Plan".</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -578,23 +578,23 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
         {activeTab === 'prs' && (
           prs.length === 0 ? (
             <div className="py-10 text-center space-y-2">
-              <Trophy className="w-10 h-10 text-slate-200 mx-auto" />
-              <p className="text-sm text-slate-500">Noch keine Personal Records.</p>
-              <p className="text-xs text-slate-400">Trainiere und setze deinen ersten PR!</p>
+              <Trophy className="w-10 h-10 text-slate-600 mx-auto" />
+              <p className="text-sm text-slate-400">Noch keine Personal Records.</p>
+              <p className="text-xs text-slate-500">Trainiere und setze deinen ersten PR!</p>
             </div>
           ) : (
             <div className="space-y-2">
               {prs.map((pr, i) => (
-                <div key={i} className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex items-center justify-between">
+                <div key={i} className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{pr.exercise_name}</p>
-                    <p className="text-xs text-slate-400">{format(new Date(pr.achieved_at), "d. MMM yyyy", { locale: de })}</p>
+                    <p className="text-sm font-semibold text-white">{pr.exercise_name}</p>
+                    <p className="text-xs text-slate-500">{format(new Date(pr.achieved_at), "d. MMM yyyy", { locale: de })}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-base font-bold text-primary tabular-nums">
+                    <p className="text-base font-bold text-orange-400 tabular-nums">
                       {Number(pr.weight_kg)}kg × {pr.reps}
                     </p>
-                    <p className="text-[10px] text-slate-400">🏆 Persönlicher Rekord</p>
+                    <p className="text-[10px] text-slate-500">🏆 Persönlicher Rekord</p>
                   </div>
                 </div>
               ))}
