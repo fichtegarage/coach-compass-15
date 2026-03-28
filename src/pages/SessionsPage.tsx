@@ -391,7 +391,7 @@ const SessionsPage: React.FC = () => {
                 <div className="flex gap-2">
                   <Input readOnly value={calendarFeedUrl} className="text-xs font-mono" />
                   <Button size="icon" variant="outline" onClick={copyFeedUrl}>
-                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
                 <div className="text-xs text-muted-foreground space-y-1">

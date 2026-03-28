@@ -531,7 +531,7 @@ const BookingsPage: React.FC = () => {
       <div className="flex flex-wrap gap-3 text-xs">
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-100 border border-blue-300 inline-block" /> Freier Slot</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 inline-block" /> Anfrage ausstehend</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block rounded-sm" /> Geplante Session</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-primary/100 inline-block rounded-sm" /> Geplante Session</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-400 inline-block" /> Abgeschlossen</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-300 inline-block" /> Abgesagt</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-muted border border-dashed border-muted-foreground/30 inline-block" /> Slot abgelaufen</span>
@@ -645,7 +645,7 @@ const BookingsPage: React.FC = () => {
                               onClick={() => { if (!selectionMode) { setEditSession(session); setEditSessionStatus(session.status); } }}
                               className={`w-full text-left rounded px-1 py-0.5 text-[10px] leading-tight transition-colors ${
                                 isScheduled
-                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                  ? 'bg-primary/100 text-white hover:bg-primary'
                                   : isCompleted
                                   ? 'bg-slate-300 text-slate-700 hover:bg-slate-400'
                                   : isCancelled

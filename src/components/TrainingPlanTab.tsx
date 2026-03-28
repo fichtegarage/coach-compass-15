@@ -82,7 +82,7 @@ const ExerciseRow: React.FC<{
           <div className="flex items-center gap-1.5 mt-1">
             <Input value={value} onChange={e => setValue(e.target.value)} placeholder="z.B. Kurzhantel-Bankdrücken" className="h-7 text-xs" autoFocus
               onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }} />
-            <button onClick={handleSave} disabled={saving} className="text-emerald-600 hover:text-emerald-700 flex-shrink-0">
+            <button onClick={handleSave} disabled={saving} className="text-primary hover:text-primary flex-shrink-0">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
             <button onClick={handleCancel} className="text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4" /></button>

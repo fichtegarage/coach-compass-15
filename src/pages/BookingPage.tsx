@@ -125,7 +125,7 @@ const statusLabels: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800 border-amber-200',
-  confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  confirmed: 'bg-primary/20 text-primary border-primary/30',
   rejected: 'bg-red-100 text-red-800 border-red-200',
   cancelled: 'bg-gray-100 text-gray-500 border-gray-200',
 };
@@ -434,7 +434,7 @@ const BookingPage: React.FC = () => {
                 value={codeInput}
                 onChange={e => { setCodeInput(e.target.value); setCodeError(''); }}
                 placeholder="z.B. PT-X7K2MQ"
-                className="bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-emerald-500"
+                className="bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-primary"
                 autoFocus
               />
             </div>
@@ -442,7 +442,7 @@ const BookingPage: React.FC = () => {
             <Button
               type="submit"
               disabled={codeLoading || !codeInput.trim()}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="w-full bg-primary hover:bg-primary/90 text-white"
             >
               {codeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Weiter'}
             </Button>
@@ -471,7 +471,7 @@ const BookingPage: React.FC = () => {
             {packageInfo && (
               <div className="flex flex-col items-end gap-0.5">
                 <p className="text-xs text-slate-400">
-                  {packageInfo.name}: <span className="font-medium text-emerald-600">{packageInfo.used}/{packageInfo.total}</span> Einheiten
+                  {packageInfo.name}: <span className="font-medium text-primary">{packageInfo.used}/{packageInfo.total}</span> Einheiten
                 </p>
                 {remainingDays !== null && (
                   <p className={`text-xs font-medium ${remainingDays <= 7 ? 'text-red-500' : remainingDays <= 14 ? 'text-amber-500' : 'text-slate-400'}`}>
@@ -501,7 +501,7 @@ const BookingPage: React.FC = () => {
       {notifications.filter(n => !dismissedNotifications.has(n.id)).length > 0 && activeView === 'calendar' && (
         <div className="max-w-4xl mx-auto px-4 mt-3 space-y-2 w-full">
           {notifications.filter(n => !dismissedNotifications.has(n.id)).map(n => (
-            <div key={n.id} className={`rounded-lg px-4 py-2 text-sm border flex items-center justify-between gap-2 ${n.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+            <div key={n.id} className={`rounded-lg px-4 py-2 text-sm border flex items-center justify-between gap-2 ${n.status === 'confirmed' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-red-50 border-red-200 text-red-800'}`}>
               <span>
                 Deine Anfrage für {n.availability_slots ? format(new Date(n.availability_slots.start_time), "d. MMM, HH:mm", { locale: de }) : '—'} wurde{' '}
                 <strong>{n.status === 'confirmed' ? 'bestätigt ✅' : 'abgelehnt ❌'}</strong>.
@@ -541,7 +541,7 @@ const BookingPage: React.FC = () => {
               <div className="space-y-2">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bestätigte Einheiten</h3>
                 {scheduledSessions.map(s => (
-                  <div key={s.id} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between">
+                  <div key={s.id} className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">
                         {format(new Date(s.session_date), "EEEE, d. MMMM · HH:mm", { locale: de })} Uhr
@@ -564,9 +564,9 @@ const BookingPage: React.FC = () => {
                           a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
                           a.click(); URL.revokeObjectURL(url);
                         }}
-                        className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 text-xs"
+                        className="text-primary hover:text-primary hover:bg-primary/20 text-xs"
                       >+ Kalender</Button>
-                      <span className="text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">Bestätigt ✅</span>
+                      <span className="text-xs font-medium text-primary bg-primary/20 border border-primary/30 rounded-full px-2 py-0.5">Bestätigt ✅</span>
                     </div>
                   </div>
                 ))}
@@ -605,7 +605,7 @@ const BookingPage: React.FC = () => {
                         <div className="flex items-center gap-2 flex-col sm:flex-row ml-3">
                           <Badge variant="outline" className={statusColors[b.status]}>{statusLabels[b.status]}</Badge>
                           {canCancel && <Button variant="ghost" size="sm" onClick={() => handleCancelRequest(b.id, slotStart)} className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs">Stornieren</Button>}
-                          {b.status === 'confirmed' && slotStart && <Button variant="ghost" size="sm" onClick={() => generateIcs(b)} className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs">+ Kalender</Button>}
+                          {b.status === 'confirmed' && slotStart && <Button variant="ghost" size="sm" onClick={() => generateIcs(b)} className="text-primary hover:text-primary hover:bg-primary/10 text-xs">+ Kalender</Button>}
                         </div>
                       </CardContent>
                     </Card>
@@ -620,7 +620,7 @@ const BookingPage: React.FC = () => {
               <div className="mb-6 space-y-2">
                 <h3 className="text-sm font-semibold text-slate-700">Deine nächsten Einheiten</h3>
                 {scheduledSessions.map(s => (
-                  <div key={s.id} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between">
+                  <div key={s.id} className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{format(new Date(s.session_date), "EEEE, d. MMMM · HH:mm", { locale: de })} Uhr</p>
                       <p className="text-xs text-slate-500 mt-0.5">{sessionTypeLabels[s.session_type] || s.session_type} · {s.duration_minutes} Min. · {s.location || 'Gym'}</p>
@@ -639,9 +639,9 @@ const BookingPage: React.FC = () => {
                           a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
                           a.click(); URL.revokeObjectURL(url);
                         }}
-                        className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 text-xs"
+                        className="text-primary hover:text-primary hover:bg-primary/20 text-xs"
                       >+ Kalender</Button>
-                      <span className="text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">Bestätigt ✅</span>
+                      <span className="text-xs font-medium text-primary bg-primary/20 border border-primary/30 rounded-full px-2 py-0.5">Bestätigt ✅</span>
                     </div>
                   </div>
                 ))}
@@ -660,9 +660,9 @@ const BookingPage: React.FC = () => {
                 return (
                   <div key={key} className={`rounded-xl border bg-white ${isPast ? 'opacity-50' : 'border-slate-200'}`}>
                     <div className="px-4 py-2 border-b border-slate-100">
-                      <p className={`text-sm font-semibold ${isSameDay(day, new Date()) ? 'text-emerald-600' : 'text-slate-700'}`}>
+                      <p className={`text-sm font-semibold ${isSameDay(day, new Date()) ? 'text-primary' : 'text-slate-700'}`}>
                         {format(day, 'EEEE, d. MMMM', { locale: de })}
-                        {isSameDay(day, new Date()) && <span className="ml-2 text-xs font-normal text-emerald-500">Heute</span>}
+                        {isSameDay(day, new Date()) && <span className="ml-2 text-xs font-normal text-primary">Heute</span>}
                       </p>
                     </div>
                     <div className="p-3 space-y-2">
@@ -680,7 +680,7 @@ const BookingPage: React.FC = () => {
                               key={slot.id}
                               disabled={isPast || slotPast || isFull || isMyBooking}
                               onClick={() => { if (isMyBooking) return; setSelectedSlot(slot); }}
-                              className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${isMyBooking ? 'bg-emerald-50 border-emerald-200 cursor-default' : isFull || slotPast ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm cursor-pointer'}`}
+                              className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${isMyBooking ? 'bg-primary/10 border-primary/30 cursor-default' : isFull || slotPast ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-primary/40 hover:shadow-sm cursor-pointer'}`}
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
@@ -743,7 +743,7 @@ const BookingPage: React.FC = () => {
                   rows={3}
                 />
               </div>
-              <Button onClick={handleBookSlot} disabled={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button onClick={handleBookSlot} disabled={submitting} className="w-full bg-primary hover:bg-primary/90 text-white">
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Termin anfragen'}
               </Button>
             </div>

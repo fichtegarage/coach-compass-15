@@ -187,7 +187,7 @@ const VolumeChart: React.FC<VolumeChartProps> = ({ workoutLogs }) => {
           <div className="flex gap-4 pt-1 text-xs text-muted-foreground border-t border-border">
             <span>Start: <strong className="text-foreground">{first}kg</strong></span>
             <span>Aktuell: <strong className="text-foreground">{last}kg</strong></span>
-            <span className={`ml-auto font-semibold ${diff >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+            <span className={`ml-auto font-semibold ${diff >= 0 ? 'text-primary' : 'text-red-500'}`}>
               {diff >= 0 ? '+' : ''}{diff}kg ({pct}%)
             </span>
           </div>

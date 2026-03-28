@@ -365,8 +365,8 @@ const DuoField: React.FC<DuoFieldProps> = ({ field, formData, updateField, nameA
 
   const renderInput = (id: string, suffix: 'a' | 'b') => {
     const colorA = 'border-l-primary/60';
-    const colorB = 'border-l-emerald-500/60';
-    const labelColor = suffix === 'a' ? 'text-primary' : 'text-emerald-600';
+    const colorB = 'border-l-primary/60';
+    const labelColor = suffix === 'a' ? 'text-primary' : 'text-primary';
     const name = suffix === 'a' ? nameA : nameB;
 
     return (
@@ -881,7 +881,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
               <div className="grid sm:grid-cols-2 gap-3">
                 {[
                   { name: clientName, type: personalityTypeA, color: 'border-primary/30 bg-primary/5' },
-                  { name: secondClientName, type: personalityTypeB, color: 'border-emerald-300 bg-emerald-50' },
+                  { name: secondClientName, type: personalityTypeB, color: 'border-primary/40 bg-primary/10' },
                 ].map(({ name, type, color }) => {
                   const pt = PERSONALITY_TYPES.find(t => t.id === type);
                   return pt ? (
@@ -926,7 +926,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                           <div key={q.id}>
                             <p className="text-muted-foreground text-xs font-medium">{q.label}</p>
                             {vA && <p className="ml-2"><span className="text-primary text-xs">{clientName}:</span> {vA}</p>}
-                            {vB && <p className="ml-2"><span className="text-emerald-600 text-xs">{secondClientName}:</span> {vB}</p>}
+                            {vB && <p className="ml-2"><span className="text-primary text-xs">{secondClientName}:</span> {vB}</p>}
                           </div>
                         );
                       })
@@ -948,7 +948,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                           <div key={field.id}>
                             <p className="text-muted-foreground text-xs font-medium">{field.label}</p>
                             {vA && <p className="ml-2"><span className="text-primary text-xs">{clientName}:</span> {vA}</p>}
-                            {vB && <p className="ml-2"><span className="text-emerald-600 text-xs">{secondClientName}:</span> {vB}</p>}
+                            {vB && <p className="ml-2"><span className="text-primary text-xs">{secondClientName}:</span> {vB}</p>}
                           </div>
                         );
                       })
@@ -1004,8 +1004,8 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
             <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">
               <span className="w-2 h-2 rounded-full bg-primary inline-block" /> {clientName}
             </span>
-            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> {secondClientName}
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/20 text-primary font-medium">
+              <span className="w-2 h-2 rounded-full bg-primary inline-block" /> {secondClientName}
             </span>
           </div>
         )}
@@ -1122,8 +1122,8 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                       />
                     </div>
                     {/* B */}
-                    <div className="pl-3 border-l-2 border-emerald-500/60 space-y-1">
-                      <p className="text-xs font-semibold text-emerald-600">{secondClientName}</p>
+                    <div className="pl-3 border-l-2 border-primary/60 space-y-1">
+                      <p className="text-xs font-semibold text-primary">{secondClientName}</p>
                       <Input
                         value={formData[q.id + '_b'] || ''}
                         onChange={e => updateField(q.id + '_b', e.target.value)}
@@ -1158,7 +1158,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                   <h3 className="text-sm font-medium">🧠 Persönlichkeitstyp-Einschätzung</h3>
                   {[
                     { label: clientName, value: personalityTypeA, setter: setPersonalityTypeA, color: 'border-primary bg-primary/10', activeColor: 'border-primary bg-primary/10' },
-                    { label: secondClientName, value: personalityTypeB, setter: setPersonalityTypeB, color: 'border-emerald-500 bg-emerald-50', activeColor: 'border-emerald-500 bg-emerald-50' },
+                    { label: secondClientName, value: personalityTypeB, setter: setPersonalityTypeB, color: 'border-primary bg-primary/10', activeColor: 'border-primary bg-primary/10' },
                   ].map(({ label, value, setter, activeColor }) => (
                     <div key={label} className="space-y-2">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>

@@ -86,7 +86,7 @@ const ResetPasswordPage: React.FC = () => {
 
         {success ? (
           <div className="glass-card p-6 text-center space-y-3">
-            <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
+            <CheckCircle className="w-12 h-12 text-success mx-auto" />
             <p className="text-foreground font-medium">Passwort erfolgreich geändert!</p>
             <p className="text-muted-foreground text-sm">Du wirst zum Login weitergeleitet…</p>
           </div>

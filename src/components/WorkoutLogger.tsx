@@ -138,8 +138,8 @@ const SetRow: React.FC<{
 
   if (set.logged) {
     return (
-      <div className="flex items-center gap-3 py-3 px-4 rounded-xl bg-emerald-50 border border-emerald-200">
-        <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+      <div className="flex items-center gap-3 py-3 px-4 rounded-xl bg-primary/10 border border-primary/30">
+        <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
           {set.isPR
             ? <Trophy className="w-3.5 h-3.5 text-white" />
             : <Check className="w-3.5 h-3.5 text-white" />}
@@ -170,9 +170,9 @@ const SetRow: React.FC<{
 
   // Active set – large inputs
   return (
-    <div className="py-3 px-4 rounded-xl bg-white border-2 border-emerald-500 shadow-sm">
+    <div className="py-3 px-4 rounded-xl bg-white border-2 border-primary shadow-sm">
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+        <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
           <span className="text-xs font-bold text-white">{set.setNumber}</span>
         </div>
         <span className="text-sm font-medium text-slate-700">Satz {set.setNumber}</span>
@@ -187,7 +187,7 @@ const SetRow: React.FC<{
             value={weight}
             onChange={e => setWeight(e.target.value)}
             placeholder="0"
-            className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+            className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
           {/* Quick +/- */}
           <div className="flex gap-1 mt-1.5">
@@ -214,7 +214,7 @@ const SetRow: React.FC<{
             value={reps}
             onChange={e => setReps(e.target.value)}
             placeholder={targetReps || '0'}
-            className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+            className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
           <div className="flex gap-1 mt-1.5">
             {['-2', '-1', '+1', '+2'].map(v => (
@@ -235,7 +235,7 @@ const SetRow: React.FC<{
       <button
         onClick={() => onLog(reps, weight)}
         disabled={!reps || !weight}
-        className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-base transition-colors active:scale-95"
+        className="w-full py-4 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-base transition-colors active:scale-95"
       >
         Satz abschließen ✓
       </button>
@@ -464,7 +464,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
   if (initializing) {
     return (
       <div className="fixed inset-0 bg-white z-40 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -501,7 +501,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
           {/* Progress bar */}
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+              className="h-full bg-primary rounded-full transition-all duration-500"
               style={{ width: `${progress * 100}%` }}
             />
           </div>
@@ -520,9 +520,9 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                 onClick={() => setCurrentExerciseIndex(i)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   active
-                    ? 'bg-emerald-500 text-white'
+                    ? 'bg-primary text-white'
                     : done
-                    ? 'bg-emerald-100 text-emerald-700'
+                    ? 'bg-primary/20 text-primary'
                     : 'bg-slate-100 text-slate-500'
                 }`}
               >
@@ -619,7 +619,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
           {allDone ? (
             <button
               onClick={handleFinish}
-              className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg transition-colors active:scale-95"
+              className="w-full py-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold text-lg transition-colors active:scale-95"
             >
               Training abschließen 🎉
             </button>
@@ -635,7 +635,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                   const next = exerciseLogs.findIndex((l, i) => i > currentExerciseIndex && !l.sets.every(s => s.logged));
                   if (next !== -1) setCurrentExerciseIndex(next);
                 }}
-                className="text-emerald-600 font-medium"
+                className="text-primary font-medium"
               >
                 Nächste Übung →
               </button>

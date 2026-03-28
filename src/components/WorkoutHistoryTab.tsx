@@ -602,19 +602,19 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
                 <div className="rounded-xl bg-primary/5 border border-primary/20 px-4 py-3 flex gap-4 text-sm">
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground">Energie</p>
-                    <p className={`font-bold ${energyDiff > 0 ? 'text-emerald-600' : energyDiff < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                    <p className={`font-bold ${energyDiff > 0 ? 'text-primary' : energyDiff < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
                       {energyDiff > 0 ? `↑ +${energyDiff}` : energyDiff < 0 ? `↓ ${energyDiff}` : '→ 0'}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground">Stimmung</p>
-                    <p className={`font-bold ${moodDiff > 0 ? 'text-emerald-600' : moodDiff < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                    <p className={`font-bold ${moodDiff > 0 ? 'text-primary' : moodDiff < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
                       {moodDiff > 0 ? `↑ +${moodDiff}` : moodDiff < 0 ? `↓ ${moodDiff}` : '→ 0'}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground">Schlaf</p>
-                    <p className={`font-bold ${(last.sleep_quality - prev.sleep_quality) > 0 ? 'text-emerald-600' : (last.sleep_quality - prev.sleep_quality) < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                    <p className={`font-bold ${(last.sleep_quality - prev.sleep_quality) > 0 ? 'text-primary' : (last.sleep_quality - prev.sleep_quality) < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
                       {(last.sleep_quality - prev.sleep_quality) > 0 ? `↑ +${last.sleep_quality - prev.sleep_quality}` : (last.sleep_quality - prev.sleep_quality) < 0 ? `↓ ${last.sleep_quality - prev.sleep_quality}` : '→ 0'}
                     </p>
                   </div>

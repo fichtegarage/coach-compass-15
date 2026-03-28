@@ -78,7 +78,7 @@ const WorkoutSummaryView: React.FC<WorkoutSummaryProps> = ({ summary, workoutNam
 
       <button
         onClick={onClose}
-        className="w-full max-w-sm py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-base transition-colors active:scale-95"
+        className="w-full max-w-sm py-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold text-base transition-colors active:scale-95"
       >
         Fertig
       </button>
