@@ -295,6 +295,7 @@ const BookingsPage: React.FC = () => {
               end_time: s.end_time,
               slot_type: slotForm.slot_type,
               notes: slotForm.notes || null,
+              is_bookable: true,
             });
           });
         }
@@ -308,6 +309,7 @@ const BookingsPage: React.FC = () => {
           end_time: s.end_time,
           slot_type: slotForm.slot_type,
           notes: slotForm.notes || null,
+          is_bookable: true,
         });
       });
     }
