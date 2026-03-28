@@ -13,7 +13,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, Users, CalendarDays, Settings, Dumbbell, LogOut, CalendarCheck, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, Settings, Dumbbell, LogOut, CalendarCheck, ClipboardList, Library } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const AppSidebar: React.FC = () => {
@@ -46,6 +46,7 @@ const AppSidebar: React.FC = () => {
     { title: 'Erstgespräch', url: '/onboarding', icon: ClipboardList },
     { title: 'Einheiten', url: '/sessions', icon: CalendarDays },
     { title: 'Buchungen', url: '/bookings', icon: CalendarCheck, badge: pendingCount },
+    { title: 'Übungen', url: '/exercises', icon: Library },
     { title: 'Einstellungen', url: '/settings', icon: Settings },
   ];
 

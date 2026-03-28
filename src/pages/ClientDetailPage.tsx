@@ -28,6 +28,7 @@ import BookSessionDialog from '@/components/BookSessionDialog';
 import { exportSingleClient, type ExportClientData } from '@/lib/exportForClaude';
 import TrainingPlanTab from '@/components/TrainingPlanTab';
 import WorkoutHistoryTab from '@/components/WorkoutHistoryTab';
+import ClientEquipmentTab from '@/components/ClientEquipmentTab';
 
 interface PackageFeature {
   label: string;
@@ -658,6 +659,7 @@ const ClientDetailPage: React.FC = () => {
           <TabsTrigger value="notes">Notizen</TabsTrigger>
           <TabsTrigger value="plan">Trainingsplan</TabsTrigger>
           <TabsTrigger value="workouts">Workouts</TabsTrigger>
+          <TabsTrigger value="equipment">Equipment</TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW TAB */}
@@ -1151,6 +1153,11 @@ const ClientDetailPage: React.FC = () => {
         </TabsContent>
         <TabsContent value="workouts" className="mt-4">
           <WorkoutHistoryTab clientId={id!} />
+        </TabsContent>
+
+        {/* EQUIPMENT TAB */}
+        <TabsContent value="equipment" className="mt-4">
+          <ClientEquipmentTab clientId={id!} clientName={client.first_name + ' ' + (client.last_name || '')} />
         </TabsContent>
 
         {/* ERSTGESPRÄCH TAB */}
