@@ -102,7 +102,7 @@ const RestTimer: React.FC<{ seconds: number; onDone: () => void }> = ({ seconds,
           <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
           <circle
             cx="50" cy="50" r="44" fill="none"
-            stroke="#10b981" strokeWidth="8"
+            stroke="hsl(20, 89%, 40%)" strokeWidth="8"
             strokeDasharray={`${2 * Math.PI * 44}`}
             strokeDashoffset={`${2 * Math.PI * 44 * (1 - pct / 100)}`}
             strokeLinecap="round"
@@ -186,6 +186,7 @@ const SetRow: React.FC<{
             inputMode="decimal"
             value={weight}
             onChange={e => setWeight(e.target.value)}
+            onFocus={e => e.target.select()}
             placeholder="0"
             className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
@@ -213,6 +214,7 @@ const SetRow: React.FC<{
             inputMode="numeric"
             value={reps}
             onChange={e => setReps(e.target.value)}
+            onFocus={e => e.target.select()}
             placeholder={targetReps || '0'}
             className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
@@ -351,6 +353,10 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
       const next = [...prev];
       const sets = [...next[currentExerciseIndex].sets];
       sets[activeSetIndex] = { ...sets[activeSetIndex], reps, weight, logged: true, isPR };
+      // Nächsten Satz mit gleichen Werten vorausfüllen (Satz-zu-Satz Vorausfüllen)
+      if (activeSetIndex + 1 < sets.length && !sets[activeSetIndex + 1].logged) {
+        sets[activeSetIndex + 1] = { ...sets[activeSetIndex + 1], reps, weight };
+      }
       next[currentExerciseIndex] = { ...next[currentExerciseIndex], sets };
       return next;
     });
