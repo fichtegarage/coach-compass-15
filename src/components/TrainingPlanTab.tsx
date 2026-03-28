@@ -252,6 +252,7 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
       const { data: planData, error: planError } = await supabase.from('training_plans').insert({
         client_id: clientId, trainer_id: trainerId, name: parsed.name, goal: parsed.goal || null,
         weeks_total: parsed.weeks_total, sessions_per_week: parsed.sessions_per_week,
+        total_cycles: parsed.total_cycles || 1,
         progression_notes: parsed.progression_notes || null, coaching_notes: parsed.coaching_notes || null,
         nutrition_notes: parsed.nutrition_notes || null, source: 'claude_import', is_active: true,
       }).select().single();
@@ -261,6 +262,9 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
         const { data: workoutData, error: workoutError } = await supabase.from('plan_workouts').insert({
           plan_id: planData.id, week_number: workout.week_number, week_label: workout.week_label,
           day_label: workout.day_label, notes: workout.notes || null, order_in_week: workout.order_in_week,
+          session_order: workout.session_order,
+          phase_type: workout.phase_type,
+          cycle_number: workout.cycle_number,
         }).select().single();
         if (workoutError || !workoutData) throw workoutError;
         if (workout.exercises.length > 0) {
@@ -314,7 +318,18 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
                 {validation.valid ? <CheckCircle className="w-4 h-4 text-success" /> : <AlertTriangle className="w-4 h-4 text-warning" />}
                 <span className="text-sm font-medium">{validation.valid ? 'Plan erfolgreich erkannt' : 'Plan mit Warnungen'}</span>
               </div>
-              <p className="text-xs text-muted-foreground">{validation.stats.workouts} Einheiten · {validation.stats.exercises} Übungen</p>
+              <p className="text-xs text-muted-foreground">
+                {validation.stats.workouts} Einheiten · {validation.stats.exercises} Übungen
+                {validation.stats.cycles > 1 && ` · ${validation.stats.cycles} Zyklen`}
+              </p>
+              {(validation.stats.phases.deload > 0 || validation.stats.phases.test > 0) && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {validation.stats.phases.load > 0 && `${validation.stats.phases.load}× Load`}
+                  {validation.stats.phases.deload > 0 && ` · ${validation.stats.phases.deload}× Deload`}
+                  {validation.stats.phases.test > 0 && ` · ${validation.stats.phases.test}× Test`}
+                  {validation.stats.phases.intro > 0 && ` · ${validation.stats.phases.intro}× Intro`}
+                </p>
+              )}
               {validation.warnings.map((w, i) => <p key={i} className="text-xs text-warning mt-1">⚠ {w}</p>)}
             </div>
             <div>
@@ -323,9 +338,14 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {parsed.workouts.map((w, i) => (
-                <div key={i} className="rounded-lg border border-border p-3 text-sm">
-                  <p className="font-medium text-xs text-muted-foreground mb-1">{w.week_label || `Woche ${w.week_number}`}</p>
-                  <p className="font-medium">{w.day_label}</p>
+                <div key={i} className={`rounded-lg border p-3 text-sm ${w.phase_type === 'deload' ? 'border-blue-200 bg-blue-50/50' : w.phase_type === 'test' ? 'border-amber-200 bg-amber-50/50' : 'border-border'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium text-xs text-muted-foreground">{w.week_label || `Woche ${w.week_number}`}</span>
+                    {w.phase_type === 'deload' && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">DELOAD</span>}
+                    {w.phase_type === 'test' && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">TEST</span>}
+                    {w.phase_type === 'intro' && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">INTRO</span>}
+                  </div>
+                  <p className="font-medium">{w.day_label} <span className="text-xs text-muted-foreground font-normal">#{w.session_order}</span></p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {w.exercises.length} Übungen: {w.exercises.slice(0, 3).map(e => e.name).join(', ')}
                     {w.exercises.length > 3 && ` +${w.exercises.length - 3} weitere`}
