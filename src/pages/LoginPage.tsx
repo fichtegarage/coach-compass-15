@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dumbbell, Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Loader2, CheckCircle, ArrowLeft, Flame } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const { signIn } = useAuth();
@@ -47,40 +47,90 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-            <Dumbbell className="w-8 h-8 text-primary" />
+    <div className="min-h-screen flex flex-col bg-slate-900">
+      {/* Hero Section */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+        {/* Logo / Brand */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 mb-5 shadow-lg shadow-orange-500/20">
+            <Flame className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-display font-bold text-foreground">CoachHub</h1>
-          <p className="text-muted-foreground text-sm mt-1">Personal Training Verwaltung</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">
+            Stronger Every Day
+          </h1>
+          <p className="text-slate-400 text-sm mt-2">
+            Personal Training · Jakob Neumann
+          </p>
         </div>
 
-        {forgotMode ? (
-          forgotSent ? (
-            <div className="glass-card p-6 text-center space-y-3">
-              <CheckCircle className="w-12 h-12 text-primary mx-auto" />
-              <p className="text-foreground font-medium">E-Mail gesendet!</p>
-              <p className="text-muted-foreground text-sm">
-                Prüfe dein Postfach für den Link zum Zurücksetzen des Passworts.
-              </p>
-              <Button
-                variant="outline"
-                className="mt-2"
-                onClick={() => { setForgotMode(false); setForgotSent(false); setError(''); }}
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Zurück zum Login
-              </Button>
-            </div>
+        {/* Card */}
+        <div className="w-full max-w-sm">
+          {forgotMode ? (
+            forgotSent ? (
+              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 text-center space-y-4 shadow-xl">
+                <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+                  <CheckCircle className="w-7 h-7 text-green-500" />
+                </div>
+                <p className="text-white font-semibold">E-Mail gesendet!</p>
+                <p className="text-slate-400 text-sm">
+                  Prüfe dein Postfach für den Link zum Zurücksetzen des Passworts.
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-2 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
+                  onClick={() => { setForgotMode(false); setForgotSent(false); setError(''); }}
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Zurück zum Login
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-5 shadow-xl">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Passwort zurücksetzen</h2>
+                  <p className="text-slate-400 text-sm mt-1">
+                    Gib deine E-Mail-Adresse ein und wir senden dir einen Link.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-slate-300">E-Mail</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="deine@email.de"
+                    required
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-orange-500 focus:ring-orange-500/20"
+                  />
+                </div>
+                {error && (
+                  <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                    {error}
+                  </p>
+                )}
+                <Button 
+                  type="submit" 
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-5" 
+                  disabled={forgotLoading}
+                >
+                  {forgotLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Link senden'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-slate-400 hover:text-white hover:bg-slate-700"
+                  onClick={() => { setForgotMode(false); setError(''); }}
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Zurück zum Login
+                </Button>
+              </form>
+            )
           ) : (
-            <form onSubmit={handleForgotPassword} className="glass-card p-6 space-y-4">
-              <p className="text-muted-foreground text-sm">
-                Gib deine E-Mail-Adresse ein und wir senden dir einen Link zum Zurücksetzen deines Passworts.
-              </p>
+            <form onSubmit={handleSubmit} className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-5 shadow-xl">
               <div className="space-y-2">
-                <Label htmlFor="email">E-Mail</Label>
+                <Label htmlFor="email" className="text-slate-300">E-Mail</Label>
                 <Input
                   id="email"
                   type="email"
@@ -88,61 +138,51 @@ const LoginPage: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="deine@email.de"
                   required
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-orange-500 focus:ring-orange-500/20"
                 />
               </div>
-              {error && <p className="text-destructive text-sm">{error}</p>}
-              <Button type="submit" className="w-full" disabled={forgotLoading}>
-                {forgotLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Link senden'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => { setForgotMode(false); setError(''); }}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-slate-300">Passwort</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-orange-500 focus:ring-orange-500/20"
+                />
+              </div>
+              {error && (
+                <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
+              <Button 
+                type="submit" 
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-5" 
+                disabled={loading}
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Zurück zum Login
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Anmelden'}
               </Button>
+              <button
+                type="button"
+                className="w-full text-sm text-slate-500 hover:text-slate-300 transition-colors py-2"
+                onClick={() => { setForgotMode(true); setError(''); }}
+              >
+                Passwort vergessen?
+              </button>
             </form>
-          )
-        ) : (
-          <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">E-Mail</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="deine@email.de"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Passwort</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
-            </div>
-            {error && <p className="text-destructive text-sm">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Anmelden'}
-            </Button>
-            <button
-              type="button"
-              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => { setForgotMode(true); setError(''); }}
-            >
-              Passwort vergessen?
-            </button>
-          </form>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* Footer */}
+      <footer className="py-6 text-center">
+        <p className="text-slate-600 text-xs">
+          © {new Date().getFullYear()} Jakob Neumann · Personal Training
+        </p>
+      </footer>
     </div>
   );
 };
