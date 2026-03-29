@@ -469,12 +469,10 @@ const BookingPage: React.FC = () => {
           {/* Top row: Brand + User */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center shadow-lg">
-                <span className="text-white text-xl">🔥</span>
-              </div>
+              <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-10 w-auto" />
               <div>
-                <p className="text-white font-bold text-base leading-tight">Stronger Every Day</p>
-                <p className="text-orange-400 text-sm font-medium">Hallo, {clientName}!</p>
+                <p className="text-white font-bold text-lg leading-tight">{clientName}</p>
+                <p className="text-orange-400 text-xs">Stronger Every Day</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
