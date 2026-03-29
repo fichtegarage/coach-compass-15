@@ -13,7 +13,6 @@ import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut
 import { buildEmail } from '@/lib/emailTemplate';
 import ClientPlanView from '@/components/ClientPlanView';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
-import { startOfWeek, format as formatDate } from 'date-fns';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
@@ -295,11 +294,11 @@ const BookingPage: React.FC = () => {
       .eq('is_read', false)
       .order('created_at', { ascending: false });
     setClientNotifications(clientNotifs || []);
-    const weekStart = formatDate(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    if (!sessionStorage.getItem(`checkin_skipped_${weekStart}`)) {
+    const weekStartStr = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    if (!sessionStorage.getItem(`checkin_skipped_${weekStartStr}`)) {
       const { data: existingCheckin } = await supabase
         .from('weekly_checkins').select('id')
-        .eq('client_id', clientId).eq('week_start', weekStart).maybeSingle();
+        .eq('client_id', clientId).eq('week_start', weekStartStr).maybeSingle();
       if (!existingCheckin) setShowCheckin(true);
     }
     setLoading(false);
