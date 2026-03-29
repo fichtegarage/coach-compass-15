@@ -159,12 +159,20 @@ const generateIcs = (booking: any) => {
 };
 
 const BookingPage: React.FC = () => {
-  const [clientId, setClientId] = useState<string | null>(() => sessionStorage.getItem('booking_client_id'));
-  const [clientName, setClientName] = useState<string>(() => sessionStorage.getItem('booking_client_name') || '');
-  const [clientEmail, setClientEmail] = useState<string | null>(() => sessionStorage.getItem('booking_client_email') || null);
+  // Prüfe zuerst localStorage, dann sessionStorage
+  const [clientId, setClientId] = useState<string | null>(() => 
+    localStorage.getItem('booking_client_id') || sessionStorage.getItem('booking_client_id')
+  );
+  const [clientName, setClientName] = useState<string>(() => 
+    localStorage.getItem('booking_client_name') || sessionStorage.getItem('booking_client_name') || ''
+  );
+  const [clientEmail, setClientEmail] = useState<string | null>(() => 
+    localStorage.getItem('booking_client_email') || sessionStorage.getItem('booking_client_email') || null
+  );
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [slots, setSlots] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
   const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
@@ -203,9 +211,11 @@ const BookingPage: React.FC = () => {
       setCodeLoading(false);
       return;
     }
-    sessionStorage.setItem('booking_client_id', data.id);
-    sessionStorage.setItem('booking_client_name', data.full_name);
-    if (data.email) sessionStorage.setItem('booking_client_email', data.email);
+    // Je nach Checkbox: localStorage (persistent) oder sessionStorage (temporär)
+    const storage = rememberMe ? localStorage : sessionStorage;
+    storage.setItem('booking_client_id', data.id);
+    storage.setItem('booking_client_name', data.full_name);
+    if (data.email) storage.setItem('booking_client_email', data.email);
     setClientId(data.id);
     setClientName(data.full_name);
     setClientEmail(data.email || null);
@@ -213,6 +223,10 @@ const BookingPage: React.FC = () => {
   };
 
   const handleLogout = () => {
+    // Beide Storage-Typen löschen
+    localStorage.removeItem('booking_client_id');
+    localStorage.removeItem('booking_client_name');
+    localStorage.removeItem('booking_client_email');
     sessionStorage.removeItem('booking_client_id');
     sessionStorage.removeItem('booking_client_name');
     sessionStorage.removeItem('booking_client_email');
@@ -438,6 +452,15 @@ const BookingPage: React.FC = () => {
               />
             </div>
             {codeError && <p className="text-sm text-red-600">{codeError}</p>}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <span className="text-sm text-slate-600">Angemeldet bleiben</span>
+            </label>
             <Button
               type="submit"
               disabled={codeLoading || !codeInput.trim()}
