@@ -498,10 +498,10 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                       )}
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 min-w-0">
                       <button
                         onClick={() => setActiveWorkout(nextWorkout)}
-                        className="flex-1 bg-white text-primary font-bold py-3 rounded-xl text-sm active:scale-95 transition-all"
+                        className="flex-1 min-w-0 bg-white text-primary font-bold py-3 rounded-xl text-sm active:scale-95 transition-all"
                       >
                         {nextWorkout.is_assessment && nextWorkout.status === 'completed'
                           ? '📋 Assessment ansehen'
@@ -521,11 +521,11 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                               .update({ next_plan_workout_id: selected.id })
                               .eq('id', plan.id);
                           }}
-                          className="bg-white/20 text-white text-xs rounded-xl px-3 border border-white/30 focus:outline-none"
+                          className="bg-white/20 text-white text-xs rounded-xl px-2 py-3 border border-white/30 focus:outline-none max-w-[100px] sm:max-w-[140px] truncate flex-shrink-0"
                         >
                           {plan.workouts.map(w => (
                             <option key={w.id} value={w.id} className="text-slate-900">
-                              {w.is_assessment ? '📋 ' : ''}{w.week_label ? w.week_label.split(':')[0] : `W${w.week_number}`} · {w.day_label}
+                              {w.is_assessment ? '📋 ' : ''}W{w.week_number} · {w.day_label.length > 12 ? w.day_label.substring(0, 12) + '…' : w.day_label}
                             </option>
                           ))}
                         </select>
