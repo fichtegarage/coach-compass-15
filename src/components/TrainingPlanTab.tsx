@@ -22,6 +22,7 @@ import { parsePlan, validateParsedPlan, type ParsedPlan } from '@/lib/planParser
 import { matchAndAddExercises, getMatchingStats } from '@/lib/exerciseMatching';
 import { loadClientDataForPrompt, generateSystemPrompt, generateUserPrompt, type PlanConfig } from '@/lib/aiPlanGenerator';
 import AssessmentGuide from '@/components/AssessmentGuide';
+import PlanExerciseEditor from '@/components/PlanExerciseEditor';
 
 interface TrainingPlan {
   id: string; name: string; goal: string | null; weeks_total: number | null;
@@ -142,10 +143,13 @@ const WorkoutCard: React.FC<{
   onExerciseUpdated: (exerciseId: string, alternativeName: string) => void;
   onToggleAssessment: (workoutId: string, isAssessment: boolean) => void;
   onOpenAssessment: (workout: PlanWorkout) => void;
+  onWorkoutUpdated: () => void;
   clientName: string;
-}> = ({ workout, onExerciseUpdated, onToggleAssessment, onOpenAssessment, clientName }) => {
+  catalogExercises?: { id: string; name_de: string }[];
+}> = ({ workout, onExerciseUpdated, onToggleAssessment, onOpenAssessment, onWorkoutUpdated, clientName, catalogExercises }) => {
   const [open, setOpen] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const handleToggleAssessment = async () => {
     setToggling(true);
@@ -181,7 +185,7 @@ const WorkoutCard: React.FC<{
       </button>
       {open && (
         <div className="p-3 space-y-3">
-          {/* Assessment-Toggle und Button */}
+          {/* Assessment-Toggle und Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handleToggleAssessment}
@@ -210,11 +214,35 @@ const WorkoutCard: React.FC<{
                 {workout.status === 'completed' ? 'Assessment ansehen' : 'Assessment durchführen'}
               </Button>
             )}
+            {!workout.is_assessment && (
+              <Button
+                size="sm"
+                variant={editMode ? "default" : "outline"}
+                onClick={() => setEditMode(!editMode)}
+                className="text-xs h-7 gap-1.5 ml-auto"
+              >
+                <Pencil className="w-3 h-3" />
+                {editMode ? 'Fertig' : 'Bearbeiten'}
+              </Button>
+            )}
           </div>
 
-          {/* Übungen (nur wenn kein Assessment oder wenn Assessment mit Übungen) */}
-          {!workout.is_assessment && workout.exercises && workout.exercises.length > 0 && (
-            <ExerciseTable exercises={workout.exercises} onExerciseUpdated={onExerciseUpdated} />
+          {/* Übungen */}
+          {!workout.is_assessment && workout.exercises && (
+            editMode ? (
+              <PlanExerciseEditor 
+                exercises={workout.exercises} 
+                workoutId={workout.id}
+                onUpdate={onWorkoutUpdated}
+                catalogExercises={catalogExercises}
+              />
+            ) : workout.exercises.length > 0 ? (
+              <ExerciseTable exercises={workout.exercises} onExerciseUpdated={onExerciseUpdated} />
+            ) : (
+              <div className="text-center py-4 text-muted-foreground text-sm">
+                Keine Übungen. <button onClick={() => setEditMode(true)} className="text-primary underline">Jetzt hinzufügen</button>
+              </div>
+            )
           )}
           {workout.is_assessment && (
             <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
@@ -720,10 +748,19 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<PlanWorkout | null>(null);
+  const [catalogExercises, setCatalogExercises] = useState<{ id: string; name_de: string }[]>([]);
 
   const loadPlans = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    
+    // Übungskatalog laden
+    const { data: exerciseCatalog } = await supabase
+      .from('exercises')
+      .select('id, name_de')
+      .order('name_de');
+    setCatalogExercises(exerciseCatalog || []);
+    
     const { data: plansData } = await supabase.from('training_plans').select('*').eq('client_id', clientId).eq('trainer_id', user.id).order('created_at', { ascending: false });
     if (!plansData) { setLoading(false); return; }
     setPlans(plansData);
@@ -890,7 +927,9 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
                   onExerciseUpdated={handleExerciseUpdated}
                   onToggleAssessment={handleToggleAssessment}
                   onOpenAssessment={handleOpenAssessment}
+                  onWorkoutUpdated={loadPlans}
                   clientName={clientName}
+                  catalogExercises={catalogExercises}
                 />
               ))}
             </div>
