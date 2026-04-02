@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut } from 'lucide-react';
 import { buildEmail } from '@/lib/emailTemplate';
 import ClientPlanView from '@/components/ClientPlanView';
+import ClientMetricsWidget from '@/components/ClientMetricsWidget';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
@@ -492,7 +493,7 @@ const BookingPage: React.FC = () => {
           {/* Top row: Brand + User */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <img src="/Logo.svg" alt="Jakob Neumann Training" className="h-10 w-auto" />
+              <img src="/Logo-white.svg" alt="Jakob Neumann Training" className="h-10 w-auto" />
               <div>
                 <p className="text-white font-bold text-lg leading-tight">{clientName}</p>
                 <p className="text-orange-400 text-xs">Stronger Every Day</p>
@@ -592,7 +593,10 @@ const BookingPage: React.FC = () => {
 
       <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
         {activeView === 'plan' ? (
-          <ClientPlanView clientId={clientId} />
+          <div className="space-y-4">
+            <ClientPlanView clientId={clientId} />
+            <ClientMetricsWidget clientId={clientId} />
+          </div>
         ) : activeView === 'bookings' ? (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-white">Meine Termine</h2>

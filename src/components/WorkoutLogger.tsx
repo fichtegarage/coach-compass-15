@@ -363,10 +363,12 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
 
     setSaving(false);
 
-    // Rest-Timer starten wenn Pause definiert und nicht letzter Satz
+    // Rest-Timer starten wenn nicht letzter Satz
     const isLastSet = activeSetIndex === currentLog.sets.length - 1;
-    if (!isLastSet && exercise.rest_seconds) {
-      setRestSeconds(exercise.rest_seconds);
+    if (!isLastSet) {
+      // Fallback auf 90 Sekunden wenn keine Pause definiert
+      const restTime = exercise.rest_seconds || 90;
+      setRestSeconds(restTime);
       setShowRestTimer(true);
     }
   }, [workoutLogId, currentLog, activeSetIndex, currentExerciseIndex]);

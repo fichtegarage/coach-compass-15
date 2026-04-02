@@ -6,15 +6,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Plus, AlertTriangle, ChevronDown, ChevronUp,
   Dumbbell, Target, Calendar, Loader2, Trash2,
   CheckCircle, ClipboardPaste, Pencil, Check, X, ClipboardCheck,
+  Sparkles, Copy, Download, Brain,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { parsePlan, validateParsedPlan, type ParsedPlan } from '@/lib/planParser';
+import { matchAndAddExercises, getMatchingStats } from '@/lib/exerciseMatching';
+import { loadClientDataForPrompt, generatePlanPrompt, copyPromptToClipboard, downloadPromptAsFile } from '@/lib/aiPlanGenerator';
 import AssessmentGuide from '@/components/AssessmentGuide';
 
 interface TrainingPlan {
@@ -248,6 +254,14 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
     if (!parsed) return;
     setSaving(true);
     try {
+      // 1. Alle Übungsnamen sammeln für Matching
+      const allExerciseNames = parsed.workouts.flatMap(w => w.exercises.map(e => e.name));
+      
+      // 2. Matching durchführen (matcht mit Katalog oder fügt neue hinzu)
+      const matchResults = await matchAndAddExercises(allExerciseNames);
+      const stats = getMatchingStats(matchResults);
+      
+      // 3. Plan speichern
       await supabase.from('training_plans').update({ is_active: false }).eq('client_id', clientId).eq('trainer_id', trainerId).eq('is_active', true);
       const { data: planData, error: planError } = await supabase.from('training_plans').insert({
         client_id: clientId, trainer_id: trainerId, name: parsed.name, goal: parsed.goal || null,
@@ -268,17 +282,34 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
         }).select().single();
         if (workoutError || !workoutData) throw workoutError;
         if (workout.exercises.length > 0) {
+          // 4. Übungen mit exercise_id aus Matching einfügen
           const { error: exError } = await supabase.from('plan_exercises').insert(
-            workout.exercises.map(ex => ({
-              workout_id: workoutData.id, name: ex.name, sets: ex.sets,
-              reps_target: ex.reps_target || null, weight_target: ex.weight_target || null,
-              rest_seconds: ex.rest_seconds, notes: ex.notes || null, order_in_workout: ex.order_in_workout,
-            }))
+            workout.exercises.map(ex => {
+              const match = matchResults.get(ex.name);
+              return {
+                workout_id: workoutData.id, 
+                name: ex.name, 
+                sets: ex.sets,
+                reps_target: ex.reps_target || null, 
+                weight_target: ex.weight_target || null,
+                rest_seconds: ex.rest_seconds, 
+                notes: ex.notes || null, 
+                order_in_workout: ex.order_in_workout,
+                exercise_id: match?.exerciseId || null,
+              };
+            })
           );
           if (exError) throw exError;
         }
       }
-      toast.success(`Plan "${parsed.name}" erfolgreich importiert`);
+      
+      // 5. Erfolgsmeldung mit Matching-Info
+      let message = `Plan "${parsed.name}" erfolgreich importiert`;
+      if (stats.added > 0) {
+        message += ` · ${stats.added} neue Übung${stats.added > 1 ? 'en' : ''} zum Katalog hinzugefügt`;
+      }
+      toast.success(message);
+      
       onImported(); onClose();
       setStep('paste'); setMarkdown(''); setParsed(null); setValidation(null);
     } catch (err) { console.error(err); toast.error('Fehler beim Speichern des Plans.'); }
@@ -367,12 +398,184 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
   );
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// KI-WORKOUT-BUILDER DIALOG
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface AIBuilderDialogProps {
+  open: boolean;
+  onClose: () => void;
+  clientId: string;
+  clientName: string;
+}
+
+const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, clientId, clientName }) => {
+  const [loading, setLoading] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [step, setStep] = useState<'config' | 'prompt'>('config');
+  
+  // Config State
+  const [weeks, setWeeks] = useState(4);
+  const [sessionsPerWeek, setSessions] = useState(3);
+  const [includeDeload, setIncludeDeload] = useState(true);
+  const [focus, setFocus] = useState('');
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    try {
+      const data = await loadClientDataForPrompt(clientId);
+      const generatedPrompt = generatePlanPrompt(data, {
+        weeks,
+        sessionsPerWeek,
+        includeDeload,
+        focus: focus || undefined,
+      });
+      setPrompt(generatedPrompt);
+      setStep('prompt');
+    } catch (err) {
+      console.error(err);
+      toast.error('Fehler beim Laden der Kundendaten');
+    }
+    setLoading(false);
+  };
+
+  const handleCopy = async () => {
+    const success = await copyPromptToClipboard(prompt);
+    if (success) {
+      toast.success('Prompt in Zwischenablage kopiert! Öffne jetzt Claude.');
+    } else {
+      toast.error('Kopieren fehlgeschlagen');
+    }
+  };
+
+  const handleDownload = () => {
+    downloadPromptAsFile(prompt, clientName);
+    toast.success('Prompt als Datei heruntergeladen');
+  };
+
+  const handleClose = () => {
+    setStep('config');
+    setPrompt('');
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            KI-Workout-Builder
+          </DialogTitle>
+        </DialogHeader>
+
+        {step === 'config' && (
+          <div className="space-y-6">
+            <p className="text-sm text-muted-foreground">
+              Generiere einen optimierten Claude-Prompt basierend auf den Erstgespräch-Daten, 
+              Assessment und Equipment-Profil von <strong>{clientName}</strong>.
+            </p>
+
+            <div className="grid gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Wochen</Label>
+                  <Select value={String(weeks)} onValueChange={v => setWeeks(Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3">3 Wochen</SelectItem>
+                      <SelectItem value="4">4 Wochen</SelectItem>
+                      <SelectItem value="6">6 Wochen</SelectItem>
+                      <SelectItem value="8">8 Wochen</SelectItem>
+                      <SelectItem value="12">12 Wochen</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Einheiten/Woche</Label>
+                  <Select value={String(sessionsPerWeek)} onValueChange={v => setSessions(Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2">2×/Woche</SelectItem>
+                      <SelectItem value="3">3×/Woche</SelectItem>
+                      <SelectItem value="4">4×/Woche</SelectItem>
+                      <SelectItem value="5">5×/Woche</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Fokus (optional)</Label>
+                <Input 
+                  value={focus}
+                  onChange={e => setFocus(e.target.value)}
+                  placeholder="z.B. Oberkörper, Fettabbau, Kraft..."
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <p className="font-medium text-sm">Deload-Woche einplanen</p>
+                  <p className="text-xs text-muted-foreground">Reduzierte Intensität am Ende</p>
+                </div>
+                <Switch checked={includeDeload} onCheckedChange={setIncludeDeload} />
+              </div>
+            </div>
+
+            <Button onClick={handleGenerate} disabled={loading} className="w-full gap-2">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+              {loading ? 'Lade Daten...' : 'Prompt generieren'}
+            </Button>
+          </div>
+        )}
+
+        {step === 'prompt' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Prompt bereit! Kopiere ihn und füge ihn bei Claude ein.
+              </p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={handleDownload}>
+                  <Download className="w-4 h-4" />
+                </Button>
+                <Button size="sm" onClick={handleCopy} className="gap-2">
+                  <Copy className="w-4 h-4" />
+                  Kopieren
+                </Button>
+              </div>
+            </div>
+
+            <Textarea
+              value={prompt}
+              readOnly
+              className="h-[400px] font-mono text-xs"
+            />
+
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep('config')} className="flex-1">
+                ← Einstellungen ändern
+              </Button>
+              <Button onClick={handleCopy} className="flex-1 gap-2">
+                <Copy className="w-4 h-4" />
+                Kopieren & Claude öffnen
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName }) => {
   const { user } = useAuth();
   const [plans, setPlans] = useState<TrainingPlan[]>([]);
   const [activePlan, setActivePlan] = useState<TrainingPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<PlanWorkout | null>(null);
@@ -489,14 +692,28 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
           <h3 className="font-display font-semibold">Trainingsplan</h3>
           {activePlan && <p className="text-xs text-muted-foreground mt-0.5">{activePlan.name}{activePlan.weeks_total && ` · ${activePlan.weeks_total} Wochen`}{activePlan.sessions_per_week && ` · ${activePlan.sessions_per_week}×/Woche`}</p>}
         </div>
-        <Button size="sm" className="gap-2" onClick={() => setImportOpen(true)}><Plus className="w-4 h-4" /> Plan importieren</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="gap-2" onClick={() => setAiBuilderOpen(true)}>
+            <Sparkles className="w-4 h-4" /> KI-Plan
+          </Button>
+          <Button size="sm" className="gap-2" onClick={() => setImportOpen(true)}>
+            <Plus className="w-4 h-4" /> Importieren
+          </Button>
+        </div>
       </div>
 
       {!activePlan && (
-        <Card><CardContent className="p-8 text-center space-y-3">
+        <Card><CardContent className="p-8 text-center space-y-4">
           <Dumbbell className="w-10 h-10 text-muted-foreground/30 mx-auto" />
           <p className="text-muted-foreground text-sm">Noch kein aktiver Trainingsplan für {clientName}.</p>
-          <Button size="sm" className="gap-2 mt-2" onClick={() => setImportOpen(true)}><ClipboardPaste className="w-4 h-4" /> Plan importieren</Button>
+          <div className="flex gap-2 justify-center">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => setAiBuilderOpen(true)}>
+              <Sparkles className="w-4 h-4" /> KI-Plan erstellen
+            </Button>
+            <Button size="sm" className="gap-2" onClick={() => setImportOpen(true)}>
+              <ClipboardPaste className="w-4 h-4" /> Plan importieren
+            </Button>
+          </div>
         </CardContent></Card>
       )}
 
@@ -609,6 +826,7 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
       )}
 
       {user && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={loadPlans} clientId={clientId} trainerId={user.id} />}
+      <AIBuilderDialog open={aiBuilderOpen} onClose={() => setAiBuilderOpen(false)} clientId={clientId} clientName={clientName} />
     </div>
     </>
   );

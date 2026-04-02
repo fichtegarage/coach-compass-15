@@ -67,6 +67,7 @@ const ClientEquipmentTab: React.FC<ClientEquipmentTabProps> = ({ clientId, clien
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [presetMode, setPresetMode] = useState<'studio_full' | 'custom'>('custom');
 
   // ── Load Data ──────────────────────────────────────────────────────────────
 
@@ -92,13 +93,17 @@ const ClientEquipmentTab: React.FC<ClientEquipmentTabProps> = ({ clientId, clien
       // Load client's equipment
       const { data: clientData } = await supabase
         .from('client_equipment')
-        .select('equipment_id, location')
+        .select('equipment_id, location, preset_mode')
         .eq('client_id', clientId);
 
-      if (clientData) {
+      if (clientData && clientData.length > 0) {
         const map = new Map<string, ClientEquipment>();
         clientData.forEach(ce => map.set(ce.equipment_id, ce));
         setClientEquipment(map);
+        // Preset-Modus aus erstem Eintrag lesen (alle haben gleichen Wert)
+        if (clientData[0].preset_mode) {
+          setPresetMode(clientData[0].preset_mode as 'studio_full' | 'custom');
+        }
       }
 
       setLoading(false);
@@ -106,6 +111,54 @@ const ClientEquipmentTab: React.FC<ClientEquipmentTabProps> = ({ clientId, clien
 
     load();
   }, [clientId]);
+
+  // ── Apply Preset ────────────────────────────────────────────────────────────
+
+  const applyPreset = async (preset: 'studio_full' | 'custom') => {
+    setSaving(true);
+    setPresetMode(preset);
+
+    try {
+      // Erst alle löschen
+      await supabase.from('client_equipment').delete().eq('client_id', clientId);
+
+      if (preset === 'studio_full') {
+        // Studio-Equipment definieren (alle außer reine Home-Items)
+        const studioCategories = ['free_weights', 'machines', 'cables', 'cardio'];
+        const studioEquipment = allEquipment.filter(e => 
+          studioCategories.includes(e.category) || 
+          ['pull_up_bar', 'dip_station', 'bench_flat', 'bench_incline', 'squat_rack', 'box', 'mat'].includes(e.name)
+        );
+
+        // Alle Studio-Geräte mit location='gym' einfügen
+        const inserts = studioEquipment.map(eq => ({
+          client_id: clientId,
+          equipment_id: eq.id,
+          location: 'gym' as const,
+          preset_mode: 'studio_full',
+        }));
+
+        if (inserts.length > 0) {
+          await supabase.from('client_equipment').insert(inserts);
+        }
+
+        // State aktualisieren
+        const map = new Map<string, ClientEquipment>();
+        studioEquipment.forEach(eq => map.set(eq.id, { equipment_id: eq.id, location: 'gym' }));
+        setClientEquipment(map);
+        toast.success(`Studio-Preset angewendet (${studioEquipment.length} Geräte)`);
+      } else {
+        // Custom = alles leer starten
+        setClientEquipment(new Map());
+        toast.success('Equipment zurückgesetzt – wähle jetzt manuell aus');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Fehler beim Anwenden des Presets');
+    }
+
+    setSaving(false);
+  };
 
   // ── Toggle Equipment ───────────────────────────────────────────────────────
 
@@ -182,7 +235,7 @@ const ClientEquipmentTab: React.FC<ClientEquipmentTabProps> = ({ clientId, clien
 
   return (
     <div className="space-y-4">
-      {/* Header Stats */}
+      {/* Preset Selection */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-display flex items-center gap-2">
@@ -190,12 +243,52 @@ const ClientEquipmentTab: React.FC<ClientEquipmentTabProps> = ({ clientId, clien
             Equipment-Profil
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-3">
-            Wähle aus, welches Equipment {clientName.split(' ')[0]} zur Verfügung steht.
-            Dies hilft bei der Planerstellung und Übungsauswahl.
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Wähle ein Preset oder konfiguriere das Equipment manuell.
           </p>
-          <div className="flex gap-4">
+          
+          {/* Preset Buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => applyPreset('studio_full')}
+              disabled={saving}
+              className={`p-3 rounded-xl border-2 transition-all text-left ${
+                presetMode === 'studio_full'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted hover:border-primary/50'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Building2 className="w-4 h-4 text-primary" />
+                <span className="font-semibold text-sm">Voll ausgestattetes Studio</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Alle Maschinen, freie Gewichte, Kabel, Cardio
+              </p>
+            </button>
+            
+            <button
+              onClick={() => applyPreset('custom')}
+              disabled={saving}
+              className={`p-3 rounded-xl border-2 transition-all text-left ${
+                presetMode === 'custom'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted hover:border-primary/50'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Home className="w-4 h-4 text-blue-500" />
+                <span className="font-semibold text-sm">Eigene Auswahl</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Manuell auswählen (Homegym, Outdoor, etc.)
+              </p>
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="flex gap-4 pt-2 border-t">
             <div className="text-center">
               <p className="text-2xl font-bold text-primary">{selectedCount}</p>
               <p className="text-xs text-muted-foreground">Gesamt</p>

@@ -12,6 +12,7 @@ import {
   CalendarCheck, Dumbbell, AlertCircle,
 } from 'lucide-react';
 import BookSessionDialog from '@/components/BookSessionDialog';
+import CoachAlerts from '@/components/CoachAlerts';
 import {
   format, addDays, isSameDay, isToday, differenceInDays, getMonth, getDate,
 } from 'date-fns';
@@ -497,6 +498,11 @@ const DashboardPage: React.FC = () => {
     </div>
   </section>
 )}
+
+      {/* Coach Alerts */}
+      <section className="space-y-3">
+        <CoachAlerts />
+      </section>
 
       {/* 7-Day Timeline */}
       <section className="space-y-3">
