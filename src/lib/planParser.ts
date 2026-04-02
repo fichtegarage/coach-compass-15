@@ -323,10 +323,13 @@ export function parsePlan(markdown: string): ParsedPlan | null {
     workouts.push(currentWorkout);
   }
 
+  // WICHTIG: Leere Workouts (ohne Übungen) herausfiltern
+  const validWorkouts = workouts.filter(w => w.exercises.length > 0);
+
   // Calculate weeks_total and total_cycles from parsed data
-  const maxWeek = workouts.reduce((max, w) => Math.max(max, w.week_number), 0);
+  const maxWeek = validWorkouts.reduce((max, w) => Math.max(max, w.week_number), 0);
   const weeks_total = maxWeek > 0 ? maxWeek : null;
-  const total_cycles = workouts.reduce((max, w) => Math.max(max, w.cycle_number), 1);
+  const total_cycles = validWorkouts.reduce((max, w) => Math.max(max, w.cycle_number), 1);
 
   return {
     name,
@@ -337,7 +340,7 @@ export function parsePlan(markdown: string): ParsedPlan | null {
     progression_notes,
     coaching_notes,
     nutrition_notes,
-    workouts,
+    workouts: validWorkouts,
   };
 }
 
