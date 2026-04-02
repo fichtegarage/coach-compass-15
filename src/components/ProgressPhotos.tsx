@@ -19,6 +19,7 @@ interface ProgressPhoto {
   photo_url: string;
   taken_at: string;
   note: string | null;
+  uploaded_by: string | null;
   created_at: string;
 }
 
@@ -92,6 +93,7 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
       photo_url: urlData.publicUrl,
       taken_at: uploadDate,
       note: uploadNote || null,
+      uploaded_by: 'coach',
     } as any);
 
     toast.success('Foto hochgeladen');
@@ -105,7 +107,6 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
 
   const deletePhoto = async (photo: ProgressPhoto) => {
     if (!window.confirm('Foto wirklich löschen?')) return;
-    // Extract storage path from URL
     const urlParts = photo.photo_url.split('/progress-photos/');
     if (urlParts[1]) {
       await supabase.storage.from('progress-photos').remove([urlParts[1]]);
@@ -127,8 +128,6 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
   };
 
   const comparePhotos = photos.filter(p => compareSelection.includes(p.id));
-
-  // Find the most recent photo
   const latestPhotoId = photos.length > 0 ? photos[photos.length - 1].id : null;
 
   if (loading) return null;
@@ -170,7 +169,6 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
         </div>
       </div>
 
-      {/* Compare mode action bar */}
       {compareMode && (
         <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
           <span className="text-sm text-foreground">
@@ -203,7 +201,6 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
         </div>
       ) : (
         <div className="relative group">
-          {/* Scroll arrows */}
           {photos.length > 3 && (
             <>
               <button
@@ -221,7 +218,6 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
             </>
           )}
 
-          {/* Horizontal timeline */}
           <div
             ref={scrollRef}
             className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory scrollbar-thin"
@@ -230,13 +226,13 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
             {photos.map(p => {
               const isLatest = p.id === latestPhotoId;
               const isSelected = compareSelection.includes(p.id);
+              const isClientPhoto = p.uploaded_by === 'client';
               return (
                 <div
                   key={p.id}
                   className="snap-start shrink-0 flex flex-col items-center"
                   style={{ width: '140px' }}
                 >
-                  {/* Timeline dot + line */}
                   <div className="flex items-center w-full mb-2">
                     <div className="flex-1 h-px bg-border" />
                     <div
@@ -249,7 +245,6 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
                     <div className="flex-1 h-px bg-border" />
                   </div>
 
-                  {/* Photo card */}
                   <button
                     className={`relative w-[130px] h-[130px] rounded-xl overflow-hidden border-2 transition-all ${
                       isLatest
@@ -276,6 +271,11 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
                         Aktuell
                       </Badge>
                     )}
+                    {isClientPhoto && (
+                      <span className="absolute bottom-1.5 right-1.5 text-[9px] bg-blue-500/80 text-white px-1 py-0.5 rounded">
+                        Kunde
+                      </span>
+                    )}
                     {compareMode && isSelected && (
                       <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
                         <Check className="w-6 h-6 text-primary" />
@@ -283,7 +283,6 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
                     )}
                   </button>
 
-                  {/* Date label */}
                   <p className={`text-xs mt-1.5 ${isLatest ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
                     {format(new Date(p.taken_at), 'd. MMM yy', { locale: de })}
                   </p>
@@ -333,6 +332,9 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
                 <DialogTitle className="font-display">
                   {format(new Date(lightboxPhoto.taken_at), 'd. MMMM yyyy', { locale: de })}
                   {lightboxPhoto.note && <span className="text-muted-foreground font-normal"> · {lightboxPhoto.note}</span>}
+                  {lightboxPhoto.uploaded_by === 'client' && (
+                    <span className="ml-2 text-xs text-blue-500">🔵 Kunde</span>
+                  )}
                 </DialogTitle>
               </DialogHeader>
               <div className="w-full rounded-xl overflow-hidden bg-muted">
@@ -371,6 +373,9 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
                   {format(new Date(p.taken_at), 'd. MMM yyyy', { locale: de })}
                 </p>
                 {p.note && <p className="text-xs text-muted-foreground">{p.note}</p>}
+                {p.uploaded_by === 'client' && (
+                  <p className="text-xs text-blue-500 mt-0.5">🔵 Kunde</p>
+                )}
               </div>
             ))}
           </div>
