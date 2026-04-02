@@ -13,6 +13,7 @@ import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut
 import { buildEmail } from '@/lib/emailTemplate';
 import ClientPlanView from '@/components/ClientPlanView';
 import ClientMetricsWidget from '@/components/ClientMetricsWidget';
+import ClientProgressPhotos from '@/components/ClientProgressPhotos';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
@@ -160,7 +161,6 @@ const generateIcs = (booking: any) => {
 };
 
 const BookingPage: React.FC = () => {
-  // Prüfe zuerst localStorage, dann sessionStorage
   const [clientId, setClientId] = useState<string | null>(() => 
     localStorage.getItem('booking_client_id') || sessionStorage.getItem('booking_client_id')
   );
@@ -212,7 +212,6 @@ const BookingPage: React.FC = () => {
       setCodeLoading(false);
       return;
     }
-    // Je nach Checkbox: localStorage (persistent) oder sessionStorage (temporär)
     const storage = rememberMe ? localStorage : sessionStorage;
     storage.setItem('booking_client_id', data.id);
     storage.setItem('booking_client_name', data.full_name);
@@ -224,7 +223,6 @@ const BookingPage: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Beide Storage-Typen löschen
     localStorage.removeItem('booking_client_id');
     localStorage.removeItem('booking_client_name');
     localStorage.removeItem('booking_client_email');
@@ -479,18 +477,17 @@ const BookingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col" style={{ fontFamily: "'Montserrat', sans-serif" }}>
       <meta name="robots" content="noindex" />
-          {showCheckin && clientId && (
-      <WeeklyCheckin
-        clientId={clientId}
-        clientName={clientName}
-        onDone={() => setShowCheckin(false)}
-      />
-    )}
+      {showCheckin && clientId && (
+        <WeeklyCheckin
+          clientId={clientId}
+          clientName={clientName}
+          onDone={() => setShowCheckin(false)}
+        />
+      )}
 
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3">
-          {/* Top row: Brand + User */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <img src="/Logo-white.svg" alt="Jakob Neumann Training" className="h-10 w-auto" />
@@ -522,14 +519,11 @@ const BookingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Tab Navigation */}
           <div className="flex gap-1 bg-slate-700/50 rounded-xl p-1">
             <button
               onClick={() => setActiveView('plan')}
               className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeView === 'plan'
-                  ? 'bg-orange-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                activeView === 'plan' ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
             >
               🏋️ Training
@@ -537,9 +531,7 @@ const BookingPage: React.FC = () => {
             <button
               onClick={() => setActiveView('calendar')}
               className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeView === 'calendar'
-                  ? 'bg-orange-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                activeView === 'calendar' ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
             >
               📅 Buchen
@@ -547,9 +539,7 @@ const BookingPage: React.FC = () => {
             <button
               onClick={() => setActiveView('bookings')}
               className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeView === 'bookings'
-                  ? 'bg-orange-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                activeView === 'bookings' ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
             >
               📋 Termine
@@ -593,9 +583,10 @@ const BookingPage: React.FC = () => {
 
       <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
         {activeView === 'plan' ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <ClientPlanView clientId={clientId} />
             <ClientMetricsWidget clientId={clientId} />
+            <ClientProgressPhotos clientId={clientId} />
           </div>
         ) : activeView === 'bookings' ? (
           <div className="space-y-4">
@@ -615,7 +606,7 @@ const BookingPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm"
-                        className="text-slate-400 hover:text-white hover:bg-slate-700"
+                        className="text-primary hover:text-primary hover:bg-primary/20 text-xs"
                         onClick={() => {
                           const start = new Date(s.session_date);
                           const end = new Date(start.getTime() + s.duration_minutes * 60000);
@@ -628,7 +619,6 @@ const BookingPage: React.FC = () => {
                           a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
                           a.click(); URL.revokeObjectURL(url);
                         }}
-                        className="text-primary hover:text-primary hover:bg-primary/20 text-xs"
                       >+ Kalender</Button>
                       <span className="text-xs font-medium text-primary bg-primary/20 border border-primary/30 rounded-full px-2 py-0.5">Bestätigt ✅</span>
                     </div>
@@ -691,7 +681,7 @@ const BookingPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm"
-                        className="text-slate-400 hover:text-white hover:bg-slate-700"
+                        className="text-primary hover:text-primary hover:bg-primary/20 text-xs"
                         onClick={() => {
                           const start = new Date(s.session_date);
                           const end = new Date(start.getTime() + s.duration_minutes * 60000);
@@ -704,7 +694,6 @@ const BookingPage: React.FC = () => {
                           a.download = `training-${format(start, 'yyyy-MM-dd')}.ics`;
                           a.click(); URL.revokeObjectURL(url);
                         }}
-                        className="text-primary hover:text-primary hover:bg-primary/20 text-xs"
                       >+ Kalender</Button>
                       <span className="text-xs font-medium text-primary bg-primary/20 border border-primary/30 rounded-full px-2 py-0.5">Bestätigt ✅</span>
                     </div>
@@ -769,7 +758,6 @@ const BookingPage: React.FC = () => {
         )}
       </div>
 
-      {/* Abmelde-Toggle für wöchentliche Zusammenfassung */}
       <div className="py-2 flex justify-center">
         <button
           onClick={async () => {
