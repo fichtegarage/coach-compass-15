@@ -266,11 +266,38 @@ const ClientDetailPage: React.FC = () => {
       supabase.from('quick_logs').select('*').eq('client_id', id).order('created_at', { ascending: false }),
       supabase.from('package_feature_completions').select('package_id, feature_key'),
     ]);
+    
+    // Auch Kunden-eingetragene Metriken laden (falls Tabelle existiert)
+    let clientMetricsData: any[] = [];
+    try {
+      const { data } = await supabase
+        .from('client_metrics')
+        .select('*')
+        .eq('client_id', id)
+        .order('recorded_at', { ascending: true });
+      clientMetricsData = (data || []).map((m: any) => ({
+        ...m,
+        measured_at: m.recorded_at,
+        body_fat_pct: m.body_fat_percent,
+        source: 'client',
+      }));
+    } catch {
+      // Tabelle existiert noch nicht
+    }
+    
+    // Coach-Metriken mit source markieren
+    const coachMetrics = (mRes.data || []).map((m: any) => ({ ...m, source: 'coach' }));
+    
+    // Zusammenführen und nach Datum sortieren
+    const allMetrics = [...coachMetrics, ...clientMetricsData].sort(
+      (a, b) => new Date(a.measured_at).getTime() - new Date(b.measured_at).getTime()
+    );
+    
     setClient(cRes.data);
     setPinnedText(cRes.data?.pinned_note || '');
     setPackages(pRes.data || []);
     setSessions(sRes.data || []);
-    setMetrics(mRes.data || []);
+    setMetrics(allMetrics);
     setBenchmarks(bRes.data || []);
     setQuickLogs(qlRes.data || []);
     const mcMap: Record<string, Set<string>> = {};
