@@ -1,10 +1,8 @@
 /**
  * aiPlanGenerator.ts
  * 
- * Generiert optimierte Prompts für Claude basierend auf:
- * - Erstgespräch-Daten
- * - Equipment-Profil
- * - Übungskatalog (verfügbare Übungen)
+ * Generiert optimierte Prompts für Claude basierend auf Kundendaten.
+ * Die API-Kommunikation erfolgt direkt im AIBuilderDialog.
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -45,7 +43,6 @@ interface AssessmentData {
   stability_score?: number;
   strengths?: string;
   focus_points?: string;
-  coach_notes?: string;
 }
 
 interface EquipmentItem {
@@ -53,7 +50,7 @@ interface EquipmentItem {
   location: 'home' | 'gym' | 'both';
 }
 
-interface PlanConfig {
+export interface PlanConfig {
   weeks: number;
   sessionsPerWeek: number;
   includeDeload: boolean;
@@ -71,14 +68,12 @@ export async function loadClientDataForPrompt(clientId: string): Promise<{
   equipment: EquipmentItem[];
   exercises: string[];
 }> {
-  // Client-Daten
   const { data: clientData } = await supabase
     .from('clients')
     .select('full_name, date_of_birth, fitness_goal, fitness_goal_text')
     .eq('id', clientId)
     .single();
 
-  // Erstgespräch
   const { data: convData } = await supabase
     .from('onboarding_conversations')
     .select('*')
@@ -87,7 +82,6 @@ export async function loadClientDataForPrompt(clientId: string): Promise<{
     .limit(1)
     .maybeSingle();
 
-  // Gesundheit
   const { data: healthData } = await supabase
     .from('health_records')
     .select('*')
@@ -96,7 +90,6 @@ export async function loadClientDataForPrompt(clientId: string): Promise<{
     .limit(1)
     .maybeSingle();
 
-  // Assessment
   const { data: assessmentData } = await supabase
     .from('assessments')
     .select('*')
@@ -105,7 +98,6 @@ export async function loadClientDataForPrompt(clientId: string): Promise<{
     .limit(1)
     .maybeSingle();
 
-  // Equipment
   const { data: equipmentData } = await supabase
     .from('client_equipment')
     .select('equipment_id, location, equipment_catalog(name_de)')
@@ -116,7 +108,6 @@ export async function loadClientDataForPrompt(clientId: string): Promise<{
     location: e.location,
   }));
 
-  // Verfügbare Übungen
   const { data: exerciseData } = await supabase
     .from('exercises')
     .select('name_de')
@@ -124,163 +115,81 @@ export async function loadClientDataForPrompt(clientId: string): Promise<{
 
   const exercises = (exerciseData || []).map((e: any) => e.name_de);
 
-  return {
-    client: clientData,
-    conversation: convData,
-    health: healthData,
-    assessment: assessmentData,
-    equipment,
-    exercises,
-  };
+  return { client: clientData, conversation: convData, health: healthData, assessment: assessmentData, equipment, exercises };
 }
 
-/**
- * Berechne Alter aus Geburtsdatum
- */
 function calculateAge(dob: string | null | undefined): string {
   if (!dob) return 'unbekannt';
   const years = Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
   return `${years} Jahre`;
 }
 
-/**
- * Persönlichkeitstyp-Beschreibung
- */
 const personalityDescriptions: Record<string, string> = {
-  success_oriented: 'Erfolgsorientiert: Liebt Herausforderungen, ist ehrgeizig und selbstmotiviert. Setze anspruchsvolle Ziele.',
-  avoidance_oriented: 'Sicherheitsorientiert: Braucht klare Struktur und mehr Anleitung. Setze realistische Ziele, betone Sicherheit.',
-  unclear: 'Noch unklar: Beobachte im Training weiter.',
+  success_oriented: 'Erfolgsorientiert: Liebt Herausforderungen, ist ehrgeizig. Setze anspruchsvolle Ziele.',
+  avoidance_oriented: 'Sicherheitsorientiert: Braucht klare Struktur. Setze realistische Ziele.',
+  unclear: 'Noch unklar.',
 };
 
 /**
- * Generiere den KI-Prompt
+ * Generiere den System-Prompt für Claude
  */
-export function generatePlanPrompt(
+export function generateSystemPrompt(
   data: Awaited<ReturnType<typeof loadClientDataForPrompt>>,
   config: PlanConfig
 ): string {
   const { client, conversation, health, assessment, equipment, exercises } = data;
 
-  if (!client) {
-    return '# Fehler: Keine Kundendaten gefunden';
-  }
+  if (!client) return '';
 
-  // Equipment-Gruppierung
   const gymEquipment = equipment.filter(e => e.location === 'gym' || e.location === 'both').map(e => e.name_de);
-  const homeEquipment = equipment.filter(e => e.location === 'home' || e.location === 'both').map(e => e.name_de);
 
-  let prompt = `# Trainingsplan-Anfrage für ${client.full_name}
+  let context = `Du bist ein erfahrener Personal Trainer. Erstelle einen **${config.weeks}-Wochen-Trainingsplan** für ${client.full_name}.
 
-Du bist ein erfahrener Personal Trainer. Erstelle einen individuellen **${config.weeks}-Wochen-Trainingsplan** basierend auf den folgenden Informationen.
-
----
-
-## Klientenprofil
-
-- **Name:** ${client.full_name}
-- **Alter:** ${calculateAge(client.date_of_birth)}
-- **Ziel:** ${client.fitness_goal_text || client.fitness_goal || 'Nicht angegeben'}
-- **Trainingstage/Woche:** ${config.sessionsPerWeek}
-${config.focus ? `- **Fokus:** ${config.focus}` : ''}
-
+## Kundenprofil
+- Alter: ${calculateAge(client.date_of_birth)}
+- Ziel: ${client.fitness_goal_text || client.fitness_goal || 'Allgemeine Fitness'}
+- Trainingstage/Woche: ${config.sessionsPerWeek}
+${config.focus ? `- Fokus: ${config.focus}` : ''}
 `;
 
-  // Erstgespräch-Daten
   if (conversation) {
-    prompt += `## Motivation & Hintergrund
-
-`;
-    if (conversation.motivation) prompt += `- **Motivation:** ${conversation.motivation}\n`;
-    if (conversation.previous_experience) prompt += `- **Erfahrung:** ${conversation.previous_experience}\n`;
-    if (conversation.current_training) prompt += `- **Aktuelles Training:** ${conversation.current_training}\n`;
-    if (conversation.goal_importance) prompt += `- **Warum wichtig:** ${conversation.goal_importance}\n`;
-    if (conversation.success_criteria) prompt += `- **Erfolgskriterien:** ${conversation.success_criteria}\n`;
-    prompt += '\n';
-
-    prompt += `## Ist-Zustand
-
-`;
-    if (conversation.stress_level) prompt += `- **Stresslevel:** ${conversation.stress_level}\n`;
-    if (conversation.sleep_quality) prompt += `- **Schlaf:** ${conversation.sleep_quality}\n`;
-    if (conversation.daily_activity) prompt += `- **Alltagsaktivität:** ${conversation.daily_activity}\n`;
-    prompt += '\n';
-
-    if (conversation.personality_type) {
-      prompt += `## Persönlichkeitstyp
-
-${personalityDescriptions[conversation.personality_type] || conversation.personality_type}
-
-`;
-    }
+    if (conversation.previous_experience) context += `- Erfahrung: ${conversation.previous_experience}\n`;
+    if (conversation.stress_level) context += `- Stresslevel: ${conversation.stress_level}\n`;
+    if (conversation.personality_type) context += `- Typ: ${personalityDescriptions[conversation.personality_type] || ''}\n`;
   }
 
-  // Gesundheit
   if (health) {
-    const hasIssues = health.cardiovascular || health.musculoskeletal || health.surgeries || health.sports_injuries || health.current_pain;
-    if (hasIssues) {
-      prompt += `## Gesundheit & Einschränkungen
-
-`;
-      if (health.cardiovascular) prompt += `- **Herz-Kreislauf:** ${health.cardiovascular}\n`;
-      if (health.musculoskeletal) prompt += `- **Bewegungsapparat:** ${health.musculoskeletal}\n`;
-      if (health.surgeries) prompt += `- **Operationen:** ${health.surgeries}\n`;
-      if (health.sports_injuries) prompt += `- **Sportverletzungen:** ${health.sports_injuries}\n`;
-      if (health.current_pain) prompt += `- **Aktuelle Schmerzen:** ${health.current_pain}\n`;
-      prompt += '\n**⚠️ Berücksichtige diese Einschränkungen bei der Übungsauswahl!**\n\n';
+    const issues = [health.musculoskeletal, health.sports_injuries, health.current_pain].filter(Boolean);
+    if (issues.length > 0) {
+      context += `\n## Einschränkungen beachten!\n${issues.join(', ')}\n`;
     }
   }
 
-  // Assessment
   if (assessment) {
-    prompt += `## Bewegungsqualität (Assessment)
-
-| Muster | Score (1-5) |
-|--------|-------------|
-| Kniebeuge | ${assessment.squat_score || '-'} |
-| Hüftbeuge | ${assessment.hinge_score || '-'} |
-| Drücken | ${assessment.push_score || '-'} |
-| Ziehen | ${assessment.pull_score || '-'} |
-| Rotation | ${assessment.rotation_score || '-'} |
-| Stabilität | ${assessment.stability_score || '-'} |
-
-`;
-    if (assessment.strengths) prompt += `- **Stärken:** ${assessment.strengths}\n`;
-    if (assessment.focus_points) prompt += `- **Fokuspunkte:** ${assessment.focus_points}\n`;
-    prompt += '\n';
+    context += `\n## Bewegungsqualität\n`;
+    if (assessment.focus_points) context += `Fokus: ${assessment.focus_points}\n`;
   }
 
-  // Equipment
-  prompt += `## Verfügbares Equipment
-
-`;
   if (gymEquipment.length > 0) {
-    prompt += `**Im Studio:** ${gymEquipment.join(', ')}\n\n`;
-  }
-  if (homeEquipment.length > 0) {
-    prompt += `**Zuhause:** ${homeEquipment.join(', ')}\n\n`;
-  }
-  if (equipment.length === 0) {
-    prompt += `Keine Angaben – plane für ein voll ausgestattetes Studio.\n\n`;
+    context += `\n## Equipment: ${gymEquipment.slice(0, 15).join(', ')}\n`;
   }
 
-  // Verfügbare Übungen
   if (exercises.length > 0) {
-    prompt += `## Übungskatalog (bevorzugt diese nutzen)
-
-${exercises.slice(0, 50).join(', ')}${exercises.length > 50 ? ` ... und ${exercises.length - 50} weitere` : ''}
-
-`;
+    context += `\n## Nutze bevorzugt diese Übungen:\n${exercises.slice(0, 40).join(', ')}\n`;
   }
 
-  // Ausgabeformat
-  prompt += `---
+  return context;
+}
 
-## Ausgabeformat (WICHTIG!)
+/**
+ * Generiere den User-Prompt mit dem exakten Ausgabeformat
+ */
+export function generateUserPrompt(clientName: string, config: PlanConfig): string {
+  return `Erstelle jetzt den Trainingsplan. 
 
-Antworte **NUR** im folgenden Markdown-Format – das ermöglicht den direkten Import in die App:
+**WICHTIG - Exaktes Format für den Import:**
 
-\`\`\`
-# Trainingsplan: ${client.full_name}
+# Trainingsplan: ${clientName}
 
 ## Ziel: [Hauptziel]
 ## Trainingstage pro Woche: ${config.sessionsPerWeek}
@@ -288,66 +197,38 @@ Antworte **NUR** im folgenden Markdown-Format – das ermöglicht den direkten I
 
 ---
 
-## Woche 1: [Wochenlabel]
+## Woche 1: [Label]
 
-### Tag 1: [Trainingsbezeichnung]
-- Übung 1 | 3×8-10 | 90s Pause | Notiz
-- Übung 2 | 4×6-8 | 120s Pause
+### Tag 1: [Name der Einheit]
+| Übung | Sätze | Wdh. | Pause | Hinweis |
+|-------|-------|------|-------|---------|
+| [Übung] | [3-4] | [8-12] | [60-120s] | [optional] |
 
-### Tag 2: [Trainingsbezeichnung]
-- Übung 1 | 3×10-12 | 60s Pause
+### Tag 2: [Name]
+| Übung | Sätze | Wdh. | Pause | Hinweis |
 ...
 
 ---
 
-## Woche 2: [Wochenlabel]
+## Woche 2: [Label]
 ...
 ${config.includeDeload ? `
 ---
 
 ## Woche ${config.weeks}: Deload
-(Reduzierte Intensität: 50-60% der normalen Gewichte, weniger Sätze)
+(50-60% Intensität, weniger Sätze)
 ` : ''}
 ---
 
 ## Progressionslogik
-[Wie soll der Kunde steigern? Wann Gewicht erhöhen?]
+[Wie steigern?]
 
-## Coaching-Hinweise (intern für Coach)
-[Worauf achten? Motivationsansatz?]
-\`\`\`
+## Coaching-Hinweise
+[Worauf achten?]
 
-**Formatregeln:**
-- Jede Übung in einer Zeile: \`Übungsname | Sätze×Wdh | Pause | Notiz (optional)\`
-- Nutze bevorzugt Übungen aus dem Katalog oben
-- Passe Intensität an Erfahrungslevel und Einschränkungen an
-- Plane ${config.includeDeload ? 'eine Deload-Woche am Ende' : 'progressiv aufbauend'}
-`;
-
-  return prompt;
-}
-
-/**
- * Kopiere Prompt in Zwischenablage
- */
-export async function copyPromptToClipboard(prompt: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(prompt);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Download Prompt als .md Datei
- */
-export function downloadPromptAsFile(prompt: string, clientName: string): void {
-  const blob = new Blob([prompt], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `trainingsplan-prompt_${clientName.toLowerCase().replace(/\s+/g, '-')}_${new Date().toISOString().split('T')[0]}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
+**REGELN:**
+1. JEDE Einheit (### Tag X) MUSS eine Übungstabelle mit mindestens 3 Übungen haben
+2. Keine leeren Einheiten!
+3. Nutze das exakte Tabellenformat mit | Trennern
+4. Pausenangaben immer mit "s" (z.B. 90s)`;
 }
