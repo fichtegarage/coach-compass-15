@@ -914,7 +914,7 @@ const ClientDetailPage: React.FC = () => {
               </CardContent>
             </Card>
             <BookingCodeCard client={client} clientId={id!} onUpdate={loadAll} />
-            <CycleWidget clientId={id!} clientName={client.full_name} />
+              <CycleWidget clientId={id!} clientName={client.full_name} />
           </div>
           {client.health_notes && (
             <Card>
