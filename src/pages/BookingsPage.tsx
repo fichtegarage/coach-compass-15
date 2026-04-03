@@ -158,7 +158,7 @@ const BookingsPage: React.FC = () => {
         .order('start_time'),
       supabase
         .from('booking_requests')
-        .select('*, clients(full_name, email, profile_photo_url), availability_slots(start_time, end_time, slot_type, trainer_id)')
+        .select('*, clients(full_name, email, profile_photo_url), availability_slots(start_time, end_time, slot_type, trainer_id, max_bookings)')
         .order('requested_at', { ascending: false }),
       supabase
         .from('sessions')
@@ -425,13 +425,8 @@ const BookingsPage: React.FC = () => {
     }).eq('id', respondDialog.id);
 
     if (status === 'confirmed') {
-      const slot = slots.find(s => s.id === respondDialog.slot_id) || respondDialog.availability_slots;
-      if (slot) {
-        const currentConfirmed = (slotBookingCounts[respondDialog.slot_id]?.confirmed || 0) + 1;
-        if (currentConfirmed >= (slot.max_bookings || 1)) {
-          await supabase.from('availability_slots').update({ is_bookable: false }).eq('id', respondDialog.slot_id);
-        }
-      }
+      // Slot immer als nicht buchbar markieren wenn bestätigt (1:1 PT)
+      await supabase.from('availability_slots').update({ is_bookable: false }).eq('id', respondDialog.slot_id);
       if (respondDialog.availability_slots) {
         const slotTypeMap: Record<string, string> = {
           'in-person': 'In-Person Training',
