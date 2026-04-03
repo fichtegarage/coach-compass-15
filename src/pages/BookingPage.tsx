@@ -15,6 +15,7 @@ import ClientPlanView from '@/components/ClientPlanView';
 import ClientMetricsWidget from '@/components/ClientMetricsWidget';
 import ClientProgressPhotos from '@/components/ClientProgressPhotos';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
+import CycleTracker from '@/components/CycleTracker';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
@@ -587,6 +588,7 @@ const BookingPage: React.FC = () => {
             <ClientPlanView clientId={clientId} />
             <ClientMetricsWidget clientId={clientId} />
             <ClientProgressPhotos clientId={clientId} />
+            <CycleTracker clientId={clientId} />
           </div>
         ) : activeView === 'bookings' ? (
           <div className="space-y-4">
