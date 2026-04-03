@@ -1,17 +1,15 @@
 /**
  * ClientPlanView.tsx
- *
  * Kunden-seitige Plan- und Workout-Ansicht.
- * Drei Tabs: Plan | Verlauf | PRs
  */
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Loader2, Dumbbell, ChevronDown, ChevronUp,
-  Target, Calendar, Play, Trophy, Star
+  Target, Calendar, Play, Trophy, Activity,
 } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import WorkoutLogger from '@/components/WorkoutLogger';
 import WorkoutSummaryView from '@/components/WorkoutSummaryView';
@@ -23,6 +21,7 @@ interface PlanExercise {
   name: string;
   sets: number | null;
   reps_target: string | null;
+  weight_target: string | null;
   rest_seconds: number | null;
   notes: string | null;
   order_in_workout: number;
@@ -124,39 +123,147 @@ function groupSetsByExercise(sets: SetLog[]): Map<string, SetLog[]> {
   return map;
 }
 
+function isCardioWorkout(dayLabel: string): boolean {
+  const lower = dayLabel.toLowerCase();
+  return (
+    lower.includes('cardio') ||
+    lower.includes('ausdauer') ||
+    lower.includes('lauf') ||
+    lower.includes('intervall') ||
+    lower.includes('fahrrad') ||
+    lower.includes('ergometer')
+  );
+}
+
+function isWarmUpOrCoolDown(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.startsWith('warm-up') || lower.startsWith('warmup') ||
+         lower.startsWith('cool-down') || lower.startsWith('cooldown') ||
+         lower.startsWith('aufwärmen') || lower.startsWith('abkühlen');
+}
+
+// ── Markdown-Renderer für Progressionslogik ───────────────────────────────────
+
+function parseBoldInline(text: string): React.ReactNode {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1
+          ? <strong key={i} className="text-slate-200 font-semibold">{part}</strong>
+          : part
+      )}
+    </>
+  );
+}
+
+function renderProgressionNotes(text: string): React.ReactNode {
+  if (!text) return null;
+  const lines = text.split('\n');
+  const result: React.ReactNode[] = [];
+  let bullets: string[] = [];
+  let keyCounter = 0;
+
+  const flushBullets = () => {
+    if (bullets.length === 0) return;
+    result.push(
+      <ul key={`bullets-${keyCounter++}`} className="space-y-1.5 my-1">
+        {bullets.map((b, i) => (
+          <li key={i} className="flex items-start gap-2 text-sm text-slate-400">
+            <span className="text-orange-400 mt-0.5 flex-shrink-0">▸</span>
+            <span>{parseBoldInline(b)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+    bullets = [];
+  };
+
+  lines.forEach(line => {
+    const t = line.trim();
+    if (!t) {
+      flushBullets();
+      return;
+    }
+    // Bullet
+    if (t.startsWith('- ') || t.startsWith('* ')) {
+      bullets.push(t.slice(2));
+      return;
+    }
+    // Numbered list
+    const numMatch = t.match(/^\d+\.\s+(.+)/);
+    if (numMatch) {
+      bullets.push(numMatch[1]);
+      return;
+    }
+    flushBullets();
+    // Heading
+    if (/^#{1,3}\s/.test(t)) {
+      const headingText = t.replace(/^#+\s*/, '').replace(/\*\*/g, '');
+      result.push(
+        <p key={keyCounter++} className="text-xs font-semibold text-slate-300 uppercase tracking-wide mt-3 mb-1">
+          {headingText}
+        </p>
+      );
+      return;
+    }
+    // Regular line
+    result.push(
+      <p key={keyCounter++} className="text-sm text-slate-400 leading-relaxed">
+        {parseBoldInline(t)}
+      </p>
+    );
+  });
+
+  flushBullets();
+  return <div className="space-y-1">{result}</div>;
+}
+
 // ── Plan: Exercise Row ────────────────────────────────────────────────────────
 
-const ExerciseRow: React.FC<{ exercise: PlanExercise; index: number }> = ({ exercise, index }) => (
-  <div className={`px-4 py-3 ${index > 0 ? 'border-t border-slate-700' : ''}`}>
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex-1">
-        <p className="text-sm font-semibold text-white">{exercise.name}</p>
-        {exercise.notes && <p className="text-xs text-slate-500 mt-0.5 italic">{exercise.notes}</p>}
-      </div>
-      <div className="flex items-center gap-3 text-right flex-shrink-0">
-        {exercise.sets && exercise.reps_target && (
-          <div className="text-center">
-            <p className="text-sm font-bold text-orange-400 tabular-nums">
-              {exercise.sets} × {exercise.reps_target}
-            </p>
-            <p className="text-[10px] text-slate-500">Sätze × Wdh.</p>
-          </div>
-        )}
-        {exercise.rest_seconds && (
-          <div className="text-center">
-            <p className="text-sm font-medium text-slate-400 tabular-nums">{formatRest(exercise.rest_seconds)}</p>
-            <p className="text-[10px] text-slate-500">Pause</p>
-          </div>
-        )}
+const ExerciseRow: React.FC<{ exercise: PlanExercise; index: number }> = ({ exercise, index }) => {
+  const warmOrCool = isWarmUpOrCoolDown(exercise.name);
+  return (
+    <div className={`px-4 py-3 ${index > 0 ? 'border-t border-slate-700' : ''} ${warmOrCool ? 'bg-slate-700/30' : ''}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <p className={`text-sm font-semibold ${warmOrCool ? 'text-slate-400 italic' : 'text-white'}`}>
+            {exercise.name}
+          </p>
+          {exercise.notes && <p className="text-xs text-slate-500 mt-0.5 italic">{exercise.notes}</p>}
+        </div>
+        <div className="flex items-center gap-3 text-right flex-shrink-0">
+          {exercise.sets && exercise.reps_target && (
+            <div className="text-center">
+              <p className={`text-sm font-bold tabular-nums ${warmOrCool ? 'text-slate-500' : 'text-orange-400'}`}>
+                {exercise.sets} × {exercise.reps_target}
+              </p>
+              <p className="text-[10px] text-slate-500">Sätze × Wdh.</p>
+            </div>
+          )}
+          {exercise.weight_target && !warmOrCool && (
+            <div className="text-center">
+              <p className="text-sm font-bold text-slate-300 tabular-nums">{exercise.weight_target}</p>
+              <p className="text-[10px] text-slate-500">Gewicht</p>
+            </div>
+          )}
+          {exercise.rest_seconds && !warmOrCool && (
+            <div className="text-center">
+              <p className="text-sm font-medium text-slate-400 tabular-nums">{formatRest(exercise.rest_seconds)}</p>
+              <p className="text-[10px] text-slate-500">Pause</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ── Plan: Workout Block ───────────────────────────────────────────────────────
 
 const WorkoutBlock: React.FC<{ workout: PlanWorkout }> = ({ workout }) => {
   const [open, setOpen] = useState(true);
+  const cardio = isCardioWorkout(workout.day_label);
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
       <button
@@ -164,8 +271,11 @@ const WorkoutBlock: React.FC<{ workout: PlanWorkout }> = ({ workout }) => {
         className="w-full flex items-center justify-between px-4 py-3 bg-slate-700/50 hover:bg-slate-700 transition-colors text-left"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0">
-            <Dumbbell className="w-3.5 h-3.5 text-orange-400" />
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${cardio ? 'bg-blue-500/20' : 'bg-orange-500/20'}`}>
+            {cardio
+              ? <Activity className="w-3.5 h-3.5 text-blue-400" />
+              : <Dumbbell className="w-3.5 h-3.5 text-orange-400" />
+            }
           </div>
           <div>
             <p className="text-sm font-semibold text-white">{workout.day_label}</p>
@@ -242,7 +352,6 @@ const WorkoutLogCard: React.FC<{ log: WorkoutLog }> = ({ log }) => {
               </div>
             </div>
           ))}
-          {/* Coach-Feedback anzeigen */}
           {log.feedback && (
             <div className="rounded-xl bg-orange-500/10 border border-orange-500/30 px-3 py-2.5">
               <p className="text-xs font-semibold text-orange-400 mb-1">💬 Feedback von Jakob</p>
@@ -272,7 +381,6 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
     const load = async () => {
       setLoading(true);
 
-      // Plan inkl. next_plan_workout_id
       const { data: planData } = await supabase
         .from('training_plans')
         .select('id, name, goal, weeks_total, sessions_per_week, total_cycles, progression_notes, next_plan_workout_id')
@@ -301,18 +409,15 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
           setPlan({ ...planData, workouts: workoutsWithEx });
           setSelectedWeek(workoutsWithEx[0]?.week_number ?? null);
 
-          // Nächstes Workout ermitteln
           if (planData.next_plan_workout_id) {
             const found = workoutsWithEx.find(w => w.id === planData.next_plan_workout_id);
             setNextWorkout(found ?? workoutsWithEx[0] ?? null);
           } else {
-            // Noch kein Zeiger gesetzt → erstes Workout
             setNextWorkout(workoutsWithEx[0] ?? null);
           }
         }
       }
 
-      // Workout-Logs mit nested set_logs
       const { data: logsData } = await supabase
         .from('workout_logs')
         .select(`
@@ -339,7 +444,6 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       }));
       setWorkoutLogs(normalisedLogs);
 
-      // PRs
       const { data: prsData } = await supabase
         .from('personal_records')
         .select('exercise_name, weight_kg, reps, achieved_at')
@@ -424,7 +528,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
           ) : (
             <div className="space-y-4">
 
-              {/* ── Nächstes Training Karte ── */}
+              {/* Nächstes Training */}
               {nextWorkout && (
                 <div className={`rounded-2xl p-4 space-y-3 shadow-sm ${
                   nextWorkout.is_assessment && nextWorkout.status !== 'completed'
@@ -433,9 +537,10 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                     ? 'bg-blue-600'
                     : nextWorkout.phase_type === 'test'
                     ? 'bg-amber-600'
+                    : isCardioWorkout(nextWorkout.day_label)
+                    ? 'bg-blue-600'
                     : 'bg-orange-600'
                 }`}>
-                  {/* Fortschrittsanzeige */}
                   {nextWorkout.session_order && plan.workouts && plan.workouts.length > 1 && (
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-xs">
@@ -443,11 +548,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                           Session {nextWorkout.session_order} von {plan.workouts.length}
                         </span>
                         {nextWorkout.phase_type && nextWorkout.phase_type !== 'load' && (
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            nextWorkout.phase_type === 'deload' ? 'bg-white/20 text-white' :
-                            nextWorkout.phase_type === 'test' ? 'bg-white/20 text-white' :
-                            'bg-white/20 text-white'
-                          }`}>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/20 text-white">
                             {nextWorkout.phase_type === 'deload' && '🔄 Deload'}
                             {nextWorkout.phase_type === 'test' && '📊 Test'}
                             {nextWorkout.phase_type === 'intro' && '🎯 Intro'}
@@ -455,7 +556,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                         )}
                       </div>
                       <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-white/80 rounded-full transition-all duration-500"
                           style={{ width: `${(nextWorkout.session_order / plan.workouts.length) * 100}%` }}
                         />
@@ -465,9 +566,10 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
 
                   <div>
                     <p className="text-white/80 text-xs font-semibold uppercase tracking-wide">
-                      {nextWorkout.is_assessment ? 'Assessment mit Coach' : 
+                      {nextWorkout.is_assessment ? 'Assessment mit Coach' :
                        nextWorkout.phase_type === 'deload' ? 'Deload-Woche' :
                        nextWorkout.phase_type === 'test' ? 'Test-Woche' :
+                       isCardioWorkout(nextWorkout.day_label) ? 'Cardio-Einheit' :
                        'Nächstes Training'}
                     </p>
                     <p className="text-white text-xl font-bold mt-0.5">{nextWorkout.day_label}</p>
@@ -475,27 +577,18 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                       {nextWorkout.week_label && `${nextWorkout.week_label} · `}
                       {nextWorkout.is_assessment
                         ? 'Bewegungsanalyse & Zielsetzung'
-                        : `${nextWorkout.exercises?.length || 0} Übungen`
-                      }
+                        : `${nextWorkout.exercises?.length || 0} Übungen`}
                     </p>
                   </div>
 
-                  {/* Assessment: Info statt Start-Button */}
                   {nextWorkout.is_assessment && nextWorkout.status !== 'completed' ? (
                     <div className="bg-white/10 rounded-xl px-4 py-3 space-y-2">
-                      <p className="text-white/90 text-sm font-medium">
-                        🎯 Session mit deinem Coach
-                      </p>
+                      <p className="text-white/90 text-sm font-medium">🎯 Session mit deinem Coach</p>
                       <p className="text-white/70 text-xs">
-                        In dieser Einheit analysieren wir gemeinsam deine Bewegungsqualität, 
-                        besprechen deine Ziele im Detail und legen die Grundlage für deinen 
+                        In dieser Einheit analysieren wir gemeinsam deine Bewegungsqualität,
+                        besprechen deine Ziele im Detail und legen die Grundlage für deinen
                         individuellen Trainingsplan.
                       </p>
-                      {nextWorkout.status === 'in_progress' && (
-                        <p className="text-amber-300 text-xs font-medium mt-2">
-                          ⏳ Assessment läuft...
-                        </p>
-                      )}
                     </div>
                   ) : (
                     <div className="flex gap-2 min-w-0">
@@ -505,10 +598,8 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                       >
                         {nextWorkout.is_assessment && nextWorkout.status === 'completed'
                           ? '📋 Assessment ansehen'
-                          : '▶ Jetzt starten'
-                        }
+                          : '▶ Jetzt starten'}
                       </button>
-                      {/* Workout wechseln */}
                       {plan.workouts && plan.workouts.length > 1 && (
                         <select
                           value={nextWorkout.id}
@@ -525,7 +616,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                         >
                           {plan.workouts.map(w => (
                             <option key={w.id} value={w.id} className="text-slate-900">
-                              {w.is_assessment ? '📋 ' : ''}W{w.week_number} · {w.day_label.length > 12 ? w.day_label.substring(0, 12) + '…' : w.day_label}
+                              {w.is_assessment ? '📋 ' : isCardioWorkout(w.day_label) ? '🏃 ' : ''}W{w.week_number} · {w.day_label.length > 12 ? w.day_label.substring(0, 12) + '…' : w.day_label}
                             </option>
                           ))}
                         </select>
@@ -534,6 +625,7 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                   )}
                 </div>
               )}
+
               {/* Plan-Header */}
               <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 space-y-2">
                 <p className="text-base font-bold text-white">{plan.name}</p>
@@ -579,7 +671,11 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                     <WorkoutBlock workout={workout} />
                     <button
                       onClick={() => setActiveWorkout(workout)}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-semibold text-sm transition-all"
+                      className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl active:scale-95 text-white font-semibold text-sm transition-all ${
+                        isCardioWorkout(workout.day_label)
+                          ? 'bg-blue-600 hover:bg-blue-700'
+                          : 'bg-orange-600 hover:bg-orange-700'
+                      }`}
                     >
                       <Play className="w-4 h-4" /> {workout.day_label} starten
                     </button>
@@ -587,10 +683,11 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
                 ))}
               </div>
 
+              {/* Progressionslogik – formatiert */}
               {plan.progression_notes && (
                 <div className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Progressionslogik</p>
-                  <p className="text-sm text-slate-400 whitespace-pre-wrap">{plan.progression_notes}</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Progressionslogik</p>
+                  {renderProgressionNotes(plan.progression_notes)}
                 </div>
               )}
             </div>
