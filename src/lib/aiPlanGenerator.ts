@@ -1,8 +1,6 @@
 /**
  * aiPlanGenerator.ts
- * 
  * Generiert optimierte Prompts für Claude basierend auf Kundendaten.
- * Die API-Kommunikation erfolgt direkt im AIBuilderDialog.
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -10,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface ClientData {
   full_name: string;
   date_of_birth?: string | null;
+  gender?: string | null;
   fitness_goal?: string | null;
   fitness_goal_text?: string | null;
 }
@@ -57,9 +56,6 @@ export interface PlanConfig {
   focus?: string;
 }
 
-/**
- * Lade alle Daten für einen Kunden
- */
 export async function loadClientDataForPrompt(clientId: string): Promise<{
   client: ClientData | null;
   conversation: ConversationData | null;
@@ -70,7 +66,7 @@ export async function loadClientDataForPrompt(clientId: string): Promise<{
 }> {
   const { data: clientData } = await supabase
     .from('clients')
-    .select('full_name, date_of_birth, fitness_goal, fitness_goal_text')
+    .select('full_name, date_of_birth, gender, fitness_goal, fitness_goal_text')
     .eq('id', clientId)
     .single();
 
@@ -133,34 +129,31 @@ const personalityDescriptions: Record<string, string> = {
 function goalSuggestsCardio(goal: string | null | undefined): boolean {
   if (!goal) return false;
   const lower = goal.toLowerCase();
-  return (
-    lower.includes('ausdauer') ||
-    lower.includes('fettabbau') ||
-    lower.includes('abnehm') ||
-    lower.includes('cardio') ||
-    lower.includes('kondition') ||
-    lower.includes('laufen') ||
-    lower.includes('fitness')
-  );
+  return lower.includes('ausdauer') || lower.includes('fettabbau') || lower.includes('abnehm') ||
+    lower.includes('cardio') || lower.includes('kondition') || lower.includes('laufen') || lower.includes('fitness');
 }
 
-/**
- * Generiere den System-Prompt für Claude
- */
+const genderLabels: Record<string, string> = {
+  female: 'Frau',
+  male: 'Mann',
+  other: 'divers',
+};
+
 export function generateSystemPrompt(
   data: Awaited<ReturnType<typeof loadClientDataForPrompt>>,
   config: PlanConfig
 ): string {
   const { client, conversation, health, assessment, equipment, exercises } = data;
-
   if (!client) return '';
 
   const gymEquipment = equipment.filter(e => e.location === 'gym' || e.location === 'both').map(e => e.name_de);
   const cardioRelevant = goalSuggestsCardio(client.fitness_goal_text || client.fitness_goal) || goalSuggestsCardio(config.focus);
+  const isFemale = client.gender === 'female';
 
   let context = `Du bist ein erfahrener Personal Trainer. Erstelle einen **${config.weeks}-Wochen-Trainingsplan** für ${client.full_name}.
 
 ## Kundenprofil
+- Geschlecht: ${genderLabels[client.gender || ''] || 'nicht angegeben'}
 - Alter: ${calculateAge(client.date_of_birth)}
 - Ziel: ${client.fitness_goal_text || client.fitness_goal || 'Allgemeine Fitness'}
 - Trainingstage/Woche: ${config.sessionsPerWeek}
@@ -175,9 +168,7 @@ ${config.focus ? `- Fokus: ${config.focus}` : ''}
 
   if (health) {
     const issues = [health.musculoskeletal, health.sports_injuries, health.current_pain].filter(Boolean);
-    if (issues.length > 0) {
-      context += `\n## Einschränkungen beachten!\n${issues.join(', ')}\n`;
-    }
+    if (issues.length > 0) context += `\n## Einschränkungen beachten!\n${issues.join(', ')}\n`;
   }
 
   if (assessment) {
@@ -193,16 +184,24 @@ ${config.focus ? `- Fokus: ${config.focus}` : ''}
     context += `\n## Nutze bevorzugt diese Übungen:\n${exercises.slice(0, 40).join(', ')}\n`;
   }
 
+  // Geschlechtsspezifische Hinweise
+  if (isFemale) {
+    context += `
+## Hinweise für Trainingsplanung bei Frauen
+- Berücksichtige hormonelle Schwankungen im Zyklus: In der Follikelphase (ca. erste Zyklushälfte) ist die Leistungsfähigkeit und Anpassungsfähigkeit höher – intensivere Einheiten sind hier besonders effektiv.
+- In der Lutealphase (zweite Hälfte) ist moderateres Training oft sinnvoller – plane entsprechende Deload- oder Technikeinheiten.
+- Verletzungsrisiko: Frauen haben ein erhöhtes ACL-Risiko – Stabilisations- und Kniebeugekorrekturen gezielt einbauen.
+- Warm-Up und Mobilität haben bei Frauen einen besonders hohen Stellenwert.
+`;
+  }
+
   if (cardioRelevant) {
-    context += `\n## Cardio-Hinweis\nDas Trainingsziel des Kunden legt Cardio nahe. Füge wenn sinnvoll 1 separate Cardio-Einheit pro Woche ein (z.B. "Cardio: Intervall-Lauf" oder "Cardio: Fahrrad"). Diese Einheit enthält Cardio-Übungen statt Kraftübungen.\n`;
+    context += `\n## Cardio-Hinweis\nDas Trainingsziel legt Cardio nahe. Füge wenn sinnvoll 1 separate Cardio-Einheit pro Woche ein.\n`;
   }
 
   return context;
 }
 
-/**
- * Generiere den User-Prompt mit dem exakten Ausgabeformat
- */
 export function generateUserPrompt(clientName: string, config: PlanConfig): string {
   return `Erstelle jetzt den Trainingsplan.
 
@@ -244,16 +243,16 @@ ${config.includeDeload ? `
 ---
 
 ## Progressionslogik
-[Wie steigern? Bitte als klare Stichpunkte oder kurze Absätze – kein Fließtext-Block]
+[Wie steigern? Bitte als klare Stichpunkte – kein langer Fließtext]
 
 ## Coaching-Hinweise
 [Worauf achten?]
 
 **REGELN:**
 1. JEDE Einheit (### Tag X) MUSS eine Übungstabelle mit mindestens 3 Hauptübungen haben
-2. Jede Einheit beginnt mit 1-2 Warm-Up Zeilen und endet mit 1 Cool-Down Zeile in der Tabelle
+2. Jede Einheit beginnt mit 1-2 Warm-Up Zeilen und endet mit 1 Cool-Down Zeile
 3. Warm-Up und Cool-Down bekommen "Sätze: 1" und "Pause: —"
-4. Wenn Cardio sinnvoll ist: eigene Session "### Tag X: Cardio: [Art]" mit Cardio-Übungen
+4. Wenn Cardio sinnvoll ist: eigene Session "### Tag X: Cardio: [Art]"
 5. Keine leeren Einheiten!
 6. Nutze das exakte Tabellenformat mit | Trennern
 7. Pausenangaben immer mit "s" (z.B. 90s) oder "min" (z.B. 2min)
