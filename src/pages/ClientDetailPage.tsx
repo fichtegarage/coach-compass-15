@@ -30,6 +30,7 @@ import { exportSingleClient, type ExportClientData } from '@/lib/exportForClaude
 import TrainingPlanTab from '@/components/TrainingPlanTab';
 import WorkoutHistoryTab from '@/components/WorkoutHistoryTab';
 import ClientEquipmentTab from '@/components/ClientEquipmentTab';
+import CycleWidget from '@/components/CycleWidget';
 
 // ── Label-Maps für Check-In Anzeige ──────────────────────────────────────────
 
@@ -913,6 +914,7 @@ const ClientDetailPage: React.FC = () => {
               </CardContent>
             </Card>
             <BookingCodeCard client={client} clientId={id!} onUpdate={loadAll} />
+            <CycleWidget clientId={id!} clientName={client.full_name} />
           </div>
           {client.health_notes && (
             <Card>
