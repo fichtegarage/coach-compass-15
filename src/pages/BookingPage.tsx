@@ -729,7 +729,7 @@ const BookingPage: React.FC = () => {
                           const isMyBooking = myBookingSlotIds.has(slot.id);
                           const myBooking = bookings.find((b: any) => b.slot_id === slot.id && (b.status === 'pending' || b.status === 'confirmed'));
                           const totalBooked = allSlotBookings[slot.id] || 0;
-                          const isFull = totalBooked >= slot.max_bookings && !isMyBooking;
+                          const isFull = totalBooked >= (slot.max_bookings ?? 1) && !isMyBooking;
                           const slotPast = isBefore(new Date(slot.start_time), new Date());
                           return (
                             <button
