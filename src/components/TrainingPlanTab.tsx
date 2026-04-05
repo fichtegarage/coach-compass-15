@@ -23,6 +23,7 @@ import { matchAndAddExercises, getMatchingStats } from '@/lib/exerciseMatching';
 import { loadClientDataForPrompt, generateSystemPrompt, generateUserPrompt, type PlanConfig } from '@/lib/aiPlanGenerator';
 import AssessmentGuide from '@/components/AssessmentGuide';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
+import AIBuilderDialog from '@/components/AIBuilderDialog';
 
 interface TrainingPlan {
   id: string; name: string; goal: string | null; weeks_total: number | null;
