@@ -673,6 +673,7 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
+  const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<PlanWorkout | null>(null);
