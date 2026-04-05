@@ -785,6 +785,14 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
             <Button size="sm" variant="outline" className="gap-2" onClick={() => setAiBuilderOpen(true)}>
               <Sparkles className="w-4 h-4" /> KI-Plan
             </Button>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setAiBuilderOpen(true)}
+            >
+              <Sparkles className="w-4 h-4" />
+              KI-Plan erstellen
+            </Button>
             <Button size="sm" className="gap-2" onClick={() => setImportOpen(true)}>
               <Plus className="w-4 h-4" /> Importieren
             </Button>
@@ -917,6 +925,13 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
 
         {user && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={loadPlans} clientId={clientId} trainerId={user.id} />}
         {user && <AIBuilderDialog open={aiBuilderOpen} onClose={() => setAiBuilderOpen(false)} onImported={loadPlans} clientId={clientId} clientName={clientName} trainerId={user.id} />}
+        <AIBuilderDialog
+          open={aiBuilderOpen}
+          onClose={() => setAiBuilderOpen(false)}
+          onImported={loadPlan}
+          clientId={clientId}
+          clientName={clientName}
+        />
       </div>
     </>
   );
