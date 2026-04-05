@@ -111,6 +111,7 @@ const BookingsPage: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [visibleCount, setVisibleCount] = useState(20);
 
   // Slot dialog (create)
   const [slotDialogOpen, setSlotDialogOpen] = useState(false);
