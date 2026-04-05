@@ -729,7 +729,6 @@ const BookingsPage: React.FC = () => {
               + {filteredRequests.length - visibleCount} weitere anzeigen
             </button>
           )}
-          )}
         </TabsContent>
       </Tabs>
 
