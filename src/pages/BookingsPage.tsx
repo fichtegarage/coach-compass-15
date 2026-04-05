@@ -669,7 +669,7 @@ const BookingsPage: React.FC = () => {
         <TabsContent value="requests" className="mt-4 space-y-4">
           <div className="flex gap-2 flex-wrap">
             {['all', 'pending', 'confirmed', 'rejected', 'cancelled'].map(f => (
-              <Button key={f} variant={filter === f ? 'default' : 'outline'} size="sm" onClick={() => setFilter(f)}>
+              <Button key={f} variant={filter === f ? 'default' : 'outline'} size="sm" onClick={() => { setFilter(f); setVisibleCount(20); }}>
                 {f === 'all' ? 'Alle' : requestStatusLabels[f]}
                 {f === 'pending' && pendingCount > 0 && (
                   <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-full bg-destructive text-destructive-foreground">
