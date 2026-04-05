@@ -721,6 +721,14 @@ const BookingsPage: React.FC = () => {
                 </Card>
               ))}
             </div>
+          {filteredRequests.length > visibleCount && (
+            <button
+              onClick={() => setVisibleCount(v => v + 20)}
+              className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors border border-border rounded-xl hover:bg-muted/50"
+            >
+              + {filteredRequests.length - visibleCount} weitere anzeigen
+            </button>
+          )}
           )}
         </TabsContent>
       </Tabs>
