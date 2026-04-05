@@ -684,7 +684,7 @@ const BookingsPage: React.FC = () => {
             <p className="text-sm text-muted-foreground text-center py-8">Keine Anfragen</p>
           ) : (
             <div className="space-y-2">
-              {filteredRequests.map(r => (
+              {filteredRequests.slice(0, visibleCount).map(r => (
                 <Card key={r.id} className={r.status === 'pending' ? 'border-warning/30' : ''}>
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="flex-1">
