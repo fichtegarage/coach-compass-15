@@ -721,6 +721,8 @@ const BookingsPage: React.FC = () => {
                 </Card>
               ))}
             </div>
+          )}
+          
           {filteredRequests.length > visibleCount && (
             <button
               onClick={() => setVisibleCount(v => v + 20)}
