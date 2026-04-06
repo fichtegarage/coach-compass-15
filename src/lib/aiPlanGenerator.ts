@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/integrations/supabase/client';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -140,7 +140,7 @@ function extractContraindications(healthNotes: string | null): string[] {
   const map: Record<string, string> = {
     knie: 'knee', knee: 'knee',
     schulter: 'shoulder', shoulder: 'shoulder',
-    rücken: 'lower_back', rücken: 'lower_back', 'lower back': 'lower_back',
+    rücken: 'lower_back', 'lower back': 'lower_back',
     nacken: 'neck', neck: 'neck',
     handgelenk: 'wrist', wrist: 'wrist',
     hüfte: 'hip', hip: 'hip',
