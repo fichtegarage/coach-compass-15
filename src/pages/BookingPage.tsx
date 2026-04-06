@@ -272,6 +272,67 @@ const BookingPage: React.FC = () => {
         sessionStorage.setItem('booking_client_email', clientData.email);
       }
       if (clientData.packages) {
+        // Pakete laden: als Hauptkunde UND als Partner
+        const pkgs = Array.isArray(clientData.packages) ? clientData.packages : [clientData.packages];
+        
+        // Auch Pakete laden, bei denen dieser Kunde Partner ist
+        const { data: partnerPkgs } = await supabase
+          .from('packages')
+          .select('*, partner:clients!packages_partner_client_id_fkey(full_name)')
+          .eq('partner_client_id', clientId);
+        
+        const allPkgs = [...pkgs, ...(partnerPkgs || [])];
+        
+        if (allPkgs.length > 0) {
+          // Aktives Paket = das mit verbleibenden Sessions
+          let activePkg = null;
+          for (const pkg of allPkgs) {
+            const { count } = await supabase
+              .from('sessions')
+              .select('*', { count: 'exact', head: true })
+              .eq('package_id', pkg.id)
+              .in('status', ['Completed', 'No-Show']);
+            const used = count || 0;
+            if (used < pkg.sessions_included) {
+              activePkg = { pkg, used };
+              break;
+            }
+          }
+          
+          if (activePkg) {
+            const { pkg, used } = activePkg;
+            const isDuo = pkg.is_duo;
+            
+            // Partner-Name ermitteln
+            if (isDuo) {
+              if (pkg.client_id !== clientId) {
+                // Dieser Kunde ist der Partner – Hauptkunde laden
+                const { data: mainClient } = await supabase
+                  .from('clients')
+                  .select('full_name')
+                  .eq('id', pkg.client_id)
+                  .single();
+                setDuoPartnerName(mainClient?.full_name || null);
+              } else {
+                // Dieser Kunde ist der Hauptkunde – Partnername aus pkg.partner
+                setDuoPartnerName(
+                  Array.isArray(pkg.partner) ? pkg.partner[0]?.full_name : pkg.partner?.full_name || null
+                );
+              }
+            } else {
+              setDuoPartnerName(null);
+            }
+            
+            setPackageInfo({
+              name: pkg.package_name,
+              total: pkg.sessions_included,
+              used,
+              endDate: pkg.end_date || null,
+              isDuo,
+            });
+          }
+        }
+      }
         const pkg = Array.isArray(clientData.packages) ? clientData.packages[0] : clientData.packages;
         if (pkg) {
           const { count } = await supabase
