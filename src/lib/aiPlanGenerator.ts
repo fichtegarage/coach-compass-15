@@ -1,260 +1,513 @@
-/**
- * aiPlanGenerator.ts
- * Generiert optimierte Prompts für Claude basierend auf Kundendaten.
- */
+import { supabase } from '@/lib/supabaseClient';
 
-import { supabase } from '@/integrations/supabase/client';
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface ClientData {
-  full_name: string;
-  date_of_birth?: string | null;
-  gender?: string | null;
-  fitness_goal?: string | null;
-  fitness_goal_text?: string | null;
-}
+export type MesocyclePhase =
+  | 'accumulation'
+  | 'intensification'
+  | 'realization'
+  | 'deload';
 
-interface ConversationData {
-  motivation?: string | null;
-  previous_experience?: string | null;
-  stress_level?: string | null;
-  sleep_quality?: string | null;
-  daily_activity?: string | null;
-  current_training?: string | null;
-  goal_importance?: string | null;
-  success_criteria?: string | null;
-  personality_type?: string | null;
-}
+export type TrainingGoal =
+  | 'hypertrophy'
+  | 'fat_loss'
+  | 'strength'
+  | 'endurance'
+  | 'mobility';
 
-interface HealthData {
-  cardiovascular?: string | null;
-  musculoskeletal?: string | null;
-  surgeries?: string | null;
-  sports_injuries?: string | null;
-  current_pain?: string | null;
-}
+export type DifficultyLevel = 1 | 2 | 3;
 
-interface AssessmentData {
-  squat_score?: number;
-  hinge_score?: number;
-  push_score?: number;
-  pull_score?: number;
-  rotation_score?: number;
-  stability_score?: number;
-  strengths?: string;
-  focus_points?: string;
-}
-
-interface EquipmentItem {
-  name_de: string;
-  location: 'home' | 'gym' | 'both';
-}
-
-export interface PlanConfig {
-  weeks: number;
+export interface PlanOptions {
   sessionsPerWeek: number;
-  includeDeload: boolean;
-  focus?: string;
+  weeksTotal: number;
+  phase: MesocyclePhase;
+  sessionDurationMinutes?: number;
+  includeCardio?: boolean;
+  isDuoTraining?: boolean;
+  duoPartnerClientId?: string; // Client-ID des Partners – wird intern zu Alias
+  coachInstructions?: string;  // Freitext vom Coach (wird sanitiert vor API-Call)
 }
 
-export async function loadClientDataForPrompt(clientId: string): Promise<{
-  client: ClientData | null;
-  conversation: ConversationData | null;
-  health: HealthData | null;
-  assessment: AssessmentData | null;
-  equipment: EquipmentItem[];
-  exercises: string[];
-}> {
-  const { data: clientData } = await supabase
-    .from('clients')
-    .select('full_name, date_of_birth, gender, fitness_goal, fitness_goal_text')
-    .eq('id', clientId)
-    .single();
+interface ExerciseRecord {
+  id: string;
+  name: string;
+  name_de: string;
+  exercise_type: string;
+  movement_pattern: string;
+  difficulty: number;
+  technique_complexity: string;
+  cns_demand: string;
+  session_position: string;
+  muscle_groups: string[];
+  muscle_secondary: string[];
+  goal_tags: string[];
+  metabolic_demand: string;
+  cardio_compatible: boolean;
+  cardio_type: string | null;
+  contraindications: string[];
+  phase_suitability: string[];
+}
 
-  const { data: convData } = await supabase
-    .from('onboarding_conversations')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('conversation_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+interface AnonymizedClientContext {
+  alias: string;
+  goal: TrainingGoal[];
+  goalText: string;
+  maxDifficulty: DifficultyLevel;
+  experienceLabel: string;
+  gender: string | null;
+  contraindications: string[];
+  goalFreeText: string; // sanitierter fitness_goal_text
+}
 
-  const { data: healthData } = await supabase
-    .from('health_records')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+export interface GeneratedPlan {
+  markdown: string;
+  alias: string;
+  clientId: string;
+  exercisesUsed: string[];
+}
 
-  const { data: assessmentData } = await supabase
-    .from('assessments')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+// ─────────────────────────────────────────────────────────────────────────────
+// ALIAS-SYSTEM
+// Deterministisch: gleiche UUID → gleicher Alias → kein State nötig
+// Format: CLIENT_XXXXXXXX (8 Hex-Zeichen, uppercase)
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const { data: equipmentData } = await supabase
-    .from('client_equipment')
-    .select('equipment_id, location, equipment_catalog(name_de)')
-    .eq('client_id', clientId);
+export function generateClientAlias(clientId: string): string {
+  return `CLIENT_${clientId.replace(/-/g, '').substring(0, 8).toUpperCase()}`;
+}
 
-  const equipment: EquipmentItem[] = (equipmentData || []).map((e: any) => ({
-    name_de: e.equipment_catalog?.name_de || 'Unbekannt',
-    location: e.location,
-  }));
+export function validateAlias(alias: string, clientId: string): boolean {
+  return alias === generateClientAlias(clientId);
+}
 
-  const { data: exerciseData } = await supabase
+// ─────────────────────────────────────────────────────────────────────────────
+// GOAL / EXPERIENCE / CONTRAINDICATION MAPPING
+// ─────────────────────────────────────────────────────────────────────────────
+
+function mapGoalToTags(fitnessGoal: string | null): TrainingGoal[] {
+  if (!fitnessGoal) return ['hypertrophy'];
+  const g = fitnessGoal.toLowerCase();
+  if (g.includes('abnehm') || g.includes('gewicht') || g.includes('fett') || g.includes('fat'))
+    return ['fat_loss', 'hypertrophy'];
+  if (g.includes('definition'))
+    return ['hypertrophy', 'fat_loss'];
+  if (g.includes('kraft') || g.includes('strength') || g.includes('stärke'))
+    return ['strength', 'hypertrophy'];
+  if (g.includes('ausdauer') || g.includes('endurance'))
+    return ['endurance', 'fat_loss'];
+  if (g.includes('muskel') || g.includes('aufbau') || g.includes('hyper'))
+    return ['hypertrophy'];
+  return ['hypertrophy'];
+}
+
+function mapExperienceToDifficulty(experience: string | null): DifficultyLevel {
+  if (!experience) return 1;
+  const e = experience.toLowerCase();
+  if (
+    e.includes('anf') || e.includes('keine erfahrung') ||
+    e.includes('beginn') || e.includes('selten')
+  ) return 1;
+  if (
+    e.includes('fortg') || e.includes('erfahren') ||
+    e.includes('regelmäßig') || e.includes('mehrere jahre')
+  ) return 2;
+  if (
+    e.includes('advanced') || e.includes('profi') ||
+    e.includes('wettkampf') || e.includes('kompetitiv')
+  ) return 3;
+  return 1;
+}
+
+const EXPERIENCE_LABELS: Record<DifficultyLevel, string> = {
+  1: 'Anfänger/in',
+  2: 'Fortgeschrittene/r',
+  3: 'Könner/in',
+};
+
+const GOAL_LABELS: Record<TrainingGoal, string> = {
+  hypertrophy: 'Muskelaufbau',
+  fat_loss: 'Fettabbau / Definition',
+  strength: 'Maximalkraft',
+  endurance: 'Ausdauer',
+  mobility: 'Mobilität',
+};
+
+function extractContraindications(healthNotes: string | null): string[] {
+  if (!healthNotes) return [];
+  const text = healthNotes.toLowerCase();
+  const map: Record<string, string> = {
+    knie: 'knee', knee: 'knee',
+    schulter: 'shoulder', shoulder: 'shoulder',
+    rücken: 'lower_back', rücken: 'lower_back', 'lower back': 'lower_back',
+    nacken: 'neck', neck: 'neck',
+    handgelenk: 'wrist', wrist: 'wrist',
+    hüfte: 'hip', hip: 'hip',
+  };
+  const result: string[] = [];
+  for (const [keyword, tag] of Object.entries(map)) {
+    if (text.includes(keyword) && !result.includes(tag)) result.push(tag);
+  }
+  return result;
+}
+
+/**
+ * Entfernt PII aus Freitext: E-Mails, Telefonnummern, kürzt auf 300 Zeichen.
+ */
+function sanitizeFreeText(text: string | null): string {
+  if (!text) return '';
+  return text
+    .replace(/[\w.+-]+@[\w.-]+\.\w{2,}/g, '[E-Mail]')
+    .replace(/(\+?\d[\d\s\-().]{6,}\d)/g, '[Tel.]')
+    .substring(0, 300)
+    .trim();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXERCISE FETCHING
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FetchExercisesOptions {
+  goalTags: TrainingGoal[];
+  maxDifficulty: DifficultyLevel;
+  contraindications: string[];
+  phase: MesocyclePhase;
+  includeCardio?: boolean;
+}
+
+async function fetchFilteredExercises(
+  opts: FetchExercisesOptions
+): Promise<ExerciseRecord[]> {
+  const { data, error } = await supabase
     .from('exercises')
-    .select('name_de')
-    .order('name_de');
+    .select(`
+      id, name, name_de, exercise_type, movement_pattern,
+      difficulty, technique_complexity, cns_demand, session_position,
+      muscle_groups, muscle_secondary, goal_tags, metabolic_demand,
+      cardio_compatible, cardio_type, contraindications, phase_suitability
+    `)
+    .lte('difficulty', opts.maxDifficulty + 1) // +1 Puffer: etwas anspruchsvollere Übungen anbieten
+    .eq('is_custom', false);
 
-  const exercises = (exerciseData || []).map((e: any) => e.name_de);
+  if (error || !data) return [];
 
-  return { client: clientData, conversation: convData, health: healthData, assessment: assessmentData, equipment, exercises };
+  return (data as ExerciseRecord[]).filter((ex) => {
+    // Mobility immer einschließen
+    if (ex.exercise_type === 'mobility') return true;
+
+    // Cardio nur wenn explizit gewünscht
+    if (ex.exercise_type === 'cardio' && !opts.includeCardio) return false;
+
+    // Phasen-Check: Übung muss zur aktuellen Mesozyklusphase passen
+    if (ex.phase_suitability?.length > 0 && !ex.phase_suitability.includes(opts.phase)) {
+      return false;
+    }
+
+    // Kontraindikationen-Check: kein Overlap zwischen Übung und Kundenproblemen
+    if (opts.contraindications.length > 0 && ex.contraindications?.length > 0) {
+      const conflict = ex.contraindications.some((c) => opts.contraindications.includes(c));
+      if (conflict) return false;
+    }
+
+    // Ziel-Matching: min. ein gemeinsamer Tag
+    if (ex.goal_tags?.length > 0 && opts.goalTags.length > 0) {
+      return ex.goal_tags.some((t) => opts.goalTags.includes(t as TrainingGoal));
+    }
+
+    return true;
+  });
 }
 
-function calculateAge(dob: string | null | undefined): string {
-  if (!dob) return 'unbekannt';
-  const years = Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
-  return `${years} Jahre`;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// EXERCISE LIBRARY → PROMPT CONTEXT
+// ─────────────────────────────────────────────────────────────────────────────
 
-const personalityDescriptions: Record<string, string> = {
-  success_oriented: 'Erfolgsorientiert: Liebt Herausforderungen, ist ehrgeizig. Setze anspruchsvolle Ziele.',
-  avoidance_oriented: 'Sicherheitsorientiert: Braucht klare Struktur. Setze realistische Ziele.',
-  unclear: 'Noch unklar.',
+const PATTERN_LABELS: Record<string, string> = {
+  squat: 'Squat',
+  lunge: 'Lunge',
+  hinge: 'Hinge / Hüftstreckung',
+  push_horizontal: 'Push horizontal (Drücken)',
+  push_vertical: 'Push vertikal (Schulterdrücken)',
+  pull_vertical: 'Pull vertikal (Ziehen)',
+  pull_horizontal: 'Pull horizontal (Rudern)',
+  core: 'Core / Rumpf',
+  carry: 'Carry / Tragen',
+  isolation: 'Isolation',
+  compound: 'Compound / Plyometrik',
+  cardio: 'Cardio',
+  mobility: 'Mobility / Beweglichkeit',
 };
 
-function goalSuggestsCardio(goal: string | null | undefined): boolean {
-  if (!goal) return false;
-  const lower = goal.toLowerCase();
-  return lower.includes('ausdauer') || lower.includes('fettabbau') || lower.includes('abnehm') ||
-    lower.includes('cardio') || lower.includes('kondition') || lower.includes('laufen') || lower.includes('fitness');
+function buildExerciseLibraryContext(exercises: ExerciseRecord[]): string {
+  const groups: Record<string, ExerciseRecord[]> = {};
+  for (const ex of exercises) {
+    const pat = ex.movement_pattern || 'other';
+    if (!groups[pat]) groups[pat] = [];
+    groups[pat].push(ex);
+  }
+
+  let ctx = '## Verfügbare Übungsbibliothek\n';
+  ctx += '> **Pflicht:** Nur diese Übungen verwenden. Exakter Name wie angegeben.\n';
+  ctx += '> Format: `Name | Schwierigkeit | Technik | ZNS | Position | Muskeln`\n\n';
+
+  const order = [
+    'squat', 'lunge', 'hinge', 'push_horizontal', 'push_vertical',
+    'pull_vertical', 'pull_horizontal', 'core', 'carry', 'isolation',
+    'compound', 'cardio', 'mobility',
+  ];
+
+  for (const pat of order) {
+    const exList = groups[pat];
+    if (!exList?.length) continue;
+    ctx += `### ${PATTERN_LABELS[pat] || pat}\n`;
+    for (const ex of exList.sort((a, b) => a.difficulty - b.difficulty)) {
+      const muscles = [
+        ...(ex.muscle_groups ?? []),
+        ...(ex.muscle_secondary ?? []),
+      ].slice(0, 3).join(', ');
+      const displayName = ex.name_de || ex.name;
+      ctx += `- **${displayName}** | diff:${ex.difficulty} | ${ex.technique_complexity} | cns:${ex.cns_demand} | ${ex.session_position} | [${muscles}]\n`;
+    }
+    ctx += '\n';
+  }
+
+  return ctx;
 }
 
-const genderLabels: Record<string, string> = {
-  female: 'Frau',
-  male: 'Mann',
-  other: 'divers',
+// ─────────────────────────────────────────────────────────────────────────────
+// ANONYMIZED CLIENT CONTEXT
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildAnonymizedClientContext(
+  client: Record<string, any>,
+  options: PlanOptions
+): AnonymizedClientContext {
+  const goal = mapGoalToTags(client.fitness_goal);
+  const maxDifficulty = mapExperienceToDifficulty(client.training_experience);
+  const contraindications = extractContraindications(client.health_notes);
+
+  return {
+    alias: generateClientAlias(client.id),
+    goal,
+    goalText: goal.map((g) => GOAL_LABELS[g]).join(' + '),
+    maxDifficulty,
+    experienceLabel: EXPERIENCE_LABELS[maxDifficulty],
+    gender: client.gender ?? null,
+    contraindications,
+    goalFreeText: sanitizeFreeText(client.fitness_goal_text),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROMPT BUILDER
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PHASE_LABELS: Record<MesocyclePhase, string> = {
+  accumulation: 'Akkumulation – hohes Volumen, moderate Intensität (60–75 % 1RM / RPE 6–7)',
+  intensification: 'Intensivierung – mittleres Volumen, hohe Intensität (75–87 % 1RM / RPE 7–9)',
+  realization: 'Realisierung / Peak – geringes Volumen, maximale Intensität (87–95 % 1RM / RPE 9–10)',
+  deload: 'Deload – deutlich reduziertes Volumen & Intensität, aktive Erholung',
 };
 
-export function generateSystemPrompt(
-  data: Awaited<ReturnType<typeof loadClientDataForPrompt>>,
-  config: PlanConfig
+function buildAIPlanPrompt(
+  ctx: AnonymizedClientContext,
+  exerciseLib: string,
+  options: PlanOptions
 ): string {
-  const { client, conversation, health, assessment, equipment, exercises } = data;
-  if (!client) return '';
+  const duoPartnerAlias = options.duoPartnerClientId
+    ? generateClientAlias(options.duoPartnerClientId)
+    : null;
 
-  const gymEquipment = equipment.filter(e => e.location === 'gym' || e.location === 'both').map(e => e.name_de);
-  const cardioRelevant = goalSuggestsCardio(client.fitness_goal_text || client.fitness_goal) || goalSuggestsCardio(config.focus);
-  const isFemale = client.gender === 'female';
+  const genderNote =
+    ctx.gender === 'female'
+      ? '\n- **Zyklusphase:** Kraftfokus in Follikelphase bevorzugen; etwas weniger Volumen in Lutealphase.'
+      : '';
 
-  let context = `Du bist ein erfahrener Personal Trainer. Erstelle einen **${config.weeks}-Wochen-Trainingsplan** für ${client.full_name}.
+  const duoNote = options.isDuoTraining
+    ? `\n- **Duo-Training:** Plan gilt gleichzeitig für beide. ${duoPartnerAlias ? `Partner-Alias: ${duoPartnerAlias}.` : ''} Equipment-Konflikte vermeiden.`
+    : '';
 
-## Kundenprofil
-- Geschlecht: ${genderLabels[client.gender || ''] || 'nicht angegeben'}
-- Alter: ${calculateAge(client.date_of_birth)}
-- Ziel: ${client.fitness_goal_text || client.fitness_goal || 'Allgemeine Fitness'}
-- Trainingstage/Woche: ${config.sessionsPerWeek}
-${config.focus ? `- Fokus: ${config.focus}` : ''}
-`;
+  const coachNote = options.coachInstructions
+    ? `\n- **Coach-Hinweise:** ${sanitizeFreeText(options.coachInstructions)}`
+    : '';
 
-  if (conversation) {
-    if (conversation.previous_experience) context += `- Erfahrung: ${conversation.previous_experience}\n`;
-    if (conversation.stress_level) context += `- Stresslevel: ${conversation.stress_level}\n`;
-    if (conversation.personality_type) context += `- Typ: ${personalityDescriptions[conversation.personality_type] || ''}\n`;
-  }
+  const contraNote =
+    ctx.contraindications.length > 0
+      ? ctx.contraindications.join(', ')
+      : 'keine bekannt';
 
-  if (health) {
-    const issues = [health.musculoskeletal, health.sports_injuries, health.current_pain].filter(Boolean);
-    if (issues.length > 0) context += `\n## Einschränkungen beachten!\n${issues.join(', ')}\n`;
-  }
+  return `Du bist erfahrener Personal Trainer und erstellst einen strukturierten Trainingsplan im CoachHub-Format.
 
-  if (assessment) {
-    context += `\n## Bewegungsqualität\n`;
-    if (assessment.focus_points) context += `Fokus: ${assessment.focus_points}\n`;
-  }
+---
 
-  if (gymEquipment.length > 0) {
-    context += `\n## Equipment: ${gymEquipment.slice(0, 15).join(', ')}\n`;
-  }
+## REGELN (unbedingt einhalten)
+1. Verwende **ausschließlich** Übungen aus der unten stehenden Bibliothek – exakter Name wie angegeben.
+2. Schreibe **keine Klarnamen**. Die Kundin/der Kunde wird ausschließlich als Alias referenziert.
+3. Füge im Plan-Header die Zeile \`CLIENT_ID: ${ctx.alias}\` ein – exakt so.
+4. Halte das Markdown-Ausgabeformat strikt ein (wird automatisch importiert).
+5. Wähle Übungen passend zur **aktuellen Mesozyklusphase** (siehe unten).
+6. Beachte **Kontraindikationen** – keine Übungen, die diese Körperstellen belasten.
 
-  if (exercises.length > 0) {
-    context += `\n## Nutze bevorzugt diese Übungen:\n${exercises.slice(0, 40).join(', ')}\n`;
-  }
+---
 
-  // Geschlechtsspezifische Hinweise
-  if (isFemale) {
-    context += `
-## Hinweise für Trainingsplanung bei Frauen
-- Berücksichtige hormonelle Schwankungen im Zyklus: In der Follikelphase (ca. erste Zyklushälfte) ist die Leistungsfähigkeit und Anpassungsfähigkeit höher – intensivere Einheiten sind hier besonders effektiv.
-- In der Lutealphase (zweite Hälfte) ist moderateres Training oft sinnvoller – plane entsprechende Deload- oder Technikeinheiten.
-- Verletzungsrisiko: Frauen haben ein erhöhtes ACL-Risiko – Stabilisations- und Kniebeugekorrekturen gezielt einbauen.
-- Warm-Up und Mobilität haben bei Frauen einen besonders hohen Stellenwert.
-`;
-  }
+## KUNDEN-PROFIL (anonymisiert)
+- Alias: \`${ctx.alias}\`
+- Ziel: ${ctx.goalText}
+- Erfahrungslevel: ${ctx.experienceLabel}
+- Kontraindikationen: ${contraNote}${ctx.goalFreeText ? `\n- Zusatzinfo: ${ctx.goalFreeText}` : ''}${genderNote}${duoNote}${coachNote}
 
-  if (cardioRelevant) {
-    context += `\n## Cardio-Hinweis\nDas Trainingsziel legt Cardio nahe. Füge wenn sinnvoll 1 separate Cardio-Einheit pro Woche ein.\n`;
-  }
+## PLAN-PARAMETER
+- Sessions/Woche: ${options.sessionsPerWeek}
+- Gesamtdauer: ${options.weeksTotal} Wochen${options.sessionDurationMinutes ? `\n- Session-Dauer: ca. ${options.sessionDurationMinutes} Min.` : ''}
+- Phase: ${PHASE_LABELS[options.phase]}
 
-  return context;
+---
+
+${exerciseLib}
+
+---
+
+## AUSGABE-FORMAT (strikt einhalten – kein Abweichen)
+
+\`\`\`markdown
+# Trainingsplan
+CLIENT_ID: ${ctx.alias}
+Ziel: ${ctx.goalText}
+Phase: ${options.phase}
+Dauer: ${options.weeksTotal} Wochen | ${options.sessionsPerWeek}x/Woche
+
+---
+
+## Session A – [Fokus, z.B. Unterkörper Push]
+
+### Aufwärmen
+- [Mobility-/Core-Übung aus Bibliothek] | 2 × 10 Wdh. | kein Gewicht
+
+### Hauptteil
+1. **[Übungsname]** | [X] × [Y–Z] Wdh. | [RPE X oder % 1RM] | Pause: [X s]
+2. **[Übungsname]** | ...
+(min. 4, max. 7 Hauptübungen)
+
+### Finisher (optional, bei fat_loss / endurance)
+- [Übung] | [Parameter]
+
+---
+
+## Session B – [Fokus]
+...
+\`\`\`
+
+Erstelle jetzt den vollständigen Plan für **alle ${options.sessionsPerWeek} Sessions**.`;
 }
 
-export function generateUserPrompt(clientName: string, config: PlanConfig): string {
-  return `Erstelle jetzt den Trainingsplan.
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN EXPORT – generateAIPlan
+// ─────────────────────────────────────────────────────────────────────────────
 
-**WICHTIG - Exaktes Format für den Import:**
+/**
+ * ⚠️  SICHERHEITSHINWEIS:
+ * Der Anthropic-API-Key darf NICHT client-seitig exponiert werden.
+ * Für Production: diesen Call in eine Vercel Serverless Function oder
+ * Supabase Edge Function auslagern und den Key als Server-Env-Variable führen.
+ *
+ * Für die Entwicklungsphase kann VITE_ANTHROPIC_API_KEY genutzt werden –
+ * aber niemals in ein öffentlich zugängliches Deployment deployen.
+ */
+export async function generateAIPlan(
+  client: Record<string, any>,
+  options: PlanOptions
+): Promise<GeneratedPlan> {
+  // 1. Kundenprofil anonymisieren
+  const ctx = buildAnonymizedClientContext(client, options);
 
-# Trainingsplan: ${clientName}
+  // 2. Gefilterte Übungsbibliothek aus Supabase laden
+  const exercises = await fetchFilteredExercises({
+    goalTags: ctx.goal,
+    maxDifficulty: ctx.maxDifficulty,
+    contraindications: ctx.contraindications,
+    phase: options.phase,
+    includeCardio: options.includeCardio,
+  });
 
-## Ziel: [Hauptziel]
-## Trainingstage pro Woche: ${config.sessionsPerWeek}
-## Wochen: ${config.weeks}
+  if (exercises.length < 5) {
+    throw new Error(
+      `Zu wenige passende Übungen (${exercises.length}) gefunden. ` +
+      'Bitte Kundenprofil oder Kontraindikationen prüfen.'
+    );
+  }
 
----
+  // 3. Prompt bauen
+  const exerciseLib = buildExerciseLibraryContext(exercises);
+  const prompt = buildAIPlanPrompt(ctx, exerciseLib, options);
 
-## Woche 1: [Label]
+  // 4. Anthropic API Call
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('VITE_ANTHROPIC_API_KEY nicht gesetzt.');
 
-### Tag 1: [Name der Einheit]
-| Übung | Sätze | Wdh. | Pause | Hinweis |
-|-------|-------|------|-------|---------|
-| Warm-Up: [Übung] | 1 | [Zeit/Wdh.] | — | Aktivierung |
-| [Hauptübung 1] | [3-4] | [8-12] | [60-120s] | [optional] |
-| [Hauptübung 2] | [3-4] | [8-12] | [90s] | [optional] |
-| [Hauptübung 3] | [3] | [10-15] | [60s] | [optional] |
-| Cool-Down: [Übung] | 1 | [Zeit] | — | Dehnung/Entspannung |
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-6',  // Opus für maximale Plan-Qualität; Sonnet für Kostensparung
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
 
-### Tag 2: [Name]
-| Übung | Sätze | Wdh. | Pause | Hinweis |
-...
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Anthropic API Fehler ${response.status}: ${err}`);
+  }
 
----
+  const data = await response.json();
+  const markdown: string = data.content?.[0]?.text ?? '';
 
-## Woche 2: [Label]
-...
-${config.includeDeload ? `
----
+  if (!markdown) throw new Error('Leere Antwort von der AI erhalten.');
 
-## Woche ${config.weeks}: Deload
-(50-60% Intensität, weniger Sätze)
-` : ''}
----
+  // 5. Verwendete Übungen für Logging/Audit erfassen
+  const exercisesUsed = exercises
+    .map((ex) => ex.name_de || ex.name)
+    .filter((name) => markdown.includes(name));
 
-## Progressionslogik
-[Wie steigern? Bitte als klare Stichpunkte – kein langer Fließtext]
+  return {
+    markdown,
+    alias: ctx.alias,
+    clientId: client.id,
+    exercisesUsed,
+  };
+}
 
-## Coaching-Hinweise
-[Worauf achten?]
+// ─────────────────────────────────────────────────────────────────────────────
+// IMPORT HELPERS
+// Werden von der ClientDetailPage beim Plan-Import genutzt
+// ─────────────────────────────────────────────────────────────────────────────
 
-**REGELN:**
-1. JEDE Einheit (### Tag X) MUSS eine Übungstabelle mit mindestens 3 Hauptübungen haben
-2. Jede Einheit beginnt mit 1-2 Warm-Up Zeilen und endet mit 1 Cool-Down Zeile
-3. Warm-Up und Cool-Down bekommen "Sätze: 1" und "Pause: —"
-4. Wenn Cardio sinnvoll ist: eigene Session "### Tag X: Cardio: [Art]"
-5. Keine leeren Einheiten!
-6. Nutze das exakte Tabellenformat mit | Trennern
-7. Pausenangaben immer mit "s" (z.B. 90s) oder "min" (z.B. 2min)
-8. Progressionslogik als Stichpunkte, nicht als langer Fließtext`;
+/**
+ * Liest den Client-Alias aus einem importierten Markdown-Plan.
+ * Sucht nach der Zeile: CLIENT_ID: CLIENT_XXXXXXXX
+ */
+export function extractAliasFromMarkdown(markdown: string): string | null {
+  const match = markdown.match(/CLIENT_ID:\s*(CLIENT_[A-F0-9]{8})/);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Prüft beim Import, ob der Plan zur geöffneten Kundin/zum geöffneten Kunden gehört.
+ * Gibt false zurück wenn kein Alias im Markdown oder Alias stimmt nicht.
+ *
+ * Verwendung in ClientDetailPage:
+ *   if (!verifyPlanOwnership(pastedMarkdown, client.id)) {
+ *     alert('Dieser Plan gehört nicht zu diesem Kunden.');
+ *     return;
+ *   }
+ */
+export function verifyPlanOwnership(markdown: string, clientId: string): boolean {
+  const alias = extractAliasFromMarkdown(markdown);
+  if (!alias) return false;
+  return validateAlias(alias, clientId);
 }
