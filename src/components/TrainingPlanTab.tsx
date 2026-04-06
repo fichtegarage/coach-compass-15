@@ -72,7 +72,8 @@ interface PlanExercise {
 }
 
 interface Props {
-  client: Record<string, any>;
+  client?: Record<string, any>; // vollstaendiges Client-Objekt (bevorzugt)
+  clientId?: string;            // Fallback: nur die ID
   duoPartnerClientId?: string;
 }
 
@@ -107,7 +108,13 @@ function formatDate(iso: string | null): string {
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
-export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
+export default function TrainingPlanTab({ client: clientProp, clientId: clientIdProp, duoPartnerClientId }: Props) {
+
+  // ── Client-Resolver: akzeptiert client-Objekt ODER clientId-String ─────────
+  // Damit funktioniert die Komponente egal wie das Parent sie einbindet.
+  const client = clientProp ?? null;
+  const resolvedClientId: string | undefined =
+    clientProp?.id ?? clientProp?.client_id ?? clientIdProp ?? undefined;
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -117,7 +124,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
   const [exercises, setExercises]             = useState<Record<string, PlanExercise[]>>({});
   const [expandedWorkout, setExpandedWorkout] = useState<string | null>(null);
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
-  const [loading, setLoading]                 = useState(true);
+  const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState<string | null>(null);
 
   // Import modal
@@ -136,7 +143,10 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
   // ── Data fetching ──────────────────────────────────────────────────────────
 
   const fetchPlans = useCallback(async () => {
-    if (!client?.id) return;
+    if (!resolvedClientId) {
+      // Kein Client bekannt → kein Spinner, nichts laden
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -145,7 +155,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
       const { data: plans, error: plansError } = await supabase
         .from('training_plans')
         .select('*')
-        .eq('client_id', client.id)
+        .eq('client_id', resolvedClientId)
         .order('created_at', { ascending: false });
 
       if (plansError) throw plansError;
@@ -162,7 +172,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [client?.id]);
+  }, [resolvedClientId]);
 
   const fetchWorkouts = async (planId: string) => {
     const { data, error } = await supabase
@@ -188,7 +198,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
     setExercises(prev => ({ ...prev, [workoutId]: data ?? [] }));
   };
 
-  useEffect(() => { fetchPlans(); }, [fetchPlans]);
+  useEffect(() => { if (resolvedClientId) fetchPlans(); }, [fetchPlans, resolvedClientId]);
 
   // ── Toggle workout expand ──────────────────────────────────────────────────
 
@@ -206,7 +216,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
       await supabase
         .from('training_plans')
         .update({ is_active: false })
-        .eq('client_id', client.id);
+        .eq('client_id', resolvedClientId!);
       await supabase
         .from('training_plans')
         .update({ is_active: true })
@@ -244,7 +254,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
     try {
       // 1. Alias-Check (wenn Plan vom KI-Builder kommt)
       const hasAlias = markdown.includes('CLIENT_ID:');
-      if (hasAlias && !verifyPlanOwnership(markdown, client.id)) {
+      if (hasAlias && !verifyPlanOwnership(markdown, resolvedClientId!)) {
         throw new Error(
           'Dieser Plan gehört nicht zu diesem Kunden (Alias-Mismatch). ' +
           'Stelle sicher, dass du den richtigen Plan für diesen Kunden einfügst.'
@@ -266,7 +276,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
       const { data: planData, error: planError } = await supabase
         .from('training_plans')
         .insert({
-          client_id: client.id,
+          client_id: resolvedClientId!,
           name: parsed.name ?? 'Importierter Plan',
           goal: parsed.goal ?? null,
           weeks_total: parsed.weeksTotal ?? null,
@@ -285,7 +295,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
       await supabase
         .from('training_plans')
         .update({ is_active: false })
-        .eq('client_id', client.id)
+        .eq('client_id', resolvedClientId!)
         .neq('id', planData.id);
 
       // 5. Workouts einfügen
@@ -808,7 +818,7 @@ export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
       {/* ── KI Workout Builder Modal ── */}
       {showKIBuilder && (
         <KIWorkoutBuilderModal
-          client={client}
+          client={client ?? { id: resolvedClientId }}
           duoPartnerClientId={duoPartnerClientId}
           onPlanGenerated={(markdown) => {
             setShowKIBuilder(false);
