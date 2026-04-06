@@ -24,6 +24,8 @@ import { loadClientDataForPrompt, generateSystemPrompt, generateUserPrompt, type
 import AssessmentGuide from '@/components/AssessmentGuide';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
 import AIBuilderDialog from '@/components/AIBuilderDialog';
+import { useState } from 'react';
+import KIWorkoutBuilderModal from '@/components/KIWorkoutBuilderModal';
 
 interface TrainingPlan {
   id: string; name: string; goal: string | null; weeks_total: number | null;
