@@ -483,6 +483,67 @@ export async function generateAIPlan(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BACKWARD-COMPATIBLE EXPORTS
+// TrainingPlanTab.tsx importiert diese Namen aus der alten API.
+// Sie wrappen die neue Implementierung – Build-Kompatibilität ohne Refactor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Alias für PlanOptions – identischer Typ unter altem Namen */
+export type PlanConfig = PlanOptions;
+
+/**
+ * Lädt und anonymisiert Kundendaten für den Prompt.
+ * Ersetzt die alte loadClientDataForPrompt-Funktion.
+ */
+export async function loadClientDataForPrompt(
+  client: Record<string, any>,
+  options?: Partial<PlanOptions>
+): Promise<AnonymizedClientContext> {
+  const defaults: PlanOptions = {
+    sessionsPerWeek: 3,
+    weeksTotal: 6,
+    phase: 'accumulation',
+  };
+  return buildAnonymizedClientContext(client, { ...defaults, ...options });
+}
+
+/**
+ * Generiert den System-Prompt (Rollenanweisung + Regeln).
+ * Wird von TrainingPlanTab für manuelle API-Calls verwendet.
+ */
+export function generateSystemPrompt(_config: PlanConfig): string {
+  return [
+    'Du bist ein erfahrener Personal Trainer und erstellst strukturierte Trainingspläne.',
+    'Verwende ausschließlich Übungen aus der bereitgestellten Bibliothek.',
+    'Schreibe keine Klarnamen – nur den Kunden-Alias.',
+    'Halte das Markdown-Ausgabeformat strikt ein.',
+  ].join('\n');
+}
+
+/**
+ * Generiert den User-Prompt mit Kundenprofil + Übungsbibliothek.
+ * Wird von TrainingPlanTab für manuelle API-Calls verwendet.
+ */
+export async function generateUserPrompt(
+  config: PlanConfig,
+  clientData: AnonymizedClientContext,
+  exerciseLibOverride?: string
+): Promise<string> {
+  let exerciseLib = exerciseLibOverride ?? '';
+  if (!exerciseLib) {
+    const exercises = await fetchFilteredExercises({
+      goalTags: clientData.goal,
+      maxDifficulty: clientData.maxDifficulty,
+      contraindications: clientData.contraindications,
+      phase: config.phase,
+      includeCardio: config.includeCardio,
+    });
+    exerciseLib = buildExerciseLibraryContext(exercises);
+  }
+  return buildAIPlanPrompt(clientData, exerciseLib, config);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // IMPORT HELPERS
 // Werden von der ClientDetailPage beim Plan-Import genutzt
 // ─────────────────────────────────────────────────────────────────────────────
