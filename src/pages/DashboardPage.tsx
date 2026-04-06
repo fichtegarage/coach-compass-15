@@ -146,14 +146,37 @@ const DashboardPage: React.FC = () => {
       const clientId = (pkg.clients as any)?.id || pkg.client_id;
       const isTestkunde = pkg.package_name === 'Testkunde';
 
-      // Unbezahlt – höchste Priorität (nur echte Pakete)
-      if (!isTestkunde && pkg.payment_status !== 'Paid in full') {
-        const price = pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price;
-        collected.push({
-          type: 'unpaid', priority: 1, clientId, clientName,
-          detail: `€${Number(price).toFixed(0)} ausstehend`,
-        });
-      }
+      // Hauptkunde unbezahlt
+        if (pkg.package_name !== 'Testkunde' && pkg.payment_status !== 'Paid in full') {
+          const price = pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price;
+          const duoSuffix = pkg.is_duo ? ' (Hauptkunde)' : '';
+          reminderList.push({
+            type: 'unpaid',
+            clientName,
+            clientId,
+            packageName: pkg.package_name + duoSuffix,
+            detail: `€${Number(price).toFixed(0)} ausstehend`,
+            severity: 'destructive',
+          });
+        }
+         
+        // Partner unbezahlt (nur für Duo-Pakete)
+        if (pkg.is_duo && pkg.partner_client_id && pkg.partner_payment_status && pkg.partner_payment_status !== 'Paid in full') {
+          const price = pkg.is_deal && pkg.deal_discounted_price ? pkg.deal_discounted_price : pkg.package_price;
+          // Partnername laden (nur beim ersten Aufruf nötig, da packages bereits geladen)
+          const partnerName = (pkg.clients_via_partner as any)?.full_name
+            || (await supabase.from('clients').select('full_name').eq('id', pkg.partner_client_id).single()).data?.full_name
+            || 'Partner';
+          const partnerClientId = pkg.partner_client_id;
+          reminderList.push({
+            type: 'unpaid',
+            clientName: partnerName,
+            clientId: partnerClientId,
+            packageName: pkg.package_name + ' (Partner)',
+            detail: `€${Number(price).toFixed(0)} ausstehend`,
+            severity: 'destructive',
+          });
+        }
 
       // Paket läuft aus: ≤ 2 Einheiten übrig ODER ≤ 14 Tage bis Ende
       if (pkg.start_date && pkg.duration_weeks) {
