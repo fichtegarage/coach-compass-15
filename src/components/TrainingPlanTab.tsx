@@ -1,942 +1,823 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// ============================================================
+// DATEI: src/components/TrainingPlanTab.tsx
+// ZWECK: Trainingsplan-Tab in der ClientDetailPage
+//        – Plan anzeigen, importieren, KI-Builder starten
+// ============================================================
+
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import {
-  Plus, AlertTriangle, ChevronDown, ChevronUp,
-  Dumbbell, Target, Calendar, Loader2, Trash2,
-  CheckCircle, ClipboardPaste, Pencil, Check, X, ClipboardCheck,
-  Sparkles, Wand2,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
-import { toast } from 'sonner';
 import { parsePlan, validateParsedPlan, type ParsedPlan } from '@/lib/planParser';
 import { matchAndAddExercises, getMatchingStats } from '@/lib/exerciseMatching';
-import { loadClientDataForPrompt, generateSystemPrompt, generateUserPrompt, type PlanConfig } from '@/lib/aiPlanGenerator';
+import {
+  loadClientDataForPrompt,
+  generateSystemPrompt,
+  generateUserPrompt,
+  verifyPlanOwnership,
+  type PlanConfig,
+} from '@/lib/aiPlanGenerator';
+import KIWorkoutBuilderModal from '@/components/KIWorkoutBuilderModal';
 import AssessmentGuide from '@/components/AssessmentGuide';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
-import AIBuilderDialog from '@/components/AIBuilderDialog';
-import { useState } from 'react';
-import KIWorkoutBuilderModal from '@/components/KIWorkoutBuilderModal';
+
+// ─── TYPES ────────────────────────────────────────────────────────────────────
 
 interface TrainingPlan {
-  id: string; name: string; goal: string | null; weeks_total: number | null;
-  sessions_per_week: number | null; progression_notes: string | null;
-  coaching_notes: string | null; nutrition_notes: string | null;
-  is_active: boolean; start_date: string | null; created_at: string;
-  next_plan_workout_id?: string | null;
-  workouts?: PlanWorkout[];
+  id: string;
+  client_id: string;
+  trainer_id: string | null;
+  name: string;
+  goal: string | null;
+  weeks_total: number | null;
+  sessions_per_week: number | null;
+  progression_notes: string | null;
+  coaching_notes: string | null;
+  nutrition_notes: string | null;
+  source: string | null;
+  is_active: boolean;
+  start_date: string | null;
+  created_at: string;
+  next_plan_workout_id: string | null;
+  total_cycles: number | null;
 }
 
 interface PlanWorkout {
-  id: string; plan_id: string; week_number: number; week_label: string;
-  day_label: string; notes: string | null; order_in_week: number;
-  exercises?: PlanExercise[];
-  is_assessment?: boolean;
-  status?: 'pending' | 'in_progress' | 'completed' | 'skipped';
-  session_order?: number;
+  id: string;
+  plan_id: string;
+  week_number: number | null;
+  week_label: string | null;
+  day_label: string | null;
+  notes: string | null;
+  order_in_week: number | null;
+  created_at: string;
+  is_assessment: boolean | null;
+  session_order: number | null;
+  phase_type: string | null;
+  cycle_number: number | null;
+  status: string | null;
 }
 
 interface PlanExercise {
-  id: string; workout_id: string; name: string; sets: number | null;
-  reps_target: string | null; weight_target: string | null;
-  rest_seconds: number | null; notes: string | null;
-  alternative_name: string | null; order_in_workout: number;
+  id: string;
+  workout_id: string;
+  name: string;
+  sets: number | null;
+  reps_target: string | null;
+  weight_target: string | null;
+  rest_seconds: number | null;
+  notes: string | null;
+  order_in_workout: number | null;
+  alternative_name: string | null;
+  exercise_id: string | null;
+  is_bodyweight: boolean | null;
 }
 
-interface TrainingPlanTabProps { clientId: string; clientName: string; }
-
-function groupWorkoutsByWeek(workouts: PlanWorkout[]): Map<number, PlanWorkout[]> {
-  const map = new Map<number, PlanWorkout[]>();
-  for (const w of workouts) {
-    if (!map.has(w.week_number)) map.set(w.week_number, []);
-    map.get(w.week_number)!.push(w);
-  }
-  map.forEach(ws => ws.sort((a, b) => a.order_in_week - b.order_in_week));
-  return map;
+interface Props {
+  client: Record<string, any>;
+  duoPartnerClientId?: string;
 }
 
-function formatRest(seconds: number | null): string {
-  if (!seconds) return '—';
-  if (seconds >= 60) { const m = Math.floor(seconds / 60); const s = seconds % 60; return s > 0 ? `${m}:${String(s).padStart(2, '0')} min` : `${m} min`; }
-  return `${seconds}s`;
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+const PHASE_COLORS: Record<string, string> = {
+  accumulation:    'bg-blue-900/40 text-blue-300 border-blue-700/50',
+  intensification: 'bg-orange-900/40 text-orange-300 border-orange-700/50',
+  realization:     'bg-red-900/40 text-red-300 border-red-700/50',
+  deload:          'bg-green-900/40 text-green-300 border-green-700/50',
+};
+
+const PHASE_LABELS: Record<string, string> = {
+  accumulation:    'Akkumulation',
+  intensification: 'Intensivierung',
+  realization:     'Peak / Realisierung',
+  deload:          'Deload',
+};
+
+const STATUS_STYLES: Record<string, string> = {
+  completed: 'bg-green-900/30 border-green-700/40 text-green-400',
+  skipped:   'bg-gray-800/40 border-gray-700/40 text-gray-500 line-through',
+  planned:   'bg-gray-800/30 border-gray-700/30 text-gray-300',
+};
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleDateString('de-DE', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  });
 }
 
-const ExerciseRow: React.FC<{
-  exercise: PlanExercise; index: number;
-  onAlternativeSaved: (exerciseId: string, value: string) => void;
-}> = ({ exercise, index, onAlternativeSaved }) => {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(exercise.alternative_name || '');
-  const [saving, setSaving] = useState(false);
+// ─── COMPONENT ────────────────────────────────────────────────────────────────
 
-  const handleSave = async () => {
-    setSaving(true);
-    const { error } = await supabase.from('plan_exercises').update({ alternative_name: value.trim() || null }).eq('id', exercise.id);
-    if (error) { toast.error('Konnte nicht gespeichert werden.'); }
-    else { onAlternativeSaved(exercise.id, value.trim()); toast.success('Ersatzübung gespeichert.'); }
-    setSaving(false); setEditing(false);
+export default function TrainingPlanTab({ client, duoPartnerClientId }: Props) {
+
+  // ── State ──────────────────────────────────────────────────────────────────
+
+  const [activePlan, setActivePlan]           = useState<TrainingPlan | null>(null);
+  const [allPlans, setAllPlans]               = useState<TrainingPlan[]>([]);
+  const [workouts, setWorkouts]               = useState<PlanWorkout[]>([]);
+  const [exercises, setExercises]             = useState<Record<string, PlanExercise[]>>({});
+  const [expandedWorkout, setExpandedWorkout] = useState<string | null>(null);
+  const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
+  const [loading, setLoading]                 = useState(true);
+  const [error, setError]                     = useState<string | null>(null);
+
+  // Import modal
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importMarkdown, setImportMarkdown]   = useState('');
+  const [importLoading, setImportLoading]     = useState(false);
+  const [importError, setImportError]         = useState<string | null>(null);
+  const [importSuccess, setImportSuccess]     = useState(false);
+
+  // KI Builder
+  const [showKIBuilder, setShowKIBuilder]     = useState(false);
+
+  // Plan history
+  const [showHistory, setShowHistory]         = useState(false);
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
+
+  const fetchPlans = useCallback(async () => {
+    if (!client?.id) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Alle Pläne des Kunden laden
+      const { data: plans, error: plansError } = await supabase
+        .from('training_plans')
+        .select('*')
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: false });
+
+      if (plansError) throw plansError;
+
+      setAllPlans(plans ?? []);
+      const active = plans?.find(p => p.is_active) ?? plans?.[0] ?? null;
+      setActivePlan(active);
+
+      if (active) {
+        await fetchWorkouts(active.id);
+      }
+    } catch (e: any) {
+      setError(e.message ?? 'Fehler beim Laden des Plans.');
+    } finally {
+      setLoading(false);
+    }
+  }, [client?.id]);
+
+  const fetchWorkouts = async (planId: string) => {
+    const { data, error } = await supabase
+      .from('plan_workouts')
+      .select('*')
+      .eq('plan_id', planId)
+      .order('cycle_number', { ascending: true })
+      .order('session_order', { ascending: true });
+
+    if (error) throw error;
+    setWorkouts(data ?? []);
   };
 
-  const handleCancel = () => { setValue(exercise.alternative_name || ''); setEditing(false); };
+  const fetchExercisesForWorkout = async (workoutId: string) => {
+    if (exercises[workoutId]) return; // already loaded
+    const { data, error } = await supabase
+      .from('plan_exercises')
+      .select('*')
+      .eq('workout_id', workoutId)
+      .order('order_in_workout', { ascending: true });
+
+    if (error) return;
+    setExercises(prev => ({ ...prev, [workoutId]: data ?? [] }));
+  };
+
+  useEffect(() => { fetchPlans(); }, [fetchPlans]);
+
+  // ── Toggle workout expand ──────────────────────────────────────────────────
+
+  const handleWorkoutExpand = async (workoutId: string) => {
+    const next = expandedWorkout === workoutId ? null : workoutId;
+    setExpandedWorkout(next);
+    if (next) await fetchExercisesForWorkout(next);
+  };
+
+  // ── Switch active plan ─────────────────────────────────────────────────────
+
+  const handleSetActivePlan = async (plan: TrainingPlan) => {
+    try {
+      // Alle deaktivieren, neuen aktivieren
+      await supabase
+        .from('training_plans')
+        .update({ is_active: false })
+        .eq('client_id', client.id);
+      await supabase
+        .from('training_plans')
+        .update({ is_active: true })
+        .eq('id', plan.id);
+      await fetchPlans();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  // ── Delete plan ────────────────────────────────────────────────────────────
+
+  const handleDeletePlan = async (planId: string) => {
+    if (!confirm('Plan wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) return;
+    try {
+      await supabase.from('training_plans').delete().eq('id', planId);
+      await fetchPlans();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  // ── Import markdown plan ───────────────────────────────────────────────────
+
+  const handleImport = async (markdown: string) => {
+    if (!markdown.trim()) {
+      setImportError('Bitte einen Plan als Markdown einfügen.');
+      return;
+    }
+
+    setImportLoading(true);
+    setImportError(null);
+    setImportSuccess(false);
+
+    try {
+      // 1. Alias-Check (wenn Plan vom KI-Builder kommt)
+      const hasAlias = markdown.includes('CLIENT_ID:');
+      if (hasAlias && !verifyPlanOwnership(markdown, client.id)) {
+        throw new Error(
+          'Dieser Plan gehört nicht zu diesem Kunden (Alias-Mismatch). ' +
+          'Stelle sicher, dass du den richtigen Plan für diesen Kunden einfügst.'
+        );
+      }
+
+      // 2. Plan parsen
+      const parsed: ParsedPlan = parsePlan(markdown);
+      const validation = validateParsedPlan(parsed);
+      if (!validation.valid) {
+        throw new Error(`Ungültiges Plan-Format: ${validation.errors.join(', ')}`);
+      }
+
+      // 3. Übungen matchen
+      const matched = await matchAndAddExercises(parsed);
+      const stats = getMatchingStats(matched);
+
+      // 4. Plan in Datenbank speichern
+      const { data: planData, error: planError } = await supabase
+        .from('training_plans')
+        .insert({
+          client_id: client.id,
+          name: parsed.name ?? 'Importierter Plan',
+          goal: parsed.goal ?? null,
+          weeks_total: parsed.weeksTotal ?? null,
+          sessions_per_week: parsed.sessionsPerWeek ?? null,
+          progression_notes: parsed.progressionNotes ?? null,
+          coaching_notes: parsed.coachingNotes ?? null,
+          source: hasAlias ? 'ki_generated' : 'manual_import',
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (planError) throw planError;
+
+      // Alle anderen Pläne deaktivieren
+      await supabase
+        .from('training_plans')
+        .update({ is_active: false })
+        .eq('client_id', client.id)
+        .neq('id', planData.id);
+
+      // 5. Workouts einfügen
+      for (const workout of matched.workouts) {
+        const { data: workoutData, error: workoutError } = await supabase
+          .from('plan_workouts')
+          .insert({
+            plan_id: planData.id,
+            week_number: workout.weekNumber ?? null,
+            week_label: workout.weekLabel ?? null,
+            day_label: workout.dayLabel ?? null,
+            notes: workout.notes ?? null,
+            order_in_week: workout.orderInWeek ?? null,
+            session_order: workout.sessionOrder ?? null,
+            phase_type: workout.phaseType ?? null,
+            cycle_number: workout.cycleNumber ?? 1,
+            is_assessment: workout.isAssessment ?? false,
+            status: 'planned',
+          })
+          .select()
+          .single();
+
+        if (workoutError) throw workoutError;
+
+        // 6. Exercises einfügen
+        if (workout.exercises?.length) {
+          const exerciseRows = workout.exercises.map((ex: any, idx: number) => ({
+            workout_id: workoutData.id,
+            name: ex.name,
+            alternative_name: ex.alternativeName ?? null,
+            exercise_id: ex.exerciseId ?? null,
+            sets: ex.sets ?? null,
+            reps_target: ex.repsTarget ?? null,
+            weight_target: ex.weightTarget ?? null,
+            rest_seconds: ex.restSeconds ?? null,
+            notes: ex.notes ?? null,
+            order_in_workout: idx + 1,
+            is_bodyweight: ex.isBodyweight ?? false,
+          }));
+          const { error: exError } = await supabase
+            .from('plan_exercises')
+            .insert(exerciseRows);
+          if (exError) throw exError;
+        }
+      }
+
+      setImportSuccess(true);
+      setImportMarkdown('');
+
+      // Stats-Meldung
+      if (stats.unmatched > 0) {
+        console.warn(
+          `Import abgeschlossen. ${stats.matched}/${stats.total} Übungen erkannt. ` +
+          `${stats.unmatched} unbekannte Übungen wurden als Text gespeichert.`
+        );
+      }
+
+      setTimeout(() => {
+        setShowImportModal(false);
+        setImportSuccess(false);
+        fetchPlans();
+      }, 1500);
+
+    } catch (e: any) {
+      setImportError(e.message ?? 'Unbekannter Fehler beim Importieren.');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  // ── KI Builder callback ────────────────────────────────────────────────────
+
+  const handlePlanGenerated = (markdown: string) => {
+    // Direkt importieren ohne manuelles Einfügen
+    handleImport(markdown);
+  };
+
+  // ── Group workouts by cycle ────────────────────────────────────────────────
+
+  const workoutsByCycle = workouts.reduce<Record<number, PlanWorkout[]>>((acc, w) => {
+    const cycle = w.cycle_number ?? 1;
+    if (!acc[cycle]) acc[cycle] = [];
+    acc[cycle].push(w);
+    return acc;
+  }, {});
+
+  const currentNextId = activePlan?.next_plan_workout_id;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+          <p className="text-gray-400 text-sm">Plan wird geladen …</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <tr className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-      <td className="px-3 py-2">
-        <p className="font-medium text-sm">{exercise.name}</p>
-        {editing ? (
-          <div className="flex items-center gap-1.5 mt-1">
-            <Input value={value} onChange={e => setValue(e.target.value)} placeholder="z.B. Kurzhantel-Bankdrücken" className="h-7 text-xs" autoFocus
-              onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }} />
-            <button onClick={handleSave} disabled={saving} className="text-primary hover:text-primary flex-shrink-0">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-            <button onClick={handleCancel} className="text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4" /></button>
-          </div>
-        ) : (
-          <button onClick={() => setEditing(true)} className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors group">
-            {exercise.alternative_name ? (
-              <><span className="text-blue-500">⇄ {exercise.alternative_name}</span><Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-1" /></>
-            ) : (
-              <span className="opacity-0 group-hover:opacity-60 transition-opacity italic">+ Ersatzübung hinterlegen</span>
-            )}
+    <div className="space-y-5">
+
+      {/* ── Error Banner ── */}
+      {error && (
+        <div className="flex items-start gap-3 rounded-lg bg-red-900/30 border border-red-700/50 p-4 text-red-300 text-sm">
+          <span className="text-lg mt-0.5">⚠️</span>
+          <p>{error}</p>
+          <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-200">✕</button>
+        </div>
+      )}
+
+      {/* ── Action Bar ── */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          {/* KI Builder Button */}
+          <button
+            onClick={() => setShowKIBuilder(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-all shadow-md shadow-indigo-900/40 active:scale-95"
+          >
+            <span>🤖</span>
+            KI-Plan erstellen
+          </button>
+
+          {/* Manual Import Button */}
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-all active:scale-95"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Plan importieren
+          </button>
+        </div>
+
+        {/* Plan history toggle */}
+        {allPlans.length > 1 && (
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            className="text-sm text-gray-400 hover:text-gray-200 transition-colors"
+          >
+            {showHistory ? 'Verlauf ausblenden' : `${allPlans.length} Pläne ▾`}
           </button>
         )}
-      </td>
-      <td className="px-3 py-2 text-center tabular-nums text-sm">{exercise.sets ?? '—'}</td>
-      <td className="px-3 py-2 text-center tabular-nums text-sm">{exercise.reps_target || '—'}</td>
-      <td className="px-3 py-2 text-center tabular-nums text-sm text-primary font-medium">{exercise.weight_target || '—'}</td>
-      <td className="px-3 py-2 text-center text-muted-foreground text-xs">{formatRest(exercise.rest_seconds)}</td>
-      <td className="px-3 py-2 text-muted-foreground text-xs">{exercise.notes || ''}</td>
-    </tr>
-  );
-};
+      </div>
 
-const ExerciseTable: React.FC<{
-  exercises: PlanExercise[];
-  onExerciseUpdated: (exerciseId: string, alternativeName: string) => void;
-}> = ({ exercises, onExerciseUpdated }) => (
-  <div className="overflow-x-auto rounded-lg border border-border">
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="bg-muted/40 border-b border-border">
-          <th className="text-left px-3 py-2 font-medium text-muted-foreground">Übung</th>
-          <th className="text-center px-3 py-2 font-medium text-muted-foreground w-14">Sätze</th>
-          <th className="text-center px-3 py-2 font-medium text-muted-foreground w-20">Wdh.</th>
-          <th className="text-center px-3 py-2 font-medium text-muted-foreground w-24">Gewicht</th>
-          <th className="text-center px-3 py-2 font-medium text-muted-foreground w-20">Pause</th>
-          <th className="text-left px-3 py-2 font-medium text-muted-foreground">Hinweis</th>
-        </tr>
-      </thead>
-      <tbody>
-        {exercises.map((ex, i) => <ExerciseRow key={ex.id} exercise={ex} index={i} onAlternativeSaved={onExerciseUpdated} />)}
-      </tbody>
-    </table>
-  </div>
-);
-
-const WorkoutCard: React.FC<{
-  workout: PlanWorkout;
-  onExerciseUpdated: (exerciseId: string, alternativeName: string) => void;
-  onToggleAssessment: (workoutId: string, isAssessment: boolean) => void;
-  onOpenAssessment: (workout: PlanWorkout) => void;
-  onWorkoutUpdated: () => void;
-  clientName: string;
-  catalogExercises?: { id: string; name_de: string }[];
-}> = ({ workout, onExerciseUpdated, onToggleAssessment, onOpenAssessment, onWorkoutUpdated, clientName, catalogExercises }) => {
-  const [open, setOpen] = useState(true);
-  const [toggling, setToggling] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-
-  const handleToggleAssessment = async () => {
-    setToggling(true);
-    await onToggleAssessment(workout.id, !workout.is_assessment);
-    setToggling(false);
-  };
-
-  return (
-    <div className={`rounded-xl border overflow-hidden ${
-      workout.is_assessment ? 'border-primary/50 bg-primary/5' : 'border-border'
-    }`}>
-      <button className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left" onClick={() => setOpen(o => !o)}>
-        <div className="flex items-center gap-2">
-          {workout.is_assessment ? (
-            <ClipboardCheck className="w-4 h-4 text-primary flex-shrink-0" />
-          ) : (
-            <Dumbbell className="w-4 h-4 text-primary flex-shrink-0" />
-          )}
-          <span className="font-medium text-sm">{workout.day_label}</span>
-          {workout.is_assessment && (
-            <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
-              ASSESSMENT
-            </span>
-          )}
-          {workout.status === 'completed' && (
-            <CheckCircle className="w-3.5 h-3.5 text-success" />
-          )}
-          {!workout.is_assessment && workout.exercises && (
-            <span className="text-xs text-muted-foreground">· {workout.exercises.length} Übungen</span>
-          )}
-        </div>
-        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-      </button>
-      {open && (
-        <div className="p-3 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleToggleAssessment}
-              disabled={toggling}
-              className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
-                workout.is_assessment
-                  ? 'bg-primary/10 border-primary/30 text-primary'
-                  : 'bg-muted border-border text-muted-foreground hover:text-foreground'
+      {/* ── Plan History ── */}
+      {showHistory && (
+        <div className="rounded-xl border border-gray-700 bg-gray-800/50 divide-y divide-gray-700/50 overflow-hidden">
+          <div className="px-4 py-2.5 text-xs text-gray-400 font-medium uppercase tracking-wider bg-gray-800/80">
+            Alle Pläne
+          </div>
+          {allPlans.map(plan => (
+            <div
+              key={plan.id}
+              className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors ${
+                plan.is_active ? 'bg-indigo-900/20' : 'hover:bg-gray-700/30'
               }`}
             >
-              {toggling ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <ClipboardCheck className="w-3 h-3" />
-              )}
-              {workout.is_assessment ? 'Assessment ✓' : 'Als Assessment markieren'}
-            </button>
-            {workout.is_assessment && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onOpenAssessment(workout)}
-                className="text-xs h-7 gap-1.5"
-              >
-                <ClipboardCheck className="w-3 h-3" />
-                {workout.status === 'completed' ? 'Assessment ansehen' : 'Assessment durchführen'}
-              </Button>
-            )}
-            {!workout.is_assessment && (
-              <Button
-                size="sm"
-                variant={editMode ? "default" : "outline"}
-                onClick={() => setEditMode(!editMode)}
-                className="text-xs h-7 gap-1.5 ml-auto"
-              >
-                <Pencil className="w-3 h-3" />
-                {editMode ? 'Fertig' : 'Bearbeiten'}
-              </Button>
-            )}
-          </div>
-
-          {!workout.is_assessment && workout.exercises && (
-            editMode ? (
-              <PlanExerciseEditor
-                exercises={workout.exercises}
-                workoutId={workout.id}
-                onUpdate={onWorkoutUpdated}
-                catalogExercises={catalogExercises}
-              />
-            ) : workout.exercises.length > 0 ? (
-              <ExerciseTable exercises={workout.exercises} onExerciseUpdated={onExerciseUpdated} />
-            ) : (
-              <div className="text-center py-4 text-muted-foreground text-sm">
-                Keine Übungen. <button onClick={() => setEditMode(true)} className="text-primary underline">Jetzt hinzufügen</button>
-              </div>
-            )
-          )}
-          {workout.is_assessment && (
-            <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground mb-1">Assessment-Session beinhaltet:</p>
-              <ul className="text-xs space-y-0.5">
-                <li>• Bewegungsqualität-Analyse (Squat, Hinge, Push, Pull, Core)</li>
-                <li>• Tiefenfragen zu Motivation & Lebensumständen</li>
-                <li>• Identifikation von Stärken & Fokuspunkten</li>
-                <li>• Erfassung von Kontraindikationen</li>
-              </ul>
-            </div>
-          )}
-          {workout.notes && <p className="text-xs text-muted-foreground italic">{workout.notes}</p>}
-        </div>
-      )}
-    </div>
-  );
-};
-
-interface ImportDialogProps { open: boolean; onClose: () => void; onImported: () => void; clientId: string; trainerId: string; }
-
-const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, clientId, trainerId }) => {
-  const [markdown, setMarkdown] = useState('');
-  const [parsed, setParsed] = useState<ParsedPlan | null>(null);
-  const [validation, setValidation] = useState<ReturnType<typeof validateParsedPlan> | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [step, setStep] = useState<'paste' | 'preview'>('paste');
-
-  const handleParse = () => {
-    const result = parsePlan(markdown);
-    if (!result) { toast.error('Kein gültiges Planformat erkannt.'); return; }
-    const v = validateParsedPlan(result);
-    setParsed(result); setValidation(v); setStep('preview');
-  };
-
-  const handleSave = async () => {
-    if (!parsed) return;
-    setSaving(true);
-    try {
-      const allExerciseNames = parsed.workouts.flatMap(w => w.exercises.map(e => e.name));
-      const matchResults = await matchAndAddExercises(allExerciseNames);
-      const stats = getMatchingStats(matchResults);
-      await supabase.from('training_plans').update({ is_active: false }).eq('client_id', clientId).eq('trainer_id', trainerId).eq('is_active', true);
-      const { data: planData, error: planError } = await supabase.from('training_plans').insert({
-        client_id: clientId, trainer_id: trainerId, name: parsed.name, goal: parsed.goal || null,
-        weeks_total: parsed.weeks_total, sessions_per_week: parsed.sessions_per_week,
-        total_cycles: parsed.total_cycles || 1,
-        progression_notes: parsed.progression_notes || null, coaching_notes: parsed.coaching_notes || null,
-        nutrition_notes: parsed.nutrition_notes || null, source: 'claude_import', is_active: true,
-      }).select().single();
-      if (planError || !planData) throw planError;
-
-      for (const workout of parsed.workouts) {
-        const { data: workoutData, error: workoutError } = await supabase.from('plan_workouts').insert({
-          plan_id: planData.id, week_number: workout.week_number, week_label: workout.week_label,
-          day_label: workout.day_label, notes: workout.notes || null, order_in_week: workout.order_in_week,
-          session_order: workout.session_order,
-          phase_type: workout.phase_type,
-          cycle_number: workout.cycle_number,
-        }).select().single();
-        if (workoutError || !workoutData) throw workoutError;
-        if (workout.exercises.length > 0) {
-          const { error: exError } = await supabase.from('plan_exercises').insert(
-            workout.exercises.map(ex => {
-              const match = matchResults.get(ex.name);
-              return {
-                workout_id: workoutData.id,
-                name: ex.name,
-                sets: ex.sets,
-                reps_target: ex.reps_target || null,
-                weight_target: ex.weight_target || null,
-                rest_seconds: ex.rest_seconds,
-                notes: ex.notes || null,
-                order_in_workout: ex.order_in_workout,
-                exercise_id: match?.exerciseId || null,
-              };
-            })
-          );
-          if (exError) throw exError;
-        }
-      }
-
-      let message = `Plan "${parsed.name}" erfolgreich importiert`;
-      if (stats.added > 0) {
-        message += ` · ${stats.added} neue Übung${stats.added > 1 ? 'en' : ''} zum Katalog hinzugefügt`;
-      }
-      toast.success(message);
-      onImported(); onClose();
-      setStep('paste'); setMarkdown(''); setParsed(null); setValidation(null);
-    } catch (err) { console.error(err); toast.error('Fehler beim Speichern des Plans.'); }
-    finally { setSaving(false); }
-  };
-
-  const handleClose = () => { setStep('paste'); setMarkdown(''); setParsed(null); setValidation(null); onClose(); };
-
-  return (
-    <Dialog open={open} onOpenChange={open => { if (!open) handleClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-display flex items-center gap-2">
-            <ClipboardPaste className="w-5 h-5" />
-            {step === 'paste' ? 'Claude-Output einfügen' : 'Plan prüfen & speichern'}
-          </DialogTitle>
-        </DialogHeader>
-        {step === 'paste' && (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-sm space-y-1">
-              <p className="font-medium text-primary">So geht's:</p>
-              <ol className="list-decimal list-inside space-y-0.5 text-xs text-muted-foreground">
-                <li>Exportiere das Erstgespräch über "Für Claude exportieren"</li>
-                <li>Lade die .md-Datei in ein neues Claude-Gespräch hoch</li>
-                <li>Claude generiert den strukturierten Trainingsplan</li>
-                <li>Füge den kompletten Output hier ein</li>
-              </ol>
-            </div>
-            <Textarea value={markdown} onChange={e => setMarkdown(e.target.value)} placeholder="# Trainingsplan: Max Mustermann..." rows={14} className="font-mono text-xs" />
-            <Button onClick={handleParse} disabled={!markdown.trim()} className="w-full">Plan analysieren →</Button>
-          </div>
-        )}
-        {step === 'preview' && parsed && validation && (
-          <div className="space-y-4">
-            <div className={`rounded-lg border px-3 py-2 ${validation.valid ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20'}`}>
-              <div className="flex items-center gap-2 mb-1">
-                {validation.valid ? <CheckCircle className="w-4 h-4 text-success" /> : <AlertTriangle className="w-4 h-4 text-warning" />}
-                <span className="text-sm font-medium">{validation.valid ? 'Plan erfolgreich erkannt' : 'Plan mit Warnungen'}</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {validation.stats.workouts} Einheiten · {validation.stats.exercises} Übungen
-                {validation.stats.cycles > 1 && ` · ${validation.stats.cycles} Zyklen`}
-              </p>
-              {(validation.stats.phases.deload > 0 || validation.stats.phases.test > 0) && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {validation.stats.phases.load > 0 && `${validation.stats.phases.load}× Load`}
-                  {validation.stats.phases.deload > 0 && ` · ${validation.stats.phases.deload}× Deload`}
-                  {validation.stats.phases.test > 0 && ` · ${validation.stats.phases.test}× Test`}
-                  {validation.stats.phases.intro > 0 && ` · ${validation.stats.phases.intro}× Intro`}
-                </p>
-              )}
-              {validation.warnings.map((w, i) => <p key={i} className="text-xs text-warning mt-1">⚠ {w}</p>)}
-            </div>
-            <div>
-              <p className="text-lg font-display font-bold">{parsed.name}</p>
-              {parsed.goal && <p className="text-sm text-muted-foreground">🎯 {parsed.goal}</p>}
-            </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {parsed.workouts.map((w, i) => (
-                <div key={i} className={`rounded-lg border p-3 text-sm ${w.phase_type === 'deload' ? 'border-blue-200 bg-blue-50/50' : w.phase_type === 'test' ? 'border-amber-200 bg-amber-50/50' : 'border-border'}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-xs text-muted-foreground">{w.week_label || `Woche ${w.week_number}`}</span>
-                    {w.phase_type === 'deload' && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">DELOAD</span>}
-                    {w.phase_type === 'test' && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">TEST</span>}
-                    {w.phase_type === 'intro' && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">INTRO</span>}
-                  </div>
-                  <p className="font-medium">{w.day_label} <span className="text-xs text-muted-foreground font-normal">#{w.session_order}</span></p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {w.exercises.length} Übungen: {w.exercises.slice(0, 3).map(e => e.name).join(', ')}
-                    {w.exercises.length > 3 && ` +${w.exercises.length - 3} weitere`}
+              <div className="flex items-center gap-3 min-w-0">
+                {plan.is_active && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-600/40 text-indigo-300 border border-indigo-700/50 shrink-0">
+                    aktiv
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <p className="text-white text-sm font-medium truncate">{plan.name}</p>
+                  <p className="text-gray-400 text-xs">
+                    {formatDate(plan.created_at)}
+                    {plan.goal ? ` · ${plan.goal}` : ''}
                   </p>
                 </div>
-              ))}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {!plan.is_active && (
+                  <button
+                    onClick={() => handleSetActivePlan(plan)}
+                    className="text-xs px-3 py-1 rounded-lg border border-gray-600 text-gray-300 hover:border-indigo-500 hover:text-indigo-300 transition-colors"
+                  >
+                    Aktivieren
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDeletePlan(plan.id)}
+                  className="text-gray-600 hover:text-red-400 transition-colors p-1"
+                  title="Plan löschen"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep('paste')} className="flex-1">← Zurück</Button>
-              <Button onClick={handleSave} disabled={saving || !validation.valid} className="flex-1 gap-2">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {saving ? 'Wird gespeichert...' : 'Plan speichern'}
-              </Button>
-            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── No Plan State ── */}
+      {!activePlan && !loading && (
+        <div className="rounded-xl border border-dashed border-gray-700 bg-gray-800/20 p-10 text-center">
+          <div className="text-4xl mb-4">📋</div>
+          <p className="text-white font-medium mb-1">Noch kein Trainingsplan vorhanden</p>
+          <p className="text-gray-400 text-sm mb-6">
+            Erstelle einen Plan mit der KI oder importiere ein Markdown-Dokument.
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => setShowKIBuilder(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-all"
+            >
+              🤖 KI-Plan erstellen
+            </button>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-all"
+            >
+              Plan importieren
+            </button>
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-};
+          {/* Assessment Guide als Fallback */}
+          <div className="mt-8">
+            <AssessmentGuide client={client} />
+          </div>
+        </div>
+      )}
 
-interface AIBuilderDialogProps {
-  open: boolean;
-  onClose: () => void;
-  onImported: () => void;
-  clientId: string;
-  clientName: string;
-  trainerId: string;
-}
+      {/* ── Active Plan ── */}
+      {activePlan && (
+        <div className="space-y-4">
 
-const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImported, clientId, clientName, trainerId }) => {
-  const [step, setStep] = useState<'config' | 'generating' | 'preview'>('config');
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [weeks, setWeeks] = useState(4);
-  const [sessionsPerWeek, setSessions] = useState(3);
-  const [includeDeload, setIncludeDeload] = useState(true);
-  const [focus, setFocus] = useState('');
-  const [generatedMarkdown, setGeneratedMarkdown] = useState('');
-  const [parsed, setParsed] = useState<ParsedPlan | null>(null);
-  const [validation, setValidation] = useState<ReturnType<typeof validateParsedPlan> | null>(null);
-
-  const handleGenerate = async () => {
-    setLoading(true);
-    setStep('generating');
-    try {
-      const config: PlanConfig = { weeks, sessionsPerWeek, includeDeload, focus: focus || undefined };
-      const data = await loadClientDataForPrompt(clientId);
-      if (!data.client) {
-        toast.error('Kundendaten nicht gefunden');
-        setStep('config');
-        setLoading(false);
-        return;
-      }
-      const systemPrompt = generateSystemPrompt(data, config);
-      const userPrompt = generateUserPrompt(clientName, config);
-      const response = await fetch('/api/claude-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: systemPrompt + '\n\n' + userPrompt }],
-          max_tokens: 8000,
-        }),
-      });
-      if (!response.ok) throw new Error('API-Fehler');
-      const result = await response.json();
-      const markdown = result.content?.[0]?.text || '';
-      if (!markdown) throw new Error('Keine Antwort von Claude');
-      setGeneratedMarkdown(markdown);
-      const parsedPlan = parsePlan(markdown);
-      if (!parsedPlan || parsedPlan.workouts.length === 0) {
-        toast.error('Plan konnte nicht geparst werden. Versuche es erneut.');
-        setStep('config');
-        setLoading(false);
-        return;
-      }
-      setParsed(parsedPlan);
-      setValidation(validateParsedPlan(parsedPlan));
-      setStep('preview');
-    } catch (err) {
-      console.error('KI-Plan Fehler:', err);
-      toast.error('Fehler bei der Plan-Generierung');
-      setStep('config');
-    }
-    setLoading(false);
-  };
-
-  const handleImport = async () => {
-    if (!parsed) return;
-    setSaving(true);
-    try {
-      const allExerciseNames = parsed.workouts.flatMap(w => w.exercises.map(e => e.name));
-      const matchResults = await matchAndAddExercises(allExerciseNames);
-      const stats = getMatchingStats(matchResults);
-      await supabase.from('training_plans').update({ is_active: false })
-        .eq('client_id', clientId).eq('trainer_id', trainerId).eq('is_active', true);
-      const { data: planData, error: planError } = await supabase.from('training_plans').insert({
-        client_id: clientId, trainer_id: trainerId, name: parsed.name, goal: parsed.goal || null,
-        weeks_total: parsed.weeks_total, sessions_per_week: parsed.sessions_per_week,
-        total_cycles: parsed.total_cycles || 1,
-        progression_notes: parsed.progression_notes || null, coaching_notes: parsed.coaching_notes || null,
-        nutrition_notes: parsed.nutrition_notes || null, source: 'ai_generated', is_active: true,
-      }).select().single();
-      if (planError || !planData) throw planError;
-      for (const workout of parsed.workouts) {
-        const { data: workoutData, error: workoutError } = await supabase.from('plan_workouts').insert({
-          plan_id: planData.id, week_number: workout.week_number, week_label: workout.week_label,
-          day_label: workout.day_label, notes: workout.notes || null, order_in_week: workout.order_in_week,
-          session_order: workout.session_order, phase_type: workout.phase_type, cycle_number: workout.cycle_number,
-        }).select().single();
-        if (workoutError || !workoutData) throw workoutError;
-        if (workout.exercises.length > 0) {
-          const { error: exError } = await supabase.from('plan_exercises').insert(
-            workout.exercises.map(ex => {
-              const match = matchResults.get(ex.name);
-              return {
-                workout_id: workoutData.id, name: ex.name, sets: ex.sets,
-                reps_target: ex.reps_target || null, weight_target: ex.weight_target || null,
-                rest_seconds: ex.rest_seconds, notes: ex.notes || null, order_in_workout: ex.order_in_workout,
-                exercise_id: match?.exerciseId || null,
-              };
-            })
-          );
-          if (exError) throw exError;
-        }
-      }
-      let message = `Plan "${parsed.name}" erstellt!`;
-      if (stats.added > 0) message += ` ${stats.added} neue Übung${stats.added > 1 ? 'en' : ''} hinzugefügt.`;
-      toast.success(message);
-      onImported();
-      handleClose();
-    } catch (err) {
-      console.error('Import-Fehler:', err);
-      toast.error('Fehler beim Speichern des Plans');
-    }
-    setSaving(false);
-  };
-
-  const handleClose = () => {
-    setStep('config');
-    setGeneratedMarkdown('');
-    setParsed(null);
-    setValidation(null);
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            KI-Workout-Builder
-          </DialogTitle>
-        </DialogHeader>
-
-        {step === 'config' && (
-          <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">
-              Erstelle automatisch einen Trainingsplan für <strong>{clientName}</strong> basierend auf Erstgespräch, Assessment und Equipment.
-            </p>
-            <div className="grid gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Wochen</Label>
-                  <Select value={String(weeks)} onValueChange={v => setWeeks(Number(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="3">3 Wochen</SelectItem>
-                      <SelectItem value="4">4 Wochen</SelectItem>
-                      <SelectItem value="6">6 Wochen</SelectItem>
-                      <SelectItem value="8">8 Wochen</SelectItem>
-                      <SelectItem value="12">12 Wochen</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Einheiten/Woche</Label>
-                  <Select value={String(sessionsPerWeek)} onValueChange={v => setSessions(Number(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2">2×/Woche</SelectItem>
-                      <SelectItem value="3">3×/Woche</SelectItem>
-                      <SelectItem value="4">4×/Woche</SelectItem>
-                      <SelectItem value="5">5×/Woche</SelectItem>
-                    </SelectContent>
-                  </Select>
+          {/* Plan Header */}
+          <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-5">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h3 className="text-white font-semibold text-lg leading-tight">{activePlan.name}</h3>
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
+                  {activePlan.goal && (
+                    <span className="text-sm text-gray-300">🎯 {activePlan.goal}</span>
+                  )}
+                  {activePlan.sessions_per_week && (
+                    <span className="text-sm text-gray-400">{activePlan.sessions_per_week}×/Woche</span>
+                  )}
+                  {activePlan.weeks_total && (
+                    <span className="text-sm text-gray-400">{activePlan.weeks_total} Wochen</span>
+                  )}
+                  {activePlan.start_date && (
+                    <span className="text-sm text-gray-400">Start: {formatDate(activePlan.start_date)}</span>
+                  )}
+                  {activePlan.source === 'ki_generated' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-700/50">
+                      🤖 KI-generiert
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Fokus (optional)</Label>
-                <Input value={focus} onChange={e => setFocus(e.target.value)} placeholder="z.B. Oberkörper, Fettabbau, Kraft..." />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="font-medium text-sm">Deload-Woche</p>
-                  <p className="text-xs text-muted-foreground">Reduzierte Intensität am Ende</p>
-                </div>
-                <Switch checked={includeDeload} onCheckedChange={setIncludeDeload} />
+              <div className="text-right text-xs text-gray-500">
+                {workouts.length} Sessions
               </div>
             </div>
-            <Button onClick={handleGenerate} disabled={loading} className="w-full gap-2">
-              <Wand2 className="w-4 h-4" />
-              Plan generieren
-            </Button>
-          </div>
-        )}
 
-        {step === 'generating' && (
-          <div className="py-12 flex flex-col items-center gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <div className="text-center">
-              <p className="font-medium">Plan wird erstellt...</p>
-              <p className="text-sm text-muted-foreground">Das dauert etwa 10-20 Sekunden</p>
-            </div>
-          </div>
-        )}
-
-        {step === 'preview' && parsed && validation && (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-3">
-              <div className="flex items-center gap-2 text-green-400 mb-2">
-                <CheckCircle className="w-4 h-4" />
-                <span className="font-medium">Plan erfolgreich generiert!</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div><p className="text-muted-foreground">Einheiten</p><p className="font-semibold">{validation.stats.workouts}</p></div>
-                <div><p className="text-muted-foreground">Übungen</p><p className="font-semibold">{validation.stats.exercises}</p></div>
-                <div><p className="text-muted-foreground">Wochen</p><p className="font-semibold">{validation.stats.weeks.length}</p></div>
-              </div>
-            </div>
-            {validation.warnings.length > 0 && (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
-                <p className="text-amber-400 text-sm font-medium mb-1">Hinweise:</p>
-                <ul className="text-xs text-muted-foreground space-y-0.5">
-                  {validation.warnings.map((w, i) => <li key={i}>• {w}</li>)}
-                </ul>
+            {/* Notes */}
+            {activePlan.coaching_notes && (
+              <div className="mt-4 rounded-lg bg-gray-700/30 border border-gray-600/30 px-4 py-3 text-sm text-gray-300">
+                <span className="text-gray-400 text-xs font-medium uppercase tracking-wider">Coaching-Hinweise</span>
+                <p className="mt-1">{activePlan.coaching_notes}</p>
               </div>
             )}
-            <div className="border rounded-lg p-3 max-h-[300px] overflow-y-auto">
-              <p className="text-xs font-medium mb-2 text-muted-foreground">Vorschau:</p>
-              <div className="space-y-2">
-                {parsed.workouts.slice(0, 6).map((w, i) => (
-                  <div key={i} className="text-xs">
-                    <span className="text-muted-foreground">Woche {w.week_number}:</span>{' '}
-                    <span className="font-medium">{w.day_label}</span>{' '}
-                    <span className="text-muted-foreground">({w.exercises.length} Übungen)</span>
-                  </div>
-                ))}
-                {parsed.workouts.length > 6 && (
-                  <p className="text-xs text-muted-foreground">... und {parsed.workouts.length - 6} weitere</p>
-                )}
+            {activePlan.progression_notes && (
+              <div className="mt-2 rounded-lg bg-gray-700/30 border border-gray-600/30 px-4 py-3 text-sm text-gray-300">
+                <span className="text-gray-400 text-xs font-medium uppercase tracking-wider">Progression</span>
+                <p className="mt-1">{activePlan.progression_notes}</p>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep('config')} className="flex-1">← Neu generieren</Button>
-              <Button onClick={handleImport} disabled={saving} className="flex-1 gap-2">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                {saving ? 'Speichern...' : 'Plan übernehmen'}
-              </Button>
-            </div>
+            )}
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-};
 
-const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName }) => {
-  const { user } = useAuth();
-  const [plans, setPlans] = useState<TrainingPlan[]>([]);
-  const [activePlan, setActivePlan] = useState<TrainingPlan | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [importOpen, setImportOpen] = useState(false);
-  const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
-  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
-  const [showArchive, setShowArchive] = useState(false);
-  const [activeAssessment, setActiveAssessment] = useState<PlanWorkout | null>(null);
-  const [catalogExercises, setCatalogExercises] = useState<{ id: string; name_de: string }[]>([]);
+          {/* Workout List – grouped by cycle */}
+          {Object.keys(workoutsByCycle).length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              Keine Sessions im Plan vorhanden.
+            </div>
+          ) : (
+            Object.entries(workoutsByCycle)
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([cycleNum, cycleWorkouts]) => (
+                <div key={cycleNum} className="space-y-2">
 
-  const loadPlans = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    const { data: exerciseCatalog } = await supabase
-      .from('exercises')
-      .select('id, name_de')
-      .order('name_de');
-    setCatalogExercises(exerciseCatalog || []);
-    const { data: plansData } = await supabase.from('training_plans').select('*').eq('client_id', clientId).eq('trainer_id', user.id).order('created_at', { ascending: false });
-    if (!plansData) { setLoading(false); return; }
-    setPlans(plansData);
-    const active = plansData.find(p => p.is_active) || null;
-    if (active) {
-      const { data: workoutsData } = await supabase.from('plan_workouts').select('*').eq('plan_id', active.id).order('week_number').order('order_in_week');
-      if (workoutsData) {
-        const workoutIds = workoutsData.map(w => w.id);
-        const { data: exercisesData } = workoutIds.length > 0
-          ? await supabase.from('plan_exercises').select('*').in('workout_id', workoutIds).order('order_in_workout')
-          : { data: [] };
-        active.workouts = workoutsData.map(w => ({ ...w, exercises: (exercisesData || []).filter(e => e.workout_id === w.id) }));
-        setSelectedWeek(prev => prev ?? (active.workouts?.[0]?.week_number ?? null));
-      }
-    }
-    setActivePlan(active);
-    setLoading(false);
-  }, [clientId, user]);
+                  {/* Cycle Header */}
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-gray-700/50" />
+                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wider px-2">
+                      {cycleWorkouts[0]?.week_label ?? `Woche ${cycleNum}`}
+                    </span>
+                    {cycleWorkouts[0]?.phase_type && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${PHASE_COLORS[cycleWorkouts[0].phase_type] ?? 'bg-gray-700 text-gray-300 border-gray-600'}`}>
+                        {PHASE_LABELS[cycleWorkouts[0].phase_type] ?? cycleWorkouts[0].phase_type}
+                      </span>
+                    )}
+                    <div className="h-px flex-1 bg-gray-700/50" />
+                  </div>
 
-  useEffect(() => { loadPlans(); }, [loadPlans]);
+                  {/* Workouts */}
+                  {cycleWorkouts.map(workout => {
+                    const isExpanded = expandedWorkout === workout.id;
+                    const isNext = workout.id === currentNextId;
+                    const exList = exercises[workout.id] ?? [];
+                    const statusStyle = STATUS_STYLES[workout.status ?? 'planned'];
 
-  const handleExerciseUpdated = (exerciseId: string, alternativeName: string) => {
-    setActivePlan(prev => {
-      if (!prev?.workouts) return prev;
-      return {
-        ...prev,
-        workouts: prev.workouts.map(w => ({
-          ...w,
-          exercises: (w.exercises || []).map(ex =>
-            ex.id === exerciseId ? { ...ex, alternative_name: alternativeName || null } : ex
-          ),
-        })),
-      };
-    });
-  };
+                    return (
+                      <div
+                        key={workout.id}
+                        className={`rounded-xl border transition-all duration-200 overflow-hidden ${statusStyle} ${
+                          isNext ? 'ring-2 ring-indigo-500/50' : ''
+                        }`}
+                      >
+                        {/* Workout Header – clickable */}
+                        <button
+                          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+                          onClick={() => handleWorkoutExpand(workout.id)}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Status icon */}
+                            <span className="text-lg shrink-0">
+                              {workout.status === 'completed' ? '✅' :
+                               workout.status === 'skipped'   ? '⏭️' :
+                               workout.is_assessment          ? '🧪' : '🏋️'}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm truncate">
+                                  {workout.day_label ?? `Session ${workout.session_order ?? ''}`}
+                                </span>
+                                {isNext && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-600/40 text-indigo-300 border border-indigo-700/50 shrink-0">
+                                    Nächste
+                                  </span>
+                                )}
+                                {workout.is_assessment && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 border border-purple-700/50 shrink-0">
+                                    Assessment
+                                  </span>
+                                )}
+                              </div>
+                              {workout.notes && (
+                                <p className="text-xs text-gray-400 mt-0.5 truncate">{workout.notes}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            {isExpanded && exList.length > 0 && (
+                              <span className="text-xs text-gray-400">{exList.length} Übungen</span>
+                            )}
+                            <svg
+                              className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </button>
 
-  const handleToggleAssessment = async (workoutId: string, isAssessment: boolean) => {
-    const { error } = await supabase
-      .from('plan_workouts')
-      .update({ is_assessment: isAssessment })
-      .eq('id', workoutId);
-    if (error) { toast.error('Fehler beim Aktualisieren'); return; }
-    setActivePlan(prev => {
-      if (!prev?.workouts) return prev;
-      return {
-        ...prev,
-        workouts: prev.workouts.map(w =>
-          w.id === workoutId ? { ...w, is_assessment: isAssessment } : w
-        ),
-      };
-    });
-    toast.success(isAssessment ? 'Als Assessment markiert' : 'Assessment-Markierung entfernt');
-  };
+                        {/* Expanded: Exercise list + Edit button */}
+                        {isExpanded && (
+                          <div className="border-t border-current/10 px-4 pb-4 pt-3 space-y-3">
+                            {exList.length === 0 ? (
+                              <p className="text-xs text-gray-500 italic">Keine Übungen hinterlegt.</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {exList.map((ex, idx) => (
+                                  <div key={ex.id} className="flex items-start gap-3 text-sm">
+                                    <span className="text-gray-500 w-4 shrink-0 pt-0.5 text-xs">{idx + 1}.</span>
+                                    <div className="min-w-0 flex-1">
+                                      <span className="text-gray-200">{ex.name}</span>
+                                      {ex.alternative_name && (
+                                        <span className="text-gray-500 ml-1 text-xs">/ {ex.alternative_name}</span>
+                                      )}
+                                      <span className="text-gray-400 ml-2 text-xs">
+                                        {[
+                                          ex.sets ? `${ex.sets} Sätze` : null,
+                                          ex.reps_target ? `${ex.reps_target} Wdh.` : null,
+                                          ex.weight_target ? `@ ${ex.weight_target}` : null,
+                                        ].filter(Boolean).join(' · ')}
+                                      </span>
+                                      {ex.notes && (
+                                        <p className="text-xs text-gray-500 mt-0.5">{ex.notes}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
 
-  const handleOpenAssessment = (workout: PlanWorkout) => { setActiveAssessment(workout); };
-  const handleAssessmentComplete = () => { setActiveAssessment(null); loadPlans(); };
+                            {/* Edit button → PlanExerciseEditor */}
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                onClick={() => setSelectedWorkoutId(
+                                  selectedWorkoutId === workout.id ? null : workout.id
+                                )}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:border-indigo-500 hover:text-indigo-300 transition-colors"
+                              >
+                                {selectedWorkoutId === workout.id ? 'Schließen' : '✏️ Bearbeiten'}
+                              </button>
+                            </div>
 
-  const handleDelete = async (planId: string, planName: string) => {
-    if (!window.confirm(`Plan "${planName}" wirklich löschen?`)) return;
-    const { error } = await supabase.from('training_plans').delete().eq('id', planId);
-    if (error) { toast.error('Fehler beim Löschen'); return; }
-    toast.success('Plan gelöscht'); setSelectedWeek(null); loadPlans();
-  };
+                            {/* Inline PlanExerciseEditor */}
+                            {selectedWorkoutId === workout.id && (
+                              <div className="mt-3 rounded-lg border border-gray-600/50 bg-gray-800/50 p-3">
+                                <PlanExerciseEditor
+                                  workoutId={workout.id}
+                                  onUpdate={() => {
+                                    // Exercises neu laden
+                                    setExercises(prev => {
+                                      const next = { ...prev };
+                                      delete next[workout.id];
+                                      return next;
+                                    });
+                                    fetchExercisesForWorkout(workout.id);
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
+          )}
+        </div>
+      )}
 
-  const handleActivate = async (planId: string) => {
-    await supabase.from('training_plans').update({ is_active: false }).eq('client_id', clientId);
-    await supabase.from('training_plans').update({ is_active: true }).eq('id', planId);
-    toast.success('Plan aktiviert'); setSelectedWeek(null); loadPlans();
-  };
+      {/* ── Import Modal ── */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-xl flex flex-col rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 bg-gray-800">
+              <div>
+                <h2 className="text-white font-semibold">Plan importieren</h2>
+                <p className="text-gray-400 text-xs mt-0.5">Markdown-Plan aus Claude einfügen</p>
+              </div>
+              <button onClick={() => { setShowImportModal(false); setImportError(null); setImportMarkdown(''); }}
+                className="text-gray-400 hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-  if (loading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              {importSuccess ? (
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                  <span className="text-4xl">✅</span>
+                  <p className="text-white font-medium">Plan erfolgreich importiert!</p>
+                  <p className="text-gray-400 text-sm">Wird automatisch geladen …</p>
+                </div>
+              ) : (
+                <>
+                  {importError && (
+                    <div className="rounded-lg bg-red-900/30 border border-red-700/50 p-3 text-red-300 text-sm">
+                      {importError}
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-gray-300 text-sm font-medium block mb-2">
+                      Markdown einfügen
+                    </label>
+                    <textarea
+                      value={importMarkdown}
+                      onChange={e => setImportMarkdown(e.target.value)}
+                      placeholder={'# Trainingsplan\nCLIENT_ID: CLIENT_XXXXXXXX\n…'}
+                      rows={12}
+                      className="w-full rounded-lg bg-gray-800 border border-gray-600 text-white text-xs font-mono px-3 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-gray-600"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
 
-  const weekMap = activePlan?.workouts ? groupWorkoutsByWeek(activePlan.workouts) : new Map();
-  const weekNumbers = [...weekMap.keys()].sort((a, b) => a - b);
-  const currentWeekWorkouts = selectedWeek !== null ? (weekMap.get(selectedWeek) || []) : [];
-  const archivedPlans = plans.filter(p => !p.is_active);
+            {/* Footer */}
+            {!importSuccess && (
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700 bg-gray-800">
+                <button
+                  onClick={() => { setShowImportModal(false); setImportError(null); setImportMarkdown(''); }}
+                  className="px-4 py-2 rounded-lg text-gray-400 hover:text-white text-sm transition-colors"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => handleImport(importMarkdown)}
+                  disabled={importLoading || !importMarkdown.trim()}
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-all"
+                >
+                  {importLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Importiere …
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Importieren
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
-  return (
-    <>
-      {activeAssessment && (
-        <AssessmentGuide
-          workoutId={activeAssessment.id}
-          clientId={clientId}
-          clientName={clientName}
-          onClose={() => setActiveAssessment(null)}
-          onComplete={handleAssessmentComplete}
+      {/* ── KI Workout Builder Modal ── */}
+      {showKIBuilder && (
+        <KIWorkoutBuilderModal
+          client={client}
+          duoPartnerClientId={duoPartnerClientId}
+          onPlanGenerated={(markdown) => {
+            setShowKIBuilder(false);
+            handleImport(markdown);
+          }}
+          onClose={() => setShowKIBuilder(false)}
         />
       )}
 
-      <div className="space-y-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-display font-semibold">Trainingsplan</h3>
-            {activePlan && <p className="text-xs text-muted-foreground mt-0.5">{activePlan.name}{activePlan.weeks_total && ` · ${activePlan.weeks_total} Wochen`}{activePlan.sessions_per_week && ` · ${activePlan.sessions_per_week}×/Woche`}</p>}
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="gap-2" onClick={() => setAiBuilderOpen(true)}>
-              <Sparkles className="w-4 h-4" /> KI-Plan
-            </Button>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => setAiBuilderOpen(true)}
-            >
-              <Sparkles className="w-4 h-4" />
-              KI-Plan erstellen
-            </Button>
-            <Button size="sm" className="gap-2" onClick={() => setImportOpen(true)}>
-              <Plus className="w-4 h-4" /> Importieren
-            </Button>
-          </div>
-        </div>
-
-        {!activePlan && (
-          <Card><CardContent className="p-8 text-center space-y-4">
-            <Dumbbell className="w-10 h-10 text-muted-foreground/30 mx-auto" />
-            <p className="text-muted-foreground text-sm">Noch kein aktiver Trainingsplan für {clientName}.</p>
-            <div className="flex gap-2 justify-center">
-              <Button size="sm" variant="outline" className="gap-2" onClick={() => setAiBuilderOpen(true)}>
-                <Sparkles className="w-4 h-4" /> KI-Plan erstellen
-              </Button>
-              <Button size="sm" className="gap-2" onClick={() => setImportOpen(true)}>
-                <ClipboardPaste className="w-4 h-4" /> Plan importieren
-              </Button>
-            </div>
-          </CardContent></Card>
-        )}
-
-        {activePlan && (
-          <>
-            <div className="grid sm:grid-cols-3 gap-3">
-              {activePlan.goal && <Card><CardContent className="p-3 flex items-start gap-2"><Target className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" /><div><p className="text-xs text-muted-foreground font-medium">Ziel</p><p className="text-sm">{activePlan.goal}</p></div></CardContent></Card>}
-              {activePlan.start_date && <Card><CardContent className="p-3 flex items-start gap-2"><Calendar className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" /><div><p className="text-xs text-muted-foreground font-medium">Startdatum</p><p className="text-sm">{format(new Date(activePlan.start_date), 'd. MMM yyyy', { locale: de })}</p></div></CardContent></Card>}
-              <Card><CardContent className="p-3 flex items-start gap-2"><Dumbbell className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" /><div><p className="text-xs text-muted-foreground font-medium">Umfang</p><p className="text-sm">{weekNumbers.length} Woche{weekNumbers.length !== 1 ? 'n' : ''} · {activePlan.workouts?.length || 0} Einheiten</p></div></CardContent></Card>
-            </div>
-
-            {weekNumbers.length > 0 && (
-              <div className="flex gap-2 flex-wrap">
-                {weekNumbers.map(wn => {
-                  const label = weekMap.get(wn)?.[0]?.week_label;
-                  return (
-                    <button key={wn} onClick={() => setSelectedWeek(wn)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${selectedWeek === wn ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                      {label ? label.replace(/^Woche\s*/i, 'W').split(':')[0] : `Woche ${wn}`}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {selectedWeek !== null && currentWeekWorkouts.length > 0 && (
-              <div className="space-y-3">
-                {currentWeekWorkouts[0]?.week_label && <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{currentWeekWorkouts[0].week_label}</p>}
-                {currentWeekWorkouts.map(workout => (
-                  <WorkoutCard
-                    key={workout.id}
-                    workout={workout}
-                    onExerciseUpdated={handleExerciseUpdated}
-                    onToggleAssessment={handleToggleAssessment}
-                    onOpenAssessment={handleOpenAssessment}
-                    onWorkoutUpdated={loadPlans}
-                    clientName={clientName}
-                    catalogExercises={catalogExercises}
-                  />
-                ))}
-              </div>
-            )}
-
-            {activePlan.workouts && activePlan.workouts.length > 0 && (
-              <Card className="border-primary/20 bg-primary/5">
-                <CardContent className="p-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Nächstes Training des Kunden</p>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={activePlan.next_plan_workout_id || activePlan.workouts[0]?.id || ''}
-                      onChange={async e => {
-                        const newId = e.target.value;
-                        await supabase.from('training_plans').update({ next_plan_workout_id: newId }).eq('id', activePlan.id);
-                        setActivePlan(prev => prev ? { ...prev, next_plan_workout_id: newId } : prev);
-                        toast.success('Nächstes Training aktualisiert.');
-                      }}
-                      className="flex-1 text-sm border border-border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      {activePlan.workouts.map(w => (
-                        <option key={w.id} value={w.id}>
-                          {w.week_label ? w.week_label.split(':')[0] : `Woche ${w.week_number}`} · {w.day_label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">Der Zeiger rückt nach jedem abgeschlossenen Workout automatisch vor.</p>
-                </CardContent>
-              </Card>
-            )}
-
-            {(activePlan.progression_notes || activePlan.coaching_notes) && (
-              <div className="grid sm:grid-cols-2 gap-3">
-                {activePlan.progression_notes && <Card><CardHeader className="pb-1 pt-3 px-4"><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Progressionslogik</CardTitle></CardHeader><CardContent className="px-4 pb-3"><p className="text-sm text-muted-foreground whitespace-pre-wrap">{activePlan.progression_notes}</p></CardContent></Card>}
-                {activePlan.coaching_notes && <Card><CardHeader className="pb-1 pt-3 px-4"><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Coaching-Hinweise</CardTitle></CardHeader><CardContent className="px-4 pb-3"><p className="text-sm text-muted-foreground whitespace-pre-wrap">{activePlan.coaching_notes}</p></CardContent></Card>}
-              </div>
-            )}
-
-            <div className="flex justify-end pt-2">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive gap-1.5 text-xs" onClick={() => handleDelete(activePlan.id, activePlan.name)}>
-                <Trash2 className="w-3.5 h-3.5" /> Plan löschen
-              </Button>
-            </div>
-          </>
-        )}
-
-        {archivedPlans.length > 0 && (
-          <div>
-            <button onClick={() => setShowArchive(v => !v)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-              {showArchive ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              {archivedPlans.length} archivierter Plan{archivedPlans.length > 1 ? 'e' : ''}
-            </button>
-            {showArchive && (
-              <div className="mt-2 space-y-2">
-                {archivedPlans.map(plan => (
-                  <Card key={plan.id} className="opacity-60">
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">{plan.name}</p>
-                        <p className="text-xs text-muted-foreground">Importiert {format(new Date(plan.created_at), 'd. MMM yyyy', { locale: de })}{plan.weeks_total && ` · ${plan.weeks_total} Wochen`}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleActivate(plan.id)} className="text-xs">Aktivieren</Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(plan.id, plan.name)} className="text-xs text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {user && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={loadPlans} clientId={clientId} trainerId={user.id} />}
-        {user && <AIBuilderDialog open={aiBuilderOpen} onClose={() => setAiBuilderOpen(false)} onImported={loadPlans} clientId={clientId} clientName={clientName} trainerId={user.id} />}
-        <AIBuilderDialog
-          open={aiBuilderOpen}
-          onClose={() => setAiBuilderOpen(false)}
-          onImported={loadPlan}
-          clientId={clientId}
-          clientName={clientName}
-        />
-      </div>
-    </>
+    </div>
   );
-};
-
-export default TrainingPlanTab;
+}
