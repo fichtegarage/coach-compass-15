@@ -16,6 +16,8 @@ import {
   type PlanConfig,
 } from '@/lib/aiPlanGenerator';
 import KIWorkoutBuilderModal from '@/components/KIWorkoutBuilderModal';
+import ExerciseTimer, { getDefaultDurationSeconds } from '@/components/ExerciseTimer';
+import WarmupCooldownBlock from '@/components/WarmupCooldownBlock';
 import AssessmentGuide from '@/components/AssessmentGuide';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
 
