@@ -686,6 +686,13 @@ export default function TrainingPlanTab({ client: clientProp, clientId: clientId
                                           ex.weight_target ? `@ ${ex.weight_target}` : null,
                                         ].filter(Boolean).join(' · ')}
                                       </span>
+                                      {ex.is_timed && (
+                                        <ExerciseTimer
+                                          durationSeconds={ex.duration_seconds ?? getDefaultDurationSeconds(ex.name)}
+                                          exerciseName={ex.name}
+                                          compact
+                                        />
+                                      )}
                                       {ex.notes && (
                                         <p className="text-xs text-gray-500 mt-0.5">{ex.notes}</p>
                                       )}
