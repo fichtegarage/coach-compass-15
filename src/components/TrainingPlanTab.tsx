@@ -662,37 +662,30 @@ export default function TrainingPlanTab({ client: clientProp, clientId: clientId
                           </div>
                         </button>
 
-                          {/* Expanded: Exercise list + Edit button */}
-                          {isExpanded && (
-                            <div className="border-t border-current/10 px-4 pb-4 pt-3 space-y-3">
-                              {exList.length === 0 ? (
-                                <p className="text-xs text-gray-500 italic">Keine Übungen hinterlegt.</p>
-                              ) : (
-                                <div className="space-y-1.5">
-                                  {exList.map((ex, idx) => (
-                                    <div key={ex.id} className="flex items-start gap-3 text-sm">
-                                      <span className="text-gray-500 w-4 shrink-0 pt-0.5 text-xs">{idx + 1}.</span>
-                                      <div className="min-w-0 flex-1">
-                                        <span className="text-gray-200">{ex.name}</span>
-                                        {ex.alternative_name && (
-                                          <span className="text-gray-500 ml-1 text-xs">/ {ex.alternative_name}</span>
-                                        )}
-                                        <span className="text-gray-400 ml-2 text-xs">
-                                          {[
-                                            ex.sets ? `${ex.sets} Sätze` : null,
-                                            ex.is_timed
-                                              ? null  // Zeiten werden per Timer angezeigt
-                                              : ex.reps_target ? `${ex.reps_target} Wdh.` : null,
-                                            ex.weight_target ? `@ ${ex.weight_target}` : null,
-                                          ].filter(Boolean).join(' · ')}
-                                        </span>
-                                            {ex.is_timed && (
-                                              <ExerciseTimer
-                                                durationSeconds={ex.duration_seconds ?? getDefaultDurationSeconds(ex.name)}
-                                                exerciseName={ex.name}
-                                                compact
-                                              />
-                                            )}
+                        {/* Expanded: Exercise list + Edit button */}
+                        {isExpanded && (
+                          <div className="border-t border-current/10 px-4 pb-4 pt-3 space-y-3">
+                            {exList.length === 0 ? (
+                              <p className="text-xs text-gray-500 italic">Keine Übungen hinterlegt.</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {exList.map((ex, idx) => (
+                                  <div key={ex.id} className="flex items-start gap-3 text-sm">
+                                    <span className="text-gray-500 w-4 shrink-0 pt-0.5 text-xs">{idx + 1}.</span>
+                                    <div className="min-w-0 flex-1">
+                                      <span className="text-gray-200">{ex.name}</span>
+                                      {ex.alternative_name && (
+                                        <span className="text-gray-500 ml-1 text-xs">/ {ex.alternative_name}</span>
+                                      )}
+                                      <span className="text-gray-400 ml-2 text-xs">
+                                        {[
+                                          ex.sets ? `${ex.sets} Sätze` : null,
+                                          ex.is_timed
+                                            ? null  // Zeiten werden per Timer angezeigt
+                                            : ex.reps_target ? `${ex.reps_target} Wdh.` : null,
+                                          ex.weight_target ? `@ ${ex.weight_target}` : null,
+                                        ].filter(Boolean).join(' · ')}
+                                      </span>
                                       {ex.notes && (
                                         <p className="text-xs text-gray-500 mt-0.5">{ex.notes}</p>
                                       )}
