@@ -16,10 +16,10 @@ import {
   type PlanConfig,
 } from '@/lib/aiPlanGenerator';
 import KIWorkoutBuilderModal from '@/components/KIWorkoutBuilderModal';
-import ExerciseTimer, { getDefaultDurationSeconds } from '@/components/ExerciseTimer';
-import WarmupCooldownBlock from '@/components/WarmupCooldownBlock';
 import AssessmentGuide from '@/components/AssessmentGuide';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
+import ExerciseTimer, { getDefaultDurationSeconds } from '@/components/ExerciseTimer';
+import WarmupCooldownBlock from '@/components/WarmupCooldownBlock';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +71,9 @@ interface PlanExercise {
   alternative_name: string | null;
   exercise_id: string | null;
   is_bodyweight: boolean | null;
+  is_timed: boolean | null;
+  duration_seconds: number | null;
+  exercise_slot: string | null;
 }
 
 interface Props {
@@ -192,7 +195,7 @@ export default function TrainingPlanTab({ client: clientProp, clientId: clientId
     if (exercises[workoutId]) return; // already loaded
     const { data, error } = await supabase
       .from('plan_exercises')
-      .select('*')
+      .select('id, workout_id, name, sets, reps_target, weight_target, rest_seconds, notes, order_in_workout, alternative_name, exercise_id, is_bodyweight, is_timed, duration_seconds, exercise_slot')
       .eq('workout_id', workoutId)
       .order('order_in_workout', { ascending: true });
 
@@ -665,6 +668,13 @@ export default function TrainingPlanTab({ client: clientProp, clientId: clientId
                         {/* Expanded: Exercise list + Edit button */}
                         {isExpanded && (
                           <div className="border-t border-current/10 px-4 pb-4 pt-3 space-y-3">
+                            {/* WARM-UP Block */}
+                            <WarmupCooldownBlock
+                              type="warmup"
+                              mainExercises={exList.filter(e => e.exercise_slot !== 'cooldown')}
+                              workoutId={workout.id}
+                            />
+
                             {exList.length === 0 ? (
                               <p className="text-xs text-gray-500 italic">Keine Übungen hinterlegt.</p>
                             ) : (
@@ -678,20 +688,22 @@ export default function TrainingPlanTab({ client: clientProp, clientId: clientId
                                         <span className="text-gray-500 ml-1 text-xs">/ {ex.alternative_name}</span>
                                       )}
                                       <span className="text-gray-400 ml-2 text-xs">
-                                        {[
+                                        {ex.is_timed ? (
+                                          `${ex.sets ?? 1} × ${ex.duration_seconds ?? getDefaultDurationSeconds(ex.name)}s`
+                                        ) : [
                                           ex.sets ? `${ex.sets} Sätze` : null,
-                                          ex.is_timed
-                                            ? null  // Zeiten werden per Timer angezeigt
-                                            : ex.reps_target ? `${ex.reps_target} Wdh.` : null,
+                                          ex.reps_target ? `${ex.reps_target} Wdh.` : null,
                                           ex.weight_target ? `@ ${ex.weight_target}` : null,
                                         ].filter(Boolean).join(' · ')}
                                       </span>
                                       {ex.is_timed && (
-                                        <ExerciseTimer
-                                          durationSeconds={ex.duration_seconds ?? getDefaultDurationSeconds(ex.name)}
-                                          exerciseName={ex.name}
-                                          compact
-                                        />
+                                        <div className="mt-1 ml-4">
+                                          <ExerciseTimer
+                                            durationSeconds={ex.duration_seconds ?? getDefaultDurationSeconds(ex.name)}
+                                            exerciseName={ex.name}
+                                            compact
+                                          />
+                                        </div>
                                       )}
                                       {ex.notes && (
                                         <p className="text-xs text-gray-500 mt-0.5">{ex.notes}</p>
@@ -701,6 +713,13 @@ export default function TrainingPlanTab({ client: clientProp, clientId: clientId
                                 ))}
                               </div>
                             )}
+
+                            {/* COOL-DOWN Block */}
+                            <WarmupCooldownBlock
+                              type="cooldown"
+                              mainExercises={exList.filter(e => e.exercise_slot !== 'warmup')}
+                              workoutId={workout.id}
+                            />
 
                             {/* Edit button → PlanExerciseEditor */}
                             <div className="flex gap-2 pt-1">
