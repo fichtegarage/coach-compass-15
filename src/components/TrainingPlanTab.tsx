@@ -680,7 +680,9 @@ export default function TrainingPlanTab({ client: clientProp, clientId: clientId
                                       <span className="text-gray-400 ml-2 text-xs">
                                         {[
                                           ex.sets ? `${ex.sets} Sätze` : null,
-                                          ex.reps_target ? `${ex.reps_target} Wdh.` : null,
+                                          ex.is_timed
+                                            ? null  // Zeiten werden per Timer angezeigt
+                                            : ex.reps_target ? `${ex.reps_target} Wdh.` : null,
                                           ex.weight_target ? `@ ${ex.weight_target}` : null,
                                         ].filter(Boolean).join(' · ')}
                                       </span>
