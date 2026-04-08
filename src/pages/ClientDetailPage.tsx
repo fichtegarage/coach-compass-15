@@ -31,6 +31,7 @@ import { exportSingleClient, type ExportClientData } from '@/lib/exportForClaude
 import TrainingPlanTab from '@/components/TrainingPlanTab';
 import WorkoutHistoryTab from '@/components/WorkoutHistoryTab';
 import ClientEquipmentTab from '@/components/ClientEquipmentTab';
+import WeeklyCheckinModal from '@/components/WeeklyCheckinModal';
 
 // ── Check-In Labels ───────────────────────────────────────────────────────────
 const INTENSITY_LABELS: Record<string, string> = { too_easy: 'Zu leicht', right: 'Genau richtig', challenging: 'Herausfordernd', too_hard: 'Zu schwer' };
