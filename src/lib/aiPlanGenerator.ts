@@ -442,40 +442,107 @@ function calculateAge(dob: string | null | undefined): string {
   return `${years} Jahre`;
 }
 
-// ─── Rückwärtskompatibilität für KIWorkoutBuilderModal ────────────────────────
-// Diese Exporte existierten in der alten Version und werden noch von
-// KIWorkoutBuilderModal.tsx importiert.
+// ─── Exporte für KIWorkoutBuilderModal ───────────────────────────────────────
+// Exakte Signatur wie vom Modal erwartet.
 
-/** @deprecated Nutze loadClientDataForPrompt + generateSystemPrompt + generateUserPrompt direkt */
+/**
+ * Optionen aus KIWorkoutBuilderModal – entspricht dem PlanOptions-Interface
+ * das dort verwendet wird.
+ */
 export interface PlanOptions {
-  clientId: string;
-  weeks: number;
   sessionsPerWeek: number;
-  includeDeload: boolean;
-  focus?: string;
-  phase?: MesocyclePhase;
-  includeCardio?: boolean;
+  weeksTotal: number;
+  phase: MesocyclePhase;
+  sessionDurationMinutes?: number;
+  includeCardio: boolean;
+  isDuoTraining: boolean;
+  duoPartnerClientId?: string;
+  coachInstructions?: string;
 }
 
-/** @deprecated Nutze loadClientDataForPrompt direkt */
-export async function generateAIPlan(options: PlanOptions): Promise<{
-  systemPrompt: string;
-  userPrompt: string;
-}> {
-  const data = await loadClientDataForPrompt(options.clientId, {
+/**
+ * Erzeugt einen vollständigen Trainingsplan via Claude.
+ * Signatur: generateAIPlan(client, options) → { markdown }
+ *
+ * @param client  - Kundendaten-Objekt mit mindestens { id, full_name }
+ * @param options - Konfiguration aus dem KIWorkoutBuilderModal
+ */
+export async function generateAIPlan(
+  client: Record<string, any>,
+  options: PlanOptions
+): Promise<{ markdown: string }> {
+
+  // 1. Kundendaten + gefilterte Übungsliste laden
+  const data = await loadClientDataForPrompt(client.id, {
     phase:        options.phase,
     includeCardio: options.includeCardio,
   });
-  return {
-    systemPrompt: generateSystemPrompt(data, options),
-    userPrompt:   generateUserPrompt(data.client?.full_name || 'Kunde', options),
+
+  // 2. Alias für Datenschutz (kein Klarname an KI)
+  const alias = 'CLIENT_' + (client.id || '').replace(/-/g, '').substring(0, 8).toUpperCase();
+
+  // 3. PlanConfig aus PlanOptions zusammenbauen
+  const planConfig: PlanConfig = {
+    weeks:           options.weeksTotal,
+    sessionsPerWeek: options.sessionsPerWeek,
+    includeDeload:   options.phase === 'deload',
+    phase:           options.phase,
+    includeCardio:   options.includeCardio,
+    focus: [
+      options.isDuoTraining ? 'Duo-Training (zwei Personen gleichzeitig)' : '',
+      options.sessionDurationMinutes
+        ? options.sessionDurationMinutes + ' Min. pro Session'
+        : '',
+      options.coachInstructions || '',
+    ].filter(Boolean).join(' · ') || undefined,
   };
+
+  // 4. Prompts aufbauen (client.full_name wird durch Alias ersetzt)
+  const systemPrompt = generateSystemPrompt(
+    { ...data, client: { ...data.client, full_name: alias } as any },
+    planConfig
+  );
+  const userPrompt = generateUserPrompt(alias, planConfig);
+
+  // 5. Claude via Proxy aufrufen
+  const response = await fetch('/api/claude-proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      max_tokens: 8000,
+      messages: [
+        { role: 'user', content: systemPrompt + '\n\n' + userPrompt },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error('Claude-Proxy-Fehler: ' + errText);
+  }
+
+  const result = await response.json();
+
+  // Anthropic gibt content[0].text zurück
+  const markdown: string =
+    result?.content?.[0]?.text ?? result?.completion ?? '';
+
+  if (!markdown) {
+    throw new Error('Leere Antwort von Claude erhalten.');
+  }
+
+  return { markdown };
 }
 
-/** @deprecated – immer true, Ownership-Prüfung entfernt */
-export async function verifyPlanOwnership(
-  _planId: string,
-  _userId: string
-): Promise<boolean> {
-  return true;
+/**
+ * Prüft ob der generierte Plan den Client-Alias enthält.
+ * Verhindert dass ein Plan versehentlich dem falschen Kunden zugeordnet wird.
+ */
+export function verifyPlanOwnership(
+  markdown: string,
+  clientId: string
+): boolean {
+  if (!markdown || !clientId) return false;
+  const alias = 'CLIENT_' + clientId.replace(/-/g, '').substring(0, 8).toUpperCase();
+  return markdown.includes(alias);
 }
