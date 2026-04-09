@@ -29,8 +29,6 @@ import { exportSingleClient, type ExportClientData } from '@/lib/exportForClaude
 import TrainingPlanTab from '@/components/TrainingPlanTab';
 import WorkoutHistoryTab from '@/components/WorkoutHistoryTab';
 import ClientEquipmentTab from '@/components/ClientEquipmentTab';
-// ── NEU: Wöchentlicher Check-In (erscheint nur 1× pro Woche) ──
-import WeeklyCheckinModal from '@/components/WeeklyCheckinModal';
 
 interface PackageFeature {
   label: string;
@@ -524,7 +522,7 @@ const ClientDetailPage: React.FC = () => {
     const hasDiscount = !!packageForm.discount_type && packageForm.discount_value > 0;
     const finalPrice = hasDiscount ? calcFinalPrice(basePrice, packageForm.discount_type, packageForm.discount_value) : null;
 
-    await supabase.from('packages').insert({
+    const { error: pkgError } = await supabase.from('packages').insert({
       client_id: id, user_id: user.id,
       package_name: packageForm.package_name,
       sessions_included: Number(packageForm.sessions_included),
@@ -539,13 +537,16 @@ const ClientDetailPage: React.FC = () => {
       deal_adjusted_terms: packageForm.deal_adjusted_terms || null,
       payment_status: isTestkunde ? 'Paid in full' : packageForm.payment_status,
       payment_date: isTestkunde ? packageForm.start_date : (packageForm.payment_date || null),
-      // ← NEU: Duo + Rabatt-Felder
       is_duo: packageForm.is_duo,
       partner_client_id: packageForm.is_duo && packageForm.partner_client_id ? packageForm.partner_client_id : null,
       discount_type: packageForm.discount_type || null,
       discount_value: packageForm.discount_value || 0,
       discount_reason: packageForm.discount_reason || null,
     });
+    if (pkgError) {
+      toast.error(`Fehler: ${pkgError.message}`);
+      return;
+    }
     setPackageDialogOpen(false);
     toast.success('Paket hinzugefügt');
     loadAll();
@@ -1553,8 +1554,6 @@ const ClientDetailPage: React.FC = () => {
         onSaved={loadAll}
       />
 
-      {/* ── NEU: Wöchentlicher Check-In (nur 1× pro Woche sichtbar) ── */}
-      <WeeklyCheckinModal clientId={id} />
     </div>
   );
 };
