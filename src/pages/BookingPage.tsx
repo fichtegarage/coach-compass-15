@@ -16,6 +16,7 @@ import ClientMetricsWidget from '@/components/ClientMetricsWidget';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
 import CycleTracker from '@/components/CycleTracker';
 import ClientProgressPhotos from '@/components/ClientProgressPhotos';
+import WeeklyCheckinModal from '@/components/WeeklyCheckinModal';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
