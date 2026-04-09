@@ -60,6 +60,7 @@ interface EquipmentItem {
 
 /** Übung mit allen Metadaten aus der Datenbank */
 interface ExerciseWithMeta {
+  id: string;
   name: string;
   name_de: string;
   movement_pattern: string;
@@ -213,7 +214,7 @@ export async function loadClientDataForPrompt(
   const { data: exerciseData } = await supabase
     .from('exercises')
     .select(`
-      name, name_de, movement_pattern, difficulty, technique_complexity,
+      id, name, name_de, movement_pattern, difficulty, technique_complexity,
       cns_demand, session_position, muscle_groups, goal_tags,
       phase_suitability, contraindications, metabolic_demand,
       cardio_compatible, is_timed
@@ -222,6 +223,7 @@ export async function loadClientDataForPrompt(
     .order('difficulty');
 
   const allExercises: ExerciseWithMeta[] = (exerciseData || []).map((e: any) => ({
+    id:                   e.id,
     name:                 e.name,
     name_de:              e.name_de || e.name,
     movement_pattern:     e.movement_pattern || 'other',
@@ -317,7 +319,7 @@ function buildExerciseLibrarySection(
       const muscles = ex.muscle_groups.slice(0, 2).join(', ') || '—';
       const timed   = ex.is_timed ? ' ⏱' : '';
       // Progressionssignal: wie oft schon trainiert, Progression bereit?
-      const prog    = progression?.get(ex.name);
+      const prog    = progression?.get(ex.id);
       let progTag   = '';
       if (prog) {
         if (prog.unlocked) progTag = ' 🔼';
