@@ -167,6 +167,7 @@ export async function loadClientDataForPrompt(
   equipment: EquipmentItem[];
   exercises: string[];
   filteredExercises: ExerciseWithMeta[];
+  progression: Map<string, { sessionCount: number; unlocked: boolean }>;
 }> {
   const { data: clientData } = await supabase
     .from('clients')
@@ -261,12 +262,29 @@ export async function loadClientDataForPrompt(
 
   const exercises = filtered.map(e => e.name_de);
 
-  return { client: clientData, conversation: convData, health: healthData, assessment: assessmentData, equipment, exercises, filteredExercises: filtered };
+  // Progressionsdaten laden
+  const { data: progressionData } = await supabase
+    .from('client_exercise_progression')
+    .select('exercise_id, session_count, progression_unlocked')
+    .eq('client_id', clientId);
+
+  const progression = new Map<string, { sessionCount: number; unlocked: boolean }>();
+  (progressionData || []).forEach((p: any) => {
+    progression.set(p.exercise_id, {
+      sessionCount: p.session_count,
+      unlocked:     p.progression_unlocked,
+    });
+  });
+
+  return { client: clientData, conversation: convData, health: healthData, assessment: assessmentData, equipment, exercises, filteredExercises: filtered, progression };
 }
 
 // ─── Übungsbibliothek-Abschnitt ───────────────────────────────────────────────
 
-function buildExerciseLibrarySection(exercises: ExerciseWithMeta[]): string {
+function buildExerciseLibrarySection(
+  exercises: ExerciseWithMeta[],
+  progression?: Map<string, { sessionCount: number; unlocked: boolean }>
+): string {
   if (exercises.length === 0) return '';
 
   const groups: Record<string, ExerciseWithMeta[]> = {};
@@ -298,7 +316,14 @@ function buildExerciseLibrarySection(exercises: ExerciseWithMeta[]): string {
       const stars   = '★'.repeat(ex.difficulty) + '☆'.repeat(3 - ex.difficulty);
       const muscles = ex.muscle_groups.slice(0, 2).join(', ') || '—';
       const timed   = ex.is_timed ? ' ⏱' : '';
-      section += `- **${ex.name_de}**${timed} | ${stars} | ${ex.technique_complexity} | ${ex.session_position} | ${muscles}\n`;
+      // Progressionssignal: wie oft schon trainiert, Progression bereit?
+      const prog    = progression?.get(ex.name);
+      let progTag   = '';
+      if (prog) {
+        if (prog.unlocked) progTag = ' 🔼';
+        else progTag = ' (' + prog.sessionCount + '×)';
+      }
+      section += '- **' + ex.name_de + '**' + timed + progTag + ' | ' + stars + ' | ' + ex.technique_complexity + ' | ' + ex.session_position + ' | ' + muscles + '\n';
     }
     section += '\n';
   }
@@ -350,7 +375,7 @@ ${config.focus ? `- Schwerpunkt: ${config.focus}` : ''}
     context += `\n## Verfügbares Equipment\n${gymEquipment.join(', ')}\n`;
   }
 
-  context += '\n' + buildExerciseLibrarySection(filteredExercises || []);
+  context += '\n' + buildExerciseLibrarySection(filteredExercises || [], data.progression);
 
   return context;
 }
