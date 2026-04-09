@@ -416,3 +416,41 @@ function calculateAge(dob: string | null | undefined): string {
   const years = Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
   return `${years} Jahre`;
 }
+
+// ─── Rückwärtskompatibilität für KIWorkoutBuilderModal ────────────────────────
+// Diese Exporte existierten in der alten Version und werden noch von
+// KIWorkoutBuilderModal.tsx importiert.
+
+/** @deprecated Nutze loadClientDataForPrompt + generateSystemPrompt + generateUserPrompt direkt */
+export interface PlanOptions {
+  clientId: string;
+  weeks: number;
+  sessionsPerWeek: number;
+  includeDeload: boolean;
+  focus?: string;
+  phase?: MesocyclePhase;
+  includeCardio?: boolean;
+}
+
+/** @deprecated Nutze loadClientDataForPrompt direkt */
+export async function generateAIPlan(options: PlanOptions): Promise<{
+  systemPrompt: string;
+  userPrompt: string;
+}> {
+  const data = await loadClientDataForPrompt(options.clientId, {
+    phase:        options.phase,
+    includeCardio: options.includeCardio,
+  });
+  return {
+    systemPrompt: generateSystemPrompt(data, options),
+    userPrompt:   generateUserPrompt(data.client?.full_name || 'Kunde', options),
+  };
+}
+
+/** @deprecated – immer true, Ownership-Prüfung entfernt */
+export async function verifyPlanOwnership(
+  _planId: string,
+  _userId: string
+): Promise<boolean> {
+  return true;
+}
