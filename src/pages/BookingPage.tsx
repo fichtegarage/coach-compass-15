@@ -160,20 +160,31 @@ const BookingPage: React.FC = () => {
   const [duoPartnerName, setDuoPartnerName] = useState<string | null>(null);
   const [allSlotBookings, setAllSlotBookings] = useState<Record<string, number>>({});
 
-  const handleCodeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = codeInput.trim();
-    if (!code) return;
-    setCodeLoading(true); setCodeError('');
-    const { data, error } = await supabase.from('clients').select('id, full_name, email').eq('booking_code', code).eq('booking_code_active', true).maybeSingle();
-    if (error || !data) { setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.'); setCodeLoading(false); return; }
-    const storage = rememberMe ? localStorage : sessionStorage;
-    storage.setItem('booking_client_id', data.id);
-    storage.setItem('booking_client_name', data.full_name);
-    if (data.email) storage.setItem('booking_client_email', data.email);
-    setClientId(data.id); setClientName(data.full_name); setClientEmail(data.email || null);
+const handleCodeSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const code = codeInput.trim();
+  if (!code) return;
+  setCodeLoading(true); setCodeError('');
+
+  // RPC statt direkter DB-Abfrage
+  const { data, error } = await supabase.rpc('client_login', { code });
+
+  if (error || data?.error || !data) {
+    setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
     setCodeLoading(false);
-  };
+    return;
+  }
+
+  const storage = rememberMe ? localStorage : sessionStorage;
+  storage.setItem('booking_client_token', data.token);  // ← Token statt ID!
+  storage.setItem('booking_client_id', data.client_id);
+  storage.setItem('booking_client_name', data.client_name);
+
+  setClientId(data.client_id);
+  setClientName(data.client_name);
+  setCodeLoading(false);
+};
+
 
   const handleLogout = () => {
     ['booking_client_id', 'booking_client_name', 'booking_client_email'].forEach(k => {
