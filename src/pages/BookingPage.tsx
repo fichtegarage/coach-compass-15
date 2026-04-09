@@ -19,10 +19,6 @@ import ClientProgressPhotos from '@/components/ClientProgressPhotos';
 import WeeklyCheckinModal from '@/components/WeeklyCheckinModal';
 import { setClientSessionToken } from '@/lib/clientSession';
 
-// Vor jeder Supabase-Abfrage:
-await setClientSessionToken();
-const { data } = await supabase.from('sessions').select('*')...
-
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
     await fetch('/api/send-email', {
