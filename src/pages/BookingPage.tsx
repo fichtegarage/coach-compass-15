@@ -207,7 +207,7 @@ const handleCodeSubmit = async (e: React.FormEvent) => {
     setNotifications((bookingsRes.data || []).filter((b: any) => b.responded_at && (b.status === 'confirmed' || b.status === 'rejected')).slice(0, 3));
 
     // Kundendaten laden
-    const { data: clientData } = await supabase.from('clients').select('*, packages(id, package_name, sessions_included, end_date, is_duo, partner_client_id)').eq('id', clientId).maybeSingle();
+    const { data: clientData } = await supabase.from('clients').select('*, packages!packages_client_id_fkey(id, package_name, sessions_included, end_date, is_duo, partner_client_id)').eq('id', clientId).maybeSingle();
 
     if (clientData) {
       if (clientData.email && clientData.email !== clientEmail) {
