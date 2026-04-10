@@ -261,18 +261,20 @@ const WorkoutCard: React.FC<{
                   </thead>
                   <tbody>
                     {[
-                      { name: 'Kniebeuge (Bodyweight)', sets: 3, reps: '8-10', pattern: 'Squat' },
-                      { name: 'Rumänisches Kreuzheben', sets: 3, reps: '8-10', pattern: 'Hinge' },
-                      { name: 'Liegestütz', sets: 3, reps: '8-10', pattern: 'Push' },
-                      { name: 'TRX Rudern', sets: 3, reps: '8-10', pattern: 'Pull' },
-                      { name: 'Unterarmstütz (Plank)', sets: 3, reps: '30-60s', pattern: 'Core' },
-                      { name: 'Weltbeste Dehnung', sets: 2, reps: '5/Seite', pattern: 'Mobilität' },
+                      { name: 'Kniebeuge (Bodyweight)',     sets: 3, reps: '8–10',      pattern: 'Squat',     measure: 'Score 1–5' },
+                      { name: 'Hip Hinge (leichtes RDL)',   sets: 3, reps: '8–10',      pattern: 'Hinge',     measure: 'Score 1–5' },
+                      { name: 'Schulter-Mobilitätstest',    sets: 1, reps: '3/Seite',   pattern: 'Mobilität', measure: '± cm (li/re)' },
+                      { name: 'Push-up Test',               sets: 1, reps: 'Max.',      pattern: 'Push',      measure: 'Anz. Wdh.' },
+                      { name: 'Plank',                      sets: 1, reps: 'Max. Zeit', pattern: 'Core',      measure: 'Sek.' },
+                      { name: 'Einbeiniger Stand',          sets: 1, reps: 'Max. Zeit', pattern: 'Balance',   measure: 'Sek. (li/re)' },
+                      { name: 'Vorwärtsbeugen stehend',     sets: 1, reps: '3 Versuche',pattern: 'Mobilität', measure: '± cm' },
                     ].map((ex, i) => (
                       <tr key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-amber-50/30'}>
                         <td className="px-3 py-1.5 font-medium text-sm">{ex.name}</td>
                         <td className="px-2 py-1.5 text-center text-sm">{ex.sets}</td>
                         <td className="px-2 py-1.5 text-center text-sm">{ex.reps}</td>
                         <td className="px-2 py-1.5 text-xs text-muted-foreground">{ex.pattern}</td>
+                        <td className="px-2 py-1.5 text-xs text-muted-foreground font-medium">{(ex as any).measure}</td>
                       </tr>
                     ))}
                   </tbody>
