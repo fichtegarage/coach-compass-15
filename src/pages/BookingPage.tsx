@@ -167,9 +167,12 @@ const handleCodeSubmit = async (e: React.FormEvent) => {
     if (!code) return;
     setCodeLoading(true);
     setCodeError('');
-    const { data: rows, error } = await supabase
-      .rpc('client_login', { booking_code: code });
-    const data = rows?.[0] ?? null;
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, full_name, email')
+      .eq('booking_code', code)
+      .eq('booking_code_active', true)
+      .maybeSingle();
     if (error || !data) {
       setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
       setCodeLoading(false);
