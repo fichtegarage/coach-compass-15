@@ -162,19 +162,19 @@ const BookingPage: React.FC = () => {
   const [allSlotBookings, setAllSlotBookings] = useState<Record<string, number>>({});
 
 const handleCodeSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  const code = codeInput.trim();
-  if (!code) return;
-  setCodeLoading(true); setCodeError('');
-
-  // RPC statt direkter DB-Abfrage
-  const { data, error } = await supabase.rpc('client_login', { code });
-
-  if (error || data?.error || !data) {
-    setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
-    setCodeLoading(false);
-    return;
-  }
+    e.preventDefault();
+    const code = codeInput.trim().toUpperCase();
+    if (!code) return;
+    setCodeLoading(true);
+    setCodeError('');
+    const { data: rows, error } = await supabase
+      .rpc('client_login', { booking_code: code });
+    const data = rows?.[0] ?? null;
+    if (error || !data) {
+      setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
+      setCodeLoading(false);
+      return;
+    }
 
   const storage = rememberMe ? localStorage : sessionStorage;
   storage.setItem('booking_client_token', data.token);  // ← Token statt ID!
