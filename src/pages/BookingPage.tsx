@@ -133,6 +133,7 @@ const [clientId, setClientId] = useState<string | null>(() => {
     const email = localStorage.getItem('booking_client_email') || sessionStorage.getItem('booking_client_email') || null;
     return email === 'undefined' ? null : email;
   });
+
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
