@@ -177,7 +177,7 @@ const handleCodeSubmit = async (e: React.FormEvent) => {
       .eq('booking_code', code)
       .eq('booking_code_active', true)
       .maybeSingle();
-    if (error || !data) {
+    if (error || !data || !data.id) {
       setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
       setCodeLoading(false);
       return;
