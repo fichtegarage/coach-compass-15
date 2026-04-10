@@ -20,6 +20,15 @@ import AssessmentGuide from '@/components/AssessmentGuide';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
 import ExerciseTimer, { getDefaultDurationSeconds } from '@/components/ExerciseTimer';
 import WarmupCooldownBlock from '@/components/WarmupCooldownBlock';
+// Assessment-Übungen – immer als Präfix wenn is_assessment=true
+const ASSESSMENT_EXERCISE_LIST = [
+  { name: 'Kniebeuge (Bodyweight)',       pattern: 'Squat',     sets: 3, reps: '8-10'  },
+  { name: 'Rumänisches Kreuzheben',       pattern: 'Hinge',     sets: 3, reps: '8-10'  },
+  { name: 'Liegestütz',                   pattern: 'Push',      sets: 3, reps: '8-10'  },
+  { name: 'TRX Rudern',                   pattern: 'Pull',      sets: 3, reps: '8-10'  },
+  { name: 'Unterarmstütz (Plank)',         pattern: 'Core',      sets: 3, reps: '30-60s'},
+  { name: 'Weltbeste Dehnung',            pattern: 'Mobilität', sets: 2, reps: '5/Seite'},
+];
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
