@@ -196,16 +196,6 @@ const handleCodeSubmit = async (e: React.FormEvent) => {
   setCodeLoading(false);
 };
 
-  const storage = rememberMe ? localStorage : sessionStorage;
-  storage.setItem('booking_client_token', data.token);  // ← Token statt ID!
-  storage.setItem('booking_client_id', data.client_id);
-  storage.setItem('booking_client_name', data.client_name);
-
-  setClientId(data.client_id);
-  setClientName(data.client_name);
-  setCodeLoading(false);
-};
-
 
   const handleLogout = () => {
     ['booking_client_id', 'booking_client_name', 'booking_client_email'].forEach(k => {
