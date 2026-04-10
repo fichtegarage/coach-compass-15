@@ -166,22 +166,36 @@ const BookingPage: React.FC = () => {
   const [allSlotBookings, setAllSlotBookings] = useState<Record<string, number>>({});
 
 const handleCodeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = codeInput.trim().toUpperCase();
-    if (!code) return;
-    setCodeLoading(true);
-    setCodeError('');
-    const { data, error } = await supabase
-      .from('clients')
-      .select('id, full_name, email')
-      .eq('booking_code', code)
-      .eq('booking_code_active', true)
-      .maybeSingle();
-    if (error || !data || !data.id) {
-      setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
-      setCodeLoading(false);
-      return;
-    }
+  e.preventDefault();
+  const code = codeInput.trim().toUpperCase();
+  if (!code) return;
+  setCodeLoading(true);
+  setCodeError('');
+
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, full_name, email')
+    .eq('booking_code', code)
+    .eq('booking_code_active', true)
+    .maybeSingle();
+
+  if (error || !data || !data.id) {
+    setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
+    setCodeLoading(false);
+    return;
+  }
+
+  const storage = rememberMe ? localStorage : sessionStorage;
+  storage.setItem('booking_client_id', data.id);
+  storage.setItem('booking_client_name', data.full_name);
+  storage.setItem('booking_client_email', data.email || '');
+
+  setClientId(data.id);
+  setClientName(data.full_name);
+  setClientEmail(data.email || null);
+  setCodeLoading(false);
+};
+
 
   const storage = rememberMe ? localStorage : sessionStorage;
   storage.setItem('booking_client_token', data.token);  // ← Token statt ID!
