@@ -196,7 +196,6 @@ const handleCodeSubmit = async (e: React.FormEvent) => {
   setCodeLoading(false);
 };
 
-
   const storage = rememberMe ? localStorage : sessionStorage;
   storage.setItem('booking_client_token', data.token);  // ← Token statt ID!
   storage.setItem('booking_client_id', data.client_id);
