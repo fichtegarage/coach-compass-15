@@ -198,11 +198,16 @@ const handleCodeSubmit = async (e: React.FormEvent) => {
 
 
   const handleLogout = () => {
-    ['booking_client_id', 'booking_client_name', 'booking_client_email'].forEach(k => {
-      localStorage.removeItem(k); sessionStorage.removeItem(k);
-    });
-    setClientId(null); setClientName(''); setClientEmail(null);
-  };
+  ['booking_client_id', 'booking_client_name', 'booking_client_email', 'booking_client_token'].forEach(k => {
+    localStorage.removeItem(k);
+    sessionStorage.removeItem(k);
+  });
+  setClientId(null);
+  setClientName('');
+  setClientEmail(null);
+  setPackageInfo(null);
+};
+
 
   const loadData = async () => {
     if (!clientId) return;
