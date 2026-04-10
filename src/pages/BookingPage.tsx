@@ -121,19 +121,16 @@ const generateIcs = (booking: any) => {
   URL.revokeObjectURL(url);
 };
 
-const [clientId, setClientId] = useState<string | null>(() => {
-    const id = localStorage.getItem('booking_client_id') || sessionStorage.getItem('booking_client_id');
-    return id && id !== 'undefined' ? id : null;
-  });
-  const [clientName, setClientName] = useState<string>(() => {
-    const name = localStorage.getItem('booking_client_name') || sessionStorage.getItem('booking_client_name') || '';
-    return name === 'undefined' ? '' : name;
-  });
-  const [clientEmail, setClientEmail] = useState<string | null>(() => {
-    const email = localStorage.getItem('booking_client_email') || sessionStorage.getItem('booking_client_email') || null;
-    return email === 'undefined' ? null : email;
-  });
-
+const BookingPage: React.FC = () => {
+  const [clientId, setClientId] = useState<string | null>(() =>
+    localStorage.getItem('booking_client_id') || sessionStorage.getItem('booking_client_id')
+  );
+  const [clientName, setClientName] = useState<string>(() =>
+    localStorage.getItem('booking_client_name') || sessionStorage.getItem('booking_client_name') || ''
+  );
+  const [clientEmail, setClientEmail] = useState<string | null>(() =>
+    localStorage.getItem('booking_client_email') || sessionStorage.getItem('booking_client_email') || null
+  );
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
