@@ -316,33 +316,49 @@ export default function AssessmentGuide({ clientId, workoutId, onComplete }: Ass
     setWarmupChecks((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  async function handleFinish() {
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const payload = {
-        client_id: clientId,
-        workout_id: workoutId ?? null,
-        assessment_scores: scores,
-        coach_notes: coachNotes,
-        sleep_score: sleep,
-        energy_score: energy,
-        complaints,
-        completed_at: new Date().toISOString(),
-      };
-      const { error } = await supabase.from("workout_logs").insert(payload);
-      if (error) {
-        setSaveError(`Fehler beim Speichern: ${error.message}`);
-        return;
-      }
-      setSaved(true);
-      onComplete?.();
-    } catch (e: unknown) {
-      setSaveError(`Unbekannter Fehler: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setSaving(false);
-    }
-  }
+  const handleComplete = async () => {
+setSaving(true);
+await saveAssessment();
+if (workoutLogId) {
+await supabase.from('workout_logs')
+.update({ completed_at: new Date().toISOString() })
+.eq('id', workoutLogId);
+}
+await supabase.from('plan_workouts')
+.update({ is_assessment: true, status: 'completed' })
+.eq('id', workoutId);
+// assessment_completed_at auf dem Client setzen
+await supabase.from('clients')
+.update({ assessment_completed_at: new Date().toISOString() })
+.eq('id', clientId);
+// next_plan_workout_id auf das naechste Workout vorruecken
+try {
+const { data: currentWorkout } = await supabase
+.from('plan_workouts')
+.select('plan_id, session_order')
+.eq('id', workoutId).single();
+if (currentWorkout) {
+const { data: allWorkouts } = await supabase
+.from('plan_workouts')
+.select('id, session_order')
+.eq('plan_id', currentWorkout.plan_id)
+.order('session_order', { ascending: true, nullsFirst: false });
+if (allWorkouts && allWorkouts.length > 1) {
+const currentIdx = allWorkouts.findIndex(w => w.id === workoutId);
+const next = currentIdx >= 0 && currentIdx + 1 < allWorkouts.length
+? allWorkouts[currentIdx + 1] : null;
+if (next) {
+await supabase.from('training_plans')
+.update({ next_plan_workout_id: next.id })
+.eq('id', currentWorkout.plan_id);
+}
+}
+}
+} catch { /* Zeiger optional */ }
+setSaving(false);
+toast.success('Assessment abgeschlossen!');
+onComplete();
+};
 
   if (saved) {
     return (
