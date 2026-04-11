@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
@@ -35,7 +35,6 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      {/* Kunden-App – direkt auf / und /book, kein Redirect */}
       <Route path="/" element={<BookingPage />} />
       <Route path="/book" element={<BookingPage />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
@@ -63,9 +62,9 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <HashRouter>
           <AppRoutes />
-        </BrowserRouter>
+        </HashRouter>
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
