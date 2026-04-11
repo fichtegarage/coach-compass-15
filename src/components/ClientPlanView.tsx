@@ -4,15 +4,19 @@
  * Kunden-seitige Plan- und Workout-Ansicht.
  * Drei Tabs: Plan | Verlauf | PRs
  *
- * NEU: Progressionsdaten werden geladen und im Plan angezeigt.
- * Übungen mit progression_unlocked = true zeigen ein 🔼 Badge.
+ * Assessment-Integration:
+ * - Wenn nächstes Workout is_assessment=true und noch nicht abgeschlossen:
+ *   → Kein Start-Button, stattdessen "Session mit Coach"-Karte
+ * - Nach Abschluss des Assessments:
+ *   → Ergebniskarte mit Stärken, Fokuspunkten und Messwerten
  */
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Loader2, Dumbbell, ChevronDown, ChevronUp,
-  Target, Calendar, Play, Trophy, Star
+  Target, Calendar, Play, Trophy, Star,
+  ClipboardCheck, CheckCircle
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -29,7 +33,6 @@ interface PlanExercise {
   rest_seconds: number | null;
   notes: string | null;
   order_in_workout: number;
-  exercise_id?: string | null; // ← NEU
 }
 
 interface PlanWorkout {
@@ -56,6 +59,28 @@ interface TrainingPlan {
   total_cycles?: number;
   progression_notes: string | null;
   workouts: PlanWorkout[];
+}
+
+interface AssessmentMeasurements {
+  squat_score?: number;
+  hinge_score?: number;
+  shoulder_left_cm?: string;
+  shoulder_right_cm?: string;
+  pushup_reps?: string;
+  plank_seconds?: string;
+  balance_left_seconds?: string;
+  balance_right_seconds?: string;
+  forward_fold_cm?: string;
+}
+
+interface AssessmentResult {
+  id: string;
+  completed_at: string | null;
+  identified_strengths: string[];
+  focus_areas: string[];
+  contraindications: string[];
+  measurements: AssessmentMeasurements | null;
+  coach_notes: string | null;
 }
 
 interface SetLog {
@@ -89,13 +114,6 @@ interface WorkoutSummary {
   totalSets: number;
   totalVolume: number;
   prs: string[];
-}
-
-// NEU: Progressions-Daten pro Übung
-interface ProgressionEntry {
-  exercise_id: string;
-  session_count: number;
-  progression_unlocked: boolean;
 }
 
 interface ClientPlanViewProps {
@@ -135,73 +153,47 @@ function groupSetsByExercise(sets: SetLog[]): Map<string, SetLog[]> {
   return map;
 }
 
+function scoreLabel(score: number): string {
+  return ['', 'Eingeschränkt', 'Verbesserungswürdig', 'Durchschnitt', 'Gut', 'Ausgezeichnet'][score] || '';
+}
+
+function scoreColor(score: number): string {
+  return ['', 'text-red-400', 'text-orange-400', 'text-yellow-400', 'text-lime-400', 'text-green-400'][score] || '';
+}
+
 // ── Plan: Exercise Row ────────────────────────────────────────────────────────
 
-// NEU: progressionMap als Prop
-const ExerciseRow: React.FC<{
-  exercise: PlanExercise;
-  index: number;
-  progressionMap: Map<string, ProgressionEntry>;
-}> = ({ exercise, index, progressionMap }) => {
-  // NEU: Progressionsdaten für diese Übung
-  const progression = exercise.exercise_id ? progressionMap.get(exercise.exercise_id) : undefined;
-  const showProgression = progression && progression.session_count > 0;
-
-  return (
-    <div className={`px-4 py-3 ${index > 0 ? 'border-t border-slate-700' : ''}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold text-white">{exercise.name}</p>
-            {/* NEU: Progressions-Badge */}
-            {showProgression && (
-              progression.progression_unlocked ? (
-                <span className="text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded-full">
-                  🔼 Steigerung möglich
-                </span>
-              ) : (
-                <span className="text-[10px] text-slate-500 bg-slate-700 px-1.5 py-0.5 rounded-full">
-                  {progression.session_count}× trainiert
-                </span>
-              )
-            )}
+const ExerciseRow: React.FC<{ exercise: PlanExercise; index: number }> = ({ exercise, index }) => (
+  <div className={`px-4 py-3 ${index > 0 ? 'border-t border-slate-700' : ''}`}>
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex-1">
+        <p className="text-sm font-semibold text-white">{exercise.name}</p>
+        {exercise.notes && <p className="text-xs text-slate-500 mt-0.5 italic">{exercise.notes}</p>}
+      </div>
+      <div className="flex items-center gap-3 text-right flex-shrink-0">
+        {exercise.sets && exercise.reps_target && (
+          <div className="text-center">
+            <p className="text-sm font-bold text-orange-400 tabular-nums">
+              {exercise.sets} × {exercise.reps_target}
+            </p>
+            <p className="text-[10px] text-slate-500">Sätze × Wdh.</p>
           </div>
-          {exercise.notes && <p className="text-xs text-slate-500 mt-0.5 italic">{exercise.notes}</p>}
-        </div>
-        <div className="flex items-center gap-3 text-right flex-shrink-0">
-          {exercise.sets && exercise.reps_target && (
-            <div className="text-center">
-              <p className="text-sm font-bold text-orange-400 tabular-nums">
-                {exercise.sets} × {exercise.reps_target}
-              </p>
-              <p className="text-[10px] text-slate-500">Sätze × Wdh.</p>
-            </div>
-          )}
-          {exercise.rest_seconds && (
-            <div className="text-center">
-              <p className="text-sm font-medium text-slate-400 tabular-nums">{formatRest(exercise.rest_seconds)}</p>
-              <p className="text-[10px] text-slate-500">Pause</p>
-            </div>
-          )}
-        </div>
+        )}
+        {exercise.rest_seconds && (
+          <div className="text-center">
+            <p className="text-sm font-medium text-slate-400 tabular-nums">{formatRest(exercise.rest_seconds)}</p>
+            <p className="text-[10px] text-slate-500">Pause</p>
+          </div>
+        )}
       </div>
     </div>
-  );
-};
+  </div>
+);
 
 // ── Plan: Workout Block ───────────────────────────────────────────────────────
 
-const WorkoutBlock: React.FC<{
-  workout: PlanWorkout;
-  progressionMap: Map<string, ProgressionEntry>;
-}> = ({ workout, progressionMap }) => {
+const WorkoutBlock: React.FC<{ workout: PlanWorkout }> = ({ workout }) => {
   const [open, setOpen] = useState(true);
-
-  // NEU: Zähle wie viele Übungen eine Progression bereit haben
-  const unlockedCount = workout.exercises.filter(ex =>
-    ex.exercise_id && progressionMap.get(ex.exercise_id)?.progression_unlocked
-  ).length;
-
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
       <button
@@ -209,18 +201,16 @@ const WorkoutBlock: React.FC<{
         className="w-full flex items-center justify-between px-4 py-3 bg-slate-700/50 hover:bg-slate-700 transition-colors text-left"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0">
-            <Dumbbell className="w-3.5 h-3.5 text-orange-400" />
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${workout.is_assessment ? 'bg-amber-500/20' : 'bg-orange-500/20'}`}>
+            {workout.is_assessment
+              ? <ClipboardCheck className="w-3.5 h-3.5 text-amber-400" />
+              : <Dumbbell className="w-3.5 h-3.5 text-orange-400" />
+            }
           </div>
           <div>
             <p className="text-sm font-semibold text-white">{workout.day_label}</p>
             <p className="text-xs text-slate-400">
-              {workout.exercises.length} Übungen
-              {unlockedCount > 0 && (
-                <span className="ml-1.5 text-green-400 font-medium">
-                  · {unlockedCount} Steigerung{unlockedCount > 1 ? 'en' : ''} möglich 🔼
-                </span>
-              )}
+              {workout.is_assessment ? 'Assessment mit Coach' : `${workout.exercises.length} Übungen`}
             </p>
           </div>
         </div>
@@ -228,14 +218,144 @@ const WorkoutBlock: React.FC<{
       </button>
       {open && (
         <div>
-          {workout.exercises.map((ex, i) => (
-            <ExerciseRow key={ex.id} exercise={ex} index={i} progressionMap={progressionMap} />
-          ))}
-          {workout.exercises.length === 0 && (
-            <p className="px-4 py-3 text-sm text-slate-500">Keine Übungen hinterlegt.</p>
+          {workout.is_assessment ? (
+            <div className="px-4 py-3 text-sm text-slate-400 italic">
+              Diese Einheit findet gemeinsam mit deinem Coach statt.
+            </div>
+          ) : (
+            <>
+              {workout.exercises.map((ex, i) => <ExerciseRow key={ex.id} exercise={ex} index={i} />)}
+              {workout.exercises.length === 0 && (
+                <p className="px-4 py-3 text-sm text-slate-500">Keine Übungen hinterlegt.</p>
+              )}
+            </>
           )}
           {workout.notes && (
             <p className="px-4 py-2 pb-3 text-xs text-slate-500 italic border-t border-slate-700">{workout.notes}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Assessment Ergebniskarte ──────────────────────────────────────────────────
+
+const AssessmentResultCard: React.FC<{ result: AssessmentResult }> = ({ result }) => {
+  const [open, setOpen] = useState(false);
+  const m = result.measurements;
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+            <CheckCircle className="w-3.5 h-3.5 text-amber-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Assessment abgeschlossen</p>
+            <p className="text-xs text-slate-400">
+              {result.completed_at ? format(new Date(result.completed_at), "d. MMM yyyy", { locale: de }) : ''}
+            </p>
+          </div>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-amber-500/20 px-4 pb-4 pt-3 space-y-4">
+          {/* Stärken */}
+          {result.identified_strengths?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-green-400 uppercase tracking-wide mb-2">✅ Deine Stärken</p>
+              <div className="flex flex-wrap gap-1.5">
+                {result.identified_strengths.map((s, i) => (
+                  <span key={i} className="text-xs bg-green-500/10 text-green-300 border border-green-500/20 px-2.5 py-1 rounded-full">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Fokuspunkte */}
+          {result.focus_areas?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-orange-400 uppercase tracking-wide mb-2">🎯 Fokus im Training</p>
+              <div className="flex flex-wrap gap-1.5">
+                {result.focus_areas.map((f, i) => (
+                  <span key={i} className="text-xs bg-orange-500/10 text-orange-300 border border-orange-500/20 px-2.5 py-1 rounded-full">
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Messwerte */}
+          {m && (
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">📊 Deine Messwerte</p>
+              <div className="space-y-1.5">
+                {m.squat_score && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">🦵 Kniebeuge</span>
+                    <span className={`font-semibold ${scoreColor(m.squat_score)}`}>{scoreLabel(m.squat_score)}</span>
+                  </div>
+                )}
+                {m.hinge_score && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">🏋️ Hip Hinge</span>
+                    <span className={`font-semibold ${scoreColor(m.hinge_score)}`}>{scoreLabel(m.hinge_score)}</span>
+                  </div>
+                )}
+                {(m.shoulder_left_cm || m.shoulder_right_cm) && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">🙌 Schulter-Mobilität</span>
+                    <span className="font-semibold text-slate-300">
+                      {m.shoulder_left_cm ? `L: ${m.shoulder_left_cm} cm` : ''}{m.shoulder_left_cm && m.shoulder_right_cm ? ' · ' : ''}{m.shoulder_right_cm ? `R: ${m.shoulder_right_cm} cm` : ''}
+                    </span>
+                  </div>
+                )}
+                {m.pushup_reps && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">💪 Push-up Test</span>
+                    <span className="font-semibold text-slate-300">{m.pushup_reps} Wdh.</span>
+                  </div>
+                )}
+                {m.plank_seconds && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">⏱ Plank</span>
+                    <span className="font-semibold text-slate-300">{m.plank_seconds} Sek.</span>
+                  </div>
+                )}
+                {(m.balance_left_seconds || m.balance_right_seconds) && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">🦶 Einbeiniger Stand</span>
+                    <span className="font-semibold text-slate-300">
+                      {m.balance_left_seconds ? `L: ${m.balance_left_seconds}s` : ''}{m.balance_left_seconds && m.balance_right_seconds ? ' · ' : ''}{m.balance_right_seconds ? `R: ${m.balance_right_seconds}s` : ''}
+                    </span>
+                  </div>
+                )}
+                {m.forward_fold_cm && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">🤸 Vorwärtsbeugen</span>
+                    <span className="font-semibold text-slate-300">{m.forward_fold_cm} cm</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Coach-Notizen */}
+          {result.coach_notes && (
+            <div className="rounded-lg bg-slate-700/50 px-3 py-2">
+              <p className="text-xs font-semibold text-slate-400 mb-1">📝 Notiz von Jakob</p>
+              <p className="text-sm text-slate-300">{result.coach_notes}</p>
+            </div>
           )}
         </div>
       )}
@@ -315,13 +435,12 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
   const [nextWorkout, setNextWorkout] = useState<PlanWorkout | null>(null);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [prs, setPrs] = useState<PersonalRecord[]>([]);
+  const [assessmentResult, setAssessmentResult] = useState<AssessmentResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('plan');
   const [activeWorkout, setActiveWorkout] = useState<PlanWorkout | null>(null);
   const [completedSummary, setCompletedSummary] = useState<WorkoutSummary | null>(null);
-  // NEU: Progressionsdaten
-  const [progressionMap, setProgressionMap] = useState<Map<string, ProgressionEntry>>(new Map());
 
   useEffect(() => {
     const load = async () => {
@@ -344,9 +463,8 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
 
         if (workoutsData) {
           const workoutIds = workoutsData.map(w => w.id);
-          // NEU: exercise_id mitholen
           const { data: exercisesData } = workoutIds.length > 0
-            ? await supabase.from('plan_exercises').select('id, workout_id, name, sets, reps_target, rest_seconds, notes, order_in_workout, exercise_id').in('workout_id', workoutIds).order('order_in_workout')
+            ? await supabase.from('plan_exercises').select('*').in('workout_id', workoutIds).order('order_in_workout')
             : { data: [] };
 
           const workoutsWithEx: PlanWorkout[] = workoutsData.map(w => ({
@@ -365,26 +483,25 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
         }
       }
 
-      // NEU: Progressionsdaten laden
-      const { data: progressionData } = await supabase
-        .from('client_exercise_progression')
-        .select('exercise_id, session_count, progression_unlocked')
-        .eq('client_id', clientId);
-
-      const pMap = new Map<string, ProgressionEntry>();
-      (progressionData || []).forEach(p => {
-        pMap.set(p.exercise_id, {
-          exercise_id: p.exercise_id,
-          session_count: p.session_count,
-          progression_unlocked: p.progression_unlocked,
-        });
-      });
-      setProgressionMap(pMap);
+      // Assessment-Ergebnisse laden (abgeschlossen)
+      const { data: assessmentData } = await supabase
+        .from('assessment_results')
+        .select('id, completed_at, identified_strengths, focus_areas, contraindications, measurements, coach_notes')
+        .eq('client_id', clientId)
+        .not('completed_at', 'is', null)
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setAssessmentResult(assessmentData ?? null);
 
       // Workout-Logs
       const { data: logsData } = await supabase
         .from('workout_logs')
-        .select(`id, started_at, completed_at, plan_workouts ( day_label ), set_logs ( id, exercise_name, set_number, reps_done, weight_kg, is_pr, logged_at )`)
+        .select(`
+          id, started_at, completed_at,
+          plan_workouts ( day_label ),
+          set_logs ( id, exercise_name, set_number, reps_done, weight_kg, is_pr, logged_at )
+        `)
         .eq('client_id', clientId)
         .order('started_at', { ascending: false })
         .limit(30);
@@ -397,11 +514,14 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       const normalisedLogs: WorkoutLog[] = (logsData || []).map(log => ({
         ...log,
         plan_workouts: Array.isArray(log.plan_workouts) ? (log.plan_workouts[0] ?? null) : log.plan_workouts,
-        set_logs: ((log.set_logs as SetLog[]) || []).sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()),
+        set_logs: ((log.set_logs as SetLog[]) || []).sort(
+          (a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+        ),
         feedback: (feedbackData || []).find(f => f.workout_log_id === log.id) ?? null,
       }));
       setWorkoutLogs(normalisedLogs);
 
+      // PRs
       const { data: prsData } = await supabase
         .from('personal_records')
         .select('exercise_name, weight_kg, reps, achieved_at')
@@ -429,16 +549,15 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
   const currentWeekLabel = currentWorkouts[0]?.week_label;
   const completedLogs = workoutLogs.filter(l => l.completed_at);
 
-  // NEU: Anzahl Steigerungen im aktuellen Plan
-  const totalUnlocked = plan
-    ? plan.workouts.flatMap(w => w.exercises).filter(ex => ex.exercise_id && progressionMap.get(ex.exercise_id)?.progression_unlocked).length
-    : 0;
-
   const tabs: { id: ActiveTab; label: string }[] = [
-    { id: 'plan', label: totalUnlocked > 0 ? `Mein Plan 🔼` : 'Mein Plan' },
+    { id: 'plan', label: 'Mein Plan' },
     { id: 'history', label: `Verlauf${completedLogs.length > 0 ? ` (${completedLogs.length})` : ''}` },
     { id: 'prs', label: `PRs ${prs.length > 0 ? '🏆' : ''}` },
   ];
+
+  // Ist das nächste Workout ein Assessment?
+  const nextIsAssessment = nextWorkout?.is_assessment === true;
+  const assessmentDone = nextIsAssessment && nextWorkout?.status === 'completed';
 
   return (
     <>
@@ -460,12 +579,19 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       )}
 
       <div className="space-y-4">
+
+        {/* Tab-Navigation */}
         <div className="flex gap-1 bg-slate-700/50 rounded-xl p-1">
           {tabs.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab.id ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-              }`}>
+                activeTab === tab.id
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
               {tab.label}
             </button>
           ))}
@@ -478,192 +604,188 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
               <div className="w-12 h-12 rounded-2xl bg-slate-700 flex items-center justify-center mx-auto">
                 <Dumbbell className="w-6 h-6 text-slate-500" />
               </div>
-              <p className="text-sm font-medium text-slate-400">Noch kein Trainingsplan hinterlegt</p>
-              <p className="text-xs text-slate-500">Dein Coach teilt deinen Plan sobald er fertig ist.</p>
+              <p className="text-slate-400 text-sm">Noch kein Trainingsplan vorhanden.</p>
+              <p className="text-slate-500 text-xs">Jakob erstellt deinen Plan nach dem Assessment.</p>
             </div>
           ) : (
             <div className="space-y-4">
 
-              {/* NEU: Progressions-Hinweis Banner */}
-              {totalUnlocked > 0 && (
-                <div className="rounded-xl bg-green-500/10 border border-green-500/30 px-4 py-3 flex items-center gap-3">
-                  <span className="text-2xl">🔼</span>
-                  <div>
-                    <p className="text-sm font-semibold text-green-400">
-                      {totalUnlocked} Übung{totalUnlocked > 1 ? 'en' : ''} bereit für Steigerung!
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      Du hast genug Erfahrung gesammelt. Erhöhe Gewicht oder Wiederholungen.
-                    </p>
-                  </div>
-                </div>
+              {/* Assessment-Ergebniskarte (wenn abgeschlossen) */}
+              {assessmentResult && (
+                <AssessmentResultCard result={assessmentResult} />
               )}
 
               {/* Nächstes Training */}
               {nextWorkout && (
-                <div className={`rounded-2xl p-4 space-y-3 shadow-sm ${
-                  nextWorkout.is_assessment && nextWorkout.status !== 'completed'
-                    ? 'bg-slate-800'
-                    : nextWorkout.phase_type === 'deload' ? 'bg-blue-600'
-                    : nextWorkout.phase_type === 'test' ? 'bg-amber-600'
-                    : 'bg-orange-600'
+                <div className={`rounded-xl border overflow-hidden ${
+                  nextIsAssessment
+                    ? 'border-amber-500/40 bg-amber-500/5'
+                    : 'border-orange-500/30 bg-orange-500/5'
                 }`}>
-                  {nextWorkout.session_order && plan.workouts && plan.workouts.length > 1 && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-white/80 font-medium">Session {nextWorkout.session_order} von {plan.workouts.length}</span>
-                        {nextWorkout.phase_type && nextWorkout.phase_type !== 'load' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/20 text-white">
-                            {nextWorkout.phase_type === 'deload' && '🔄 Deload'}
-                            {nextWorkout.phase_type === 'test' && '📊 Test'}
-                            {nextWorkout.phase_type === 'intro' && '🎯 Intro'}
-                          </span>
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        nextIsAssessment ? 'bg-amber-500/20' : 'bg-orange-500/20'
+                      }`}>
+                        {nextIsAssessment
+                          ? <ClipboardCheck className="w-3.5 h-3.5 text-amber-400" />
+                          : <Play className="w-3.5 h-3.5 text-orange-400" />
+                        }
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                          {nextIsAssessment ? 'Assessment-Session' : 'Nächstes Training'}
+                        </p>
+                        <p className="text-base font-bold text-white">{nextWorkout.day_label}</p>
+                        {nextWorkout.week_label && (
+                          <p className="text-xs text-slate-400">{nextWorkout.week_label}</p>
                         )}
                       </div>
-                      <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                        <div className="h-full bg-white/80 rounded-full transition-all duration-500"
-                          style={{ width: `${(nextWorkout.session_order / plan.workouts.length) * 100}%` }} />
+                    </div>
+
+                    {/* Start-Button oder Assessment-Hinweis */}
+                    {nextIsAssessment ? (
+                      <div className="text-right">
+                        <span className="text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg block">
+                          Mit Coach
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setActiveWorkout(nextWorkout)}
+                        className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 active:scale-95 transition-all text-white font-bold px-4 py-2.5 rounded-xl text-sm"
+                      >
+                        <Play className="w-4 h-4" />
+                        Starten
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Assessment-Erklärung */}
+                  {nextIsAssessment && !assessmentDone && (
+                    <div className="px-4 pb-3 pt-0">
+                      <div className="rounded-lg bg-slate-800/50 px-3 py-2.5 space-y-2">
+                        <p className="text-xs text-slate-300 font-medium">Was passiert beim Assessment?</p>
+                        <ul className="text-xs text-slate-400 space-y-1">
+                          <li>• Jakob führt mit dir 7 Bewegungstests durch</li>
+                          <li>• Kraft, Mobilität und Stabilität werden gemessen</li>
+                          <li>• Auf Basis der Ergebnisse wird dein Trainingsplan erstellt</li>
+                        </ul>
+                        <p className="text-xs text-slate-500 italic">Diese Einheit startest du nicht selbst – Jakob loggt alles für dich.</p>
                       </div>
                     </div>
                   )}
-                  <div>
-                    <p className="text-white/80 text-xs font-semibold uppercase tracking-wide">
-                      {nextWorkout.is_assessment ? 'Assessment mit Coach' :
-                       nextWorkout.phase_type === 'deload' ? 'Deload-Woche' :
-                       nextWorkout.phase_type === 'test' ? 'Test-Woche' : 'Nächstes Training'}
-                    </p>
-                    <p className="text-white text-xl font-bold mt-0.5">{nextWorkout.day_label}</p>
-                    <p className="text-white/80 text-sm">
-                      {nextWorkout.week_label && `${nextWorkout.week_label} · `}
-                      {nextWorkout.is_assessment ? 'Bewegungsanalyse & Zielsetzung' : `${nextWorkout.exercises?.length || 0} Übungen`}
-                    </p>
-                  </div>
-                  {nextWorkout.is_assessment && nextWorkout.status !== 'completed' ? (
-                    <div className="bg-white/10 rounded-xl px-4 py-3 space-y-2">
-                      <p className="text-white/90 text-sm font-medium">🎯 Session mit deinem Coach</p>
-                      <p className="text-white/70 text-xs">In dieser Einheit analysieren wir gemeinsam deine Bewegungsqualität, besprechen deine Ziele im Detail und legen die Grundlage für deinen individuellen Trainingsplan.</p>
-                      {nextWorkout.status === 'in_progress' && <p className="text-amber-300 text-xs font-medium mt-2">⏳ Assessment läuft...</p>}
-                    </div>
-                  ) : (
-                    <div className="flex gap-2 min-w-0">
-                      <button onClick={() => setActiveWorkout(nextWorkout)}
-                        className="flex-1 min-w-0 bg-white text-primary font-bold py-3 rounded-xl text-sm active:scale-95 transition-all">
-                        {nextWorkout.is_assessment && nextWorkout.status === 'completed' ? '📋 Assessment ansehen' : '▶ Jetzt starten'}
-                      </button>
-                      {plan.workouts && plan.workouts.length > 1 && (
-                        <select value={nextWorkout.id}
-                          onChange={async e => {
-                            const selected = plan.workouts!.find(w => w.id === e.target.value);
-                            if (!selected) return;
-                            setNextWorkout(selected);
-                            await supabase.from('training_plans').update({ next_plan_workout_id: selected.id }).eq('id', plan.id);
-                          }}
-                          className="bg-white/20 text-white text-xs rounded-xl px-2 py-3 border border-white/30 focus:outline-none max-w-[100px] sm:max-w-[140px] truncate flex-shrink-0">
-                          {plan.workouts.map(w => (
-                            <option key={w.id} value={w.id} className="text-slate-900">
-                              {w.is_assessment ? '📋 ' : ''}W{w.week_number} · {w.day_label.length > 12 ? w.day_label.substring(0, 12) + '…' : w.day_label}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+
+                  {/* Übungsvorschau (nur wenn kein Assessment) */}
+                  {!nextIsAssessment && nextWorkout.exercises.length > 0 && (
+                    <div className="border-t border-orange-500/10 px-4 pb-3 pt-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {nextWorkout.exercises.slice(0, 5).map(ex => (
+                          <span key={ex.id} className="text-xs text-slate-400 bg-slate-700/50 px-2 py-0.5 rounded-md">
+                            {ex.name}
+                          </span>
+                        ))}
+                        {nextWorkout.exercises.length > 5 && (
+                          <span className="text-xs text-slate-500">+{nextWorkout.exercises.length - 5} weitere</span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Plan-Header */}
-              <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 space-y-2">
-                <p className="text-base font-bold text-white">{plan.name}</p>
-                {plan.goal && <p className="text-sm text-slate-400 flex items-center gap-1.5"><Target className="w-3.5 h-3.5 flex-shrink-0" /> {plan.goal}</p>}
-                <div className="flex gap-4 text-xs text-slate-500">
-                  {plan.weeks_total && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {plan.weeks_total} Wochen</span>}
-                  {plan.sessions_per_week && <span className="flex items-center gap-1"><Dumbbell className="w-3.5 h-3.5" /> {plan.sessions_per_week}× pro Woche</span>}
-                </div>
-              </div>
-
-              {/* Wochen-Navigation */}
+              {/* Wochenauswahl */}
               {weekNumbers.length > 1 && (
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 overflow-x-auto pb-1">
                   {weekNumbers.map(wn => {
                     const label = weekMap.get(wn)?.[0]?.week_label;
-                    const short = label ? label.replace(/^Woche\s*/i, 'W').split(':')[0] : `W${wn}`;
                     return (
-                      <button key={wn} onClick={() => setSelectedWeek(wn)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                          selectedWeek === wn ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                        }`}>
-                        {short}
+                      <button
+                        key={wn}
+                        onClick={() => setSelectedWeek(wn)}
+                        className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          selectedWeek === wn
+                            ? 'bg-slate-700 text-white'
+                            : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+                        }`}
+                      >
+                        {label ? label.replace(/^Woche\s*/i, 'W').split(':')[0] : `W${wn}`}
                       </button>
                     );
                   })}
                 </div>
               )}
 
-              {currentWeekLabel && <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{currentWeekLabel}</p>}
+              {/* Wochen-Workouts */}
+              {currentWorkouts.length > 0 && (
+                <div className="space-y-3">
+                  {currentWeekLabel && (
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{currentWeekLabel}</p>
+                  )}
+                  {currentWorkouts.map(workout => (
+                    <WorkoutBlock key={workout.id} workout={workout} />
+                  ))}
+                </div>
+              )}
 
-              <div className="space-y-3">
-                {currentWorkouts.map(workout => (
-                  <div key={workout.id} className="space-y-2">
-                    {/* NEU: progressionMap als Prop */}
-                    <WorkoutBlock workout={workout} progressionMap={progressionMap} />
-                    <button onClick={() => setActiveWorkout(workout)}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-semibold text-sm transition-all">
-                      <Play className="w-4 h-4" /> {workout.day_label} starten
-                    </button>
+              {/* Plan-Info */}
+              {plan.goal && (
+                <div className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 flex items-start gap-3">
+                  <Target className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-slate-400 font-medium">Dein Ziel</p>
+                    <p className="text-sm text-slate-300 mt-0.5">{plan.goal}</p>
                   </div>
-                ))}
-              </div>
-
-              {plan.progression_notes && (
-                <div className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Progressionslogik</p>
-                  <p className="text-sm text-slate-400 whitespace-pre-wrap">{plan.progression_notes}</p>
                 </div>
               )}
             </div>
           )
         )}
 
-        {/* ── HISTORY TAB ── */}
+        {/* ── VERLAUF TAB ── */}
         {activeTab === 'history' && (
-          workoutLogs.length === 0 ? (
-            <div className="py-10 text-center space-y-2">
-              <Dumbbell className="w-10 h-10 text-slate-600 mx-auto" />
-              <p className="text-sm text-slate-400">Noch keine Workouts geloggt.</p>
-              <p className="text-xs text-slate-500">Starte dein erstes Training über „Mein Plan".</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {workoutLogs.map(log => <WorkoutLogCard key={log.id} log={log} />)}
-            </div>
-          )
+          <div className="space-y-3">
+            {completedLogs.length === 0 ? (
+              <div className="py-10 text-center">
+                <Trophy className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm">Noch keine abgeschlossenen Trainings.</p>
+              </div>
+            ) : (
+              completedLogs.map(log => <WorkoutLogCard key={log.id} log={log} />)
+            )}
+          </div>
         )}
 
-        {/* ── PR-BOARD TAB ── */}
+        {/* ── PRs TAB ── */}
         {activeTab === 'prs' && (
-          prs.length === 0 ? (
-            <div className="py-10 text-center space-y-2">
-              <Trophy className="w-10 h-10 text-slate-600 mx-auto" />
-              <p className="text-sm text-slate-400">Noch keine Personal Records.</p>
-              <p className="text-xs text-slate-500">Trainiere und setze deinen ersten PR!</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {prs.map((pr, i) => (
+          <div className="space-y-3">
+            {prs.length === 0 ? (
+              <div className="py-10 text-center">
+                <Trophy className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm">Noch keine persönlichen Rekorde.</p>
+                <p className="text-slate-500 text-xs mt-1">PRs werden automatisch erkannt.</p>
+              </div>
+            ) : (
+              prs.map((pr, i) => (
                 <div key={i} className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-white">{pr.exercise_name}</p>
-                    <p className="text-xs text-slate-500">{format(new Date(pr.achieved_at), "d. MMM yyyy", { locale: de })}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {format(new Date(pr.achieved_at), "d. MMM yyyy", { locale: de })}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-base font-bold text-orange-400 tabular-nums">{Number(pr.weight_kg)}kg × {pr.reps}</p>
-                    <p className="text-[10px] text-slate-500">🏆 Persönlicher Rekord</p>
+                    <p className="text-sm font-bold text-amber-400 tabular-nums">
+                      {pr.weight_kg} kg × {pr.reps}
+                    </p>
+                    <p className="text-[10px] text-slate-500">Persönlicher Rekord 🏆</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          )
+              ))
+            )}
+          </div>
         )}
+
       </div>
     </>
   );
