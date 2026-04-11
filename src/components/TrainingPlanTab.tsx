@@ -13,7 +13,7 @@ import {
   Plus, AlertTriangle, ChevronDown, ChevronUp,
   Dumbbell, Target, Calendar, Loader2, Trash2,
   CheckCircle, ClipboardPaste, Pencil, Check, X, ClipboardCheck,
-  Sparkles, Wand2,
+  Sparkles, Wand2, Flame, Wind,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -23,6 +23,123 @@ import { matchAndAddExercises, getMatchingStats } from '@/lib/exerciseMatching';
 import { loadClientDataForPrompt, generateSystemPrompt, generateUserPrompt, type PlanConfig } from '@/lib/aiPlanGenerator';
 import AssessmentGuide from '@/components/AssessmentGuide';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
+
+// ── Warm-Up / Cool-Down Defaults ──────────────────────────────────────────────
+
+const WARMUP_BY_PATTERN: Record<string, { name: string; reps: string }[]> = {
+  squat: [
+    { name: 'Hüftkreisen', reps: '10/Seite' },
+    { name: 'Goblet Squat (leicht)', reps: '10' },
+    { name: 'Sprunggelenk-Mobilisation', reps: '10/Seite' },
+  ],
+  hinge: [
+    { name: 'Cat-Cow', reps: '10' },
+    { name: 'Hip Hinge Drill (ohne Gewicht)', reps: '10' },
+    { name: 'Glute Bridge', reps: '15' },
+  ],
+  push: [
+    { name: 'Schulterkreisen', reps: '10/Richtung' },
+    { name: 'Band Pull-Apart', reps: '15' },
+    { name: 'Wall Slides', reps: '10' },
+  ],
+  pull: [
+    { name: 'Schulterkreisen', reps: '10/Richtung' },
+    { name: 'Thorakale Rotation', reps: '10/Seite' },
+    { name: 'Dead Hang', reps: '20–30 Sek.' },
+  ],
+  core: [
+    { name: 'Dead Bug', reps: '8/Seite' },
+    { name: 'Bird Dog', reps: '8/Seite' },
+    { name: 'Plank', reps: '30 Sek.' },
+  ],
+  upper: [
+    { name: 'Schulterkreisen', reps: '10/Richtung' },
+    { name: 'Band Pull-Apart', reps: '15' },
+    { name: 'Thorakale Rotation', reps: '10/Seite' },
+  ],
+  lower: [
+    { name: 'Hüftkreisen', reps: '10/Seite' },
+    { name: 'Glute Bridge', reps: '15' },
+    { name: 'Sprunggelenk-Mobilisation', reps: '10/Seite' },
+  ],
+  general: [
+    { name: '5 Min. Fahrrad/Laufen (leicht)', reps: '5 Min.' },
+    { name: 'Weltbeste Dehnung', reps: '5/Seite' },
+    { name: 'Schulterkreisen', reps: '10/Richtung' },
+  ],
+};
+
+const COOLDOWN_BY_PATTERN: Record<string, { name: string; reps: string }[]> = {
+  squat: [
+    { name: 'Hüftbeuger-Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Quad-Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Child\'s Pose', reps: '60 Sek.' },
+  ],
+  hinge: [
+    { name: 'Hamstring-Dehnung liegend', reps: '30 Sek./Seite' },
+    { name: 'Piriformis-Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Child\'s Pose', reps: '60 Sek.' },
+  ],
+  push: [
+    { name: 'Brust-Dehnung am Rahmen', reps: '30 Sek./Seite' },
+    { name: 'Schulter-Quer-Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Trizeps-Dehnung', reps: '30 Sek./Seite' },
+  ],
+  pull: [
+    { name: 'Lat-Dehnung am Gerät', reps: '30 Sek./Seite' },
+    { name: 'Bizeps-Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Brust-Öffner', reps: '60 Sek.' },
+  ],
+  core: [
+    { name: 'Cobra-Stretch', reps: '30 Sek.' },
+    { name: 'Seitliche Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Child\'s Pose', reps: '60 Sek.' },
+  ],
+  upper: [
+    { name: 'Brust-Dehnung am Rahmen', reps: '30 Sek./Seite' },
+    { name: 'Schulter-Quer-Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Lat-Dehnung', reps: '30 Sek./Seite' },
+  ],
+  lower: [
+    { name: 'Hüftbeuger-Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Hamstring-Dehnung', reps: '30 Sek./Seite' },
+    { name: 'Pigeon Pose', reps: '60 Sek./Seite' },
+  ],
+  general: [
+    { name: 'Weltbeste Dehnung', reps: '5/Seite' },
+    { name: 'Child\'s Pose', reps: '60 Sek.' },
+    { name: 'Thorakale Rotation', reps: '10/Seite' },
+  ],
+};
+
+/** Erkennt das dominante Bewegungsmuster anhand der Übungsnamen */
+function detectPattern(exercises: PlanExercise[]): string {
+  const names = exercises.map(e => e.name.toLowerCase()).join(' ');
+  const score: Record<string, number> = { squat: 0, hinge: 0, push: 0, pull: 0, core: 0 };
+
+  if (/squat|kniebeuge|leg press|lunge|ausfallschritt|bulgar/.test(names)) score.squat += 2;
+  if (/deadlift|kreuzheben|rdl|hip hinge|good morning|swing/.test(names)) score.hinge += 2;
+  if (/press|bankdrücken|overhead|push-?up|liegestütz|dips|chest/.test(names)) score.push += 2;
+  if (/row|rudern|pull.?up|klimmzug|lat|chin|curl/.test(names)) score.pull += 2;
+  if (/plank|crunch|sit.?up|core|ab|rumpf/.test(names)) score.core += 2;
+
+  const dominant = Object.entries(score).sort((a, b) => b[1] - a[1]);
+  const top = dominant[0];
+  const second = dominant[1];
+
+  if (top[1] === 0) return 'general';
+
+  // Erkennt Upper/Lower-Body-Days
+  const hasUpper = (score.push > 0 || score.pull > 0);
+  const hasLower = (score.squat > 0 || score.hinge > 0);
+  if (hasUpper && hasLower) return 'general';
+  if (hasUpper && !hasLower) return 'upper';
+  if (hasLower && !hasUpper) return 'lower';
+
+  return top[0];
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TrainingPlan {
   id: string; name: string; goal: string | null; weeks_total: number | null;
@@ -47,6 +164,7 @@ interface PlanExercise {
   reps_target: string | null; weight_target: string | null;
   rest_seconds: number | null; notes: string | null;
   alternative_name: string | null; order_in_workout: number;
+  exercise_slot?: string | null; // 'warmup' | 'cooldown' | 'main' | null
 }
 
 interface TrainingPlanTabProps { clientId: string; clientName: string; }
@@ -67,10 +185,14 @@ function formatRest(seconds: number | null): string {
   return `${seconds}s`;
 }
 
+// ── ExerciseRow ───────────────────────────────────────────────────────────────
+
 const ExerciseRow: React.FC<{
   exercise: PlanExercise; index: number;
   onAlternativeSaved: (exerciseId: string, value: string) => void;
-}> = ({ exercise, index, onAlternativeSaved }) => {
+  onDelete?: (exerciseId: string) => void;
+  compact?: boolean;
+}> = ({ exercise, index, onAlternativeSaved, onDelete, compact }) => {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(exercise.alternative_name || '');
   const [saving, setSaving] = useState(false);
@@ -78,7 +200,7 @@ const ExerciseRow: React.FC<{
   const handleSave = async () => {
     setSaving(true);
     const { error } = await supabase.from('plan_exercises').update({ alternative_name: value.trim() || null }).eq('id', exercise.id);
-    if (error) { toast.error('Konnte nicht gespeichert werden.'); }
+    if (error) toast.error('Konnte nicht gespeichert werden.');
     else { onAlternativeSaved(exercise.id, value.trim()); toast.success('Ersatzübung gespeichert.'); }
     setSaving(false); setEditing(false);
   };
@@ -89,54 +211,208 @@ const ExerciseRow: React.FC<{
     <tr className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
       <td className="px-3 py-2">
         <p className="font-medium text-sm">{exercise.name}</p>
-        {editing ? (
+        {!compact && (editing ? (
           <div className="flex items-center gap-1.5 mt-1">
             <Input value={value} onChange={e => setValue(e.target.value)} placeholder="z.B. Kurzhantel-Bankdrücken" className="h-7 text-xs" autoFocus
               onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }} />
-            <button onClick={handleSave} disabled={saving} className="text-primary hover:text-primary flex-shrink-0">
+            <button onClick={handleSave} disabled={saving} className="text-primary flex-shrink-0">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
-            <button onClick={handleCancel} className="text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4" /></button>
+            <button onClick={handleCancel} className="text-muted-foreground flex-shrink-0"><X className="w-4 h-4" /></button>
           </div>
         ) : (
           <button onClick={() => setEditing(true)} className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors group">
-            {exercise.alternative_name ? (
-              <><span className="text-blue-500">⇄ {exercise.alternative_name}</span><Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-1" /></>
-            ) : (
-              <span className="opacity-0 group-hover:opacity-60 transition-opacity italic">+ Ersatzübung hinterlegen</span>
-            )}
+            {exercise.alternative_name
+              ? <><span className="text-blue-500">⇄ {exercise.alternative_name}</span><Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 ml-1" /></>
+              : <span className="opacity-0 group-hover:opacity-60 italic">+ Ersatzübung</span>}
           </button>
-        )}
+        ))}
       </td>
       <td className="px-3 py-2 text-center tabular-nums text-sm">{exercise.sets ?? '—'}</td>
       <td className="px-3 py-2 text-center tabular-nums text-sm">{exercise.reps_target || '—'}</td>
-      <td className="px-3 py-2 text-center text-muted-foreground text-xs">{formatRest(exercise.rest_seconds)}</td>
-      <td className="px-3 py-2 text-muted-foreground text-xs">{exercise.notes || ''}</td>
+      {!compact && <td className="px-3 py-2 text-center text-muted-foreground text-xs">{formatRest(exercise.rest_seconds)}</td>}
+      {!compact && <td className="px-3 py-2 text-muted-foreground text-xs">{exercise.notes || ''}</td>}
+      {onDelete && (
+        <td className="px-2 py-2">
+          <button onClick={() => onDelete(exercise.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </td>
+      )}
     </tr>
   );
 };
 
+// ── ExerciseTable ─────────────────────────────────────────────────────────────
+
 const ExerciseTable: React.FC<{
   exercises: PlanExercise[];
   onExerciseUpdated: (exerciseId: string, alternativeName: string) => void;
-}> = ({ exercises, onExerciseUpdated }) => (
-  <div className="overflow-x-auto rounded-lg border border-border">
+  onDelete?: (exerciseId: string) => void;
+  compact?: boolean;
+  colorClass?: string;
+}> = ({ exercises, onExerciseUpdated, onDelete, compact, colorClass }) => (
+  <div className={`overflow-x-auto rounded-lg border ${colorClass || 'border-border'}`}>
     <table className="w-full text-sm">
       <thead>
-        <tr className="bg-muted/40 border-b border-border">
+        <tr className={`border-b ${colorClass ? colorClass.replace('border-', 'bg-').replace('/30', '/10') : 'bg-muted/40 border-border'}`}>
           <th className="text-left px-3 py-2 font-medium text-muted-foreground">Übung</th>
           <th className="text-center px-3 py-2 font-medium text-muted-foreground w-14">Sätze</th>
           <th className="text-center px-3 py-2 font-medium text-muted-foreground w-20">Wdh.</th>
-          <th className="text-center px-3 py-2 font-medium text-muted-foreground w-20">Pause</th>
-          <th className="text-left px-3 py-2 font-medium text-muted-foreground">Hinweis</th>
+          {!compact && <th className="text-center px-3 py-2 font-medium text-muted-foreground w-20">Pause</th>}
+          {!compact && <th className="text-left px-3 py-2 font-medium text-muted-foreground">Hinweis</th>}
+          {onDelete && <th className="w-8" />}
         </tr>
       </thead>
       <tbody>
-        {exercises.map((ex, i) => <ExerciseRow key={ex.id} exercise={ex} index={i} onAlternativeSaved={onExerciseUpdated} />)}
+        {exercises.map((ex, i) => (
+          <ExerciseRow key={ex.id} exercise={ex} index={i}
+            onAlternativeSaved={onExerciseUpdated}
+            onDelete={onDelete}
+            compact={compact} />
+        ))}
       </tbody>
     </table>
   </div>
 );
+
+// ── WarmupCooldownSection ─────────────────────────────────────────────────────
+
+const WarmupCooldownSection: React.FC<{
+  slot: 'warmup' | 'cooldown';
+  exercises: PlanExercise[];
+  workoutId: string;
+  mainExercises: PlanExercise[];
+  onRefresh: () => void;
+  onExerciseUpdated: (id: string, alt: string) => void;
+}> = ({ slot, exercises, workoutId, mainExercises, onRefresh, onExerciseUpdated }) => {
+  const [open, setOpen] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newReps, setNewReps] = useState('');
+  const [generating, setGenerating] = useState(false);
+
+  const isWarmup = slot === 'warmup';
+  const label = isWarmup ? 'Warm-Up' : 'Cool-Down';
+  const icon = isWarmup ? <Flame className="w-3.5 h-3.5" /> : <Wind className="w-3.5 h-3.5" />;
+  const colorClass = isWarmup ? 'border-amber-200/70' : 'border-blue-200/70';
+  const headerColor = isWarmup
+    ? 'text-amber-700 bg-amber-50 border-amber-200/50'
+    : 'text-blue-700 bg-blue-50 border-blue-200/50';
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    const pattern = detectPattern(mainExercises);
+    const defaults = isWarmup ? WARMUP_BY_PATTERN[pattern] : COOLDOWN_BY_PATTERN[pattern];
+
+    // Bestehende löschen
+    if (exercises.length > 0) {
+      await supabase.from('plan_exercises').delete().in('id', exercises.map(e => e.id));
+    }
+
+    // Neue einfügen
+    const maxOrder = mainExercises.reduce((m, e) => Math.max(m, e.order_in_workout), 0);
+    const inserts = defaults.map((ex, i) => ({
+      workout_id: workoutId,
+      name: ex.name,
+      sets: 1,
+      reps_target: ex.reps,
+      rest_seconds: null,
+      notes: isWarmup ? 'Aktivierung' : 'Dehnung',
+      order_in_workout: isWarmup ? -(defaults.length - i) : maxOrder + i + 1,
+      exercise_slot: slot,
+    }));
+
+    await supabase.from('plan_exercises').insert(inserts);
+    toast.success(`${label} generiert (${pattern}-Muster)`);
+    setGenerating(false);
+    onRefresh();
+  };
+
+  const handleAdd = async () => {
+    if (!newName.trim()) return;
+    const maxOrder = mainExercises.reduce((m, e) => Math.max(m, e.order_in_workout), 0);
+    await supabase.from('plan_exercises').insert({
+      workout_id: workoutId,
+      name: newName.trim(),
+      sets: 1,
+      reps_target: newReps.trim() || null,
+      exercise_slot: slot,
+      order_in_workout: isWarmup ? -999 : maxOrder + 999,
+    });
+    setNewName(''); setNewReps(''); setAdding(false);
+    onRefresh();
+  };
+
+  const handleDelete = async (id: string) => {
+    await supabase.from('plan_exercises').delete().eq('id', id);
+    onRefresh();
+  };
+
+  return (
+    <div className={`rounded-lg border overflow-hidden ${isWarmup ? 'border-amber-200/50' : 'border-blue-200/50'}`}>
+      {/* Header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide ${headerColor}`}
+      >
+        <span className="flex items-center gap-1.5">{icon}{label} ({exercises.length} Übungen)</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={e => { e.stopPropagation(); handleGenerate(); }}
+            disabled={generating}
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+              isWarmup ? 'border-amber-300 hover:bg-amber-100' : 'border-blue-300 hover:bg-blue-100'
+            }`}
+          >
+            {generating ? <Loader2 className="w-3 h-3 animate-spin inline" /> : '⚡ Auto'}
+          </button>
+          {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </div>
+      </button>
+
+      {open && (
+        <div className={`p-2 space-y-2 ${isWarmup ? 'bg-amber-50/30' : 'bg-blue-50/30'}`}>
+          {exercises.length > 0 ? (
+            <ExerciseTable
+              exercises={exercises}
+              onExerciseUpdated={onExerciseUpdated}
+              onDelete={handleDelete}
+              compact
+              colorClass={colorClass}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-2 italic">
+              Noch keine Übungen · „Auto" für Vorschlag klicken
+            </p>
+          )}
+
+          {adding ? (
+            <div className="flex gap-2 items-center">
+              <Input value={newName} onChange={e => setNewName(e.target.value)}
+                placeholder="Übungsname" className="h-7 text-xs flex-1"
+                onKeyDown={e => e.key === 'Enter' && handleAdd()} autoFocus />
+              <Input value={newReps} onChange={e => setNewReps(e.target.value)}
+                placeholder="Wdh./Zeit" className="h-7 text-xs w-28"
+                onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+              <button onClick={handleAdd} className="text-primary"><Check className="w-4 h-4" /></button>
+              <button onClick={() => setAdding(false)} className="text-muted-foreground"><X className="w-4 h-4" /></button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAdding(true)}
+              className={`text-xs flex items-center gap-1 ${isWarmup ? 'text-amber-600 hover:text-amber-700' : 'text-blue-600 hover:text-blue-700'}`}
+            >
+              <Plus className="w-3 h-3" /> Übung hinzufügen
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── WorkoutCard ───────────────────────────────────────────────────────────────
 
 const WorkoutCard: React.FC<{
   workout: PlanWorkout;
@@ -151,6 +427,28 @@ const WorkoutCard: React.FC<{
   const [toggling, setToggling] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
+  const allExercises = workout.exercises || [];
+
+  // Nach Slot aufteilen
+  const warmupExercises = allExercises.filter(e => e.exercise_slot === 'warmup');
+  const cooldownExercises = allExercises.filter(e => e.exercise_slot === 'cooldown');
+  const mainExercises = allExercises.filter(e => !e.exercise_slot || e.exercise_slot === 'main' || e.exercise_slot === 'main');
+
+  // Übungen die mit "Warm-Up:" oder "Cool-Down:" beginnen (Legacy)
+  const legacyWarmup = mainExercises.filter(e =>
+    /^warm.?up:/i.test(e.name) || /^aufwärm/i.test(e.name)
+  );
+  const legacyCooldown = mainExercises.filter(e =>
+    /^cool.?down:/i.test(e.name) || /^abkühl/i.test(e.name) || /^dehnung:/i.test(e.name)
+  );
+  const trueMain = mainExercises.filter(e =>
+    !legacyWarmup.includes(e) && !legacyCooldown.includes(e)
+  );
+
+  // Alle Warm-Up zusammenführen (slot + legacy)
+  const allWarmup = [...warmupExercises, ...legacyWarmup];
+  const allCooldown = [...cooldownExercises, ...legacyCooldown];
+
   const handleToggleAssessment = async () => {
     setToggling(true);
     await onToggleAssessment(workout.id, !workout.is_assessment);
@@ -161,31 +459,29 @@ const WorkoutCard: React.FC<{
     <div className={`rounded-xl border overflow-hidden ${
       workout.is_assessment ? 'border-primary/50 bg-primary/5' : 'border-border'
     }`}>
-      <button className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left" onClick={() => setOpen(o => !o)}>
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+        onClick={() => setOpen(o => !o)}
+      >
         <div className="flex items-center gap-2">
-          {workout.is_assessment ? (
-            <ClipboardCheck className="w-4 h-4 text-primary flex-shrink-0" />
-          ) : (
-            <Dumbbell className="w-4 h-4 text-primary flex-shrink-0" />
-          )}
+          {workout.is_assessment
+            ? <ClipboardCheck className="w-4 h-4 text-primary flex-shrink-0" />
+            : <Dumbbell className="w-4 h-4 text-primary flex-shrink-0" />}
           <span className="font-medium text-sm">{workout.day_label}</span>
           {workout.is_assessment && (
-            <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
-              ASSESSMENT
-            </span>
+            <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">ASSESSMENT</span>
           )}
-          {workout.status === 'completed' && (
-            <CheckCircle className="w-3.5 h-3.5 text-success" />
-          )}
-          {!workout.is_assessment && workout.exercises && (
-            <span className="text-xs text-muted-foreground">· {workout.exercises.length} Übungen</span>
+          {workout.status === 'completed' && <CheckCircle className="w-3.5 h-3.5 text-success" />}
+          {!workout.is_assessment && (
+            <span className="text-xs text-muted-foreground">· {trueMain.length} Übungen{allWarmup.length > 0 ? `, ${allWarmup.length} WU` : ''}{allCooldown.length > 0 ? `, ${allCooldown.length} CD` : ''}</span>
           )}
         </div>
         {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
       </button>
+
       {open && (
         <div className="p-3 space-y-3">
-          {/* Assessment-Toggle und Buttons */}
+          {/* Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handleToggleAssessment}
@@ -196,56 +492,24 @@ const WorkoutCard: React.FC<{
                   : 'bg-muted border-border text-muted-foreground hover:text-foreground'
               }`}
             >
-              {toggling ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <ClipboardCheck className="w-3 h-3" />
-              )}
+              {toggling ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3 h-3" />}
               {workout.is_assessment ? 'Assessment ✓' : 'Als Assessment markieren'}
             </button>
             {workout.is_assessment && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onOpenAssessment(workout)}
-                className="text-xs h-7 gap-1.5"
-              >
+              <Button size="sm" variant="outline" onClick={() => onOpenAssessment(workout)} className="text-xs h-7 gap-1.5">
                 <ClipboardCheck className="w-3 h-3" />
                 {workout.status === 'completed' ? 'Assessment ansehen' : 'Assessment durchführen'}
               </Button>
             )}
             {!workout.is_assessment && (
-              <Button
-                size="sm"
-                variant={editMode ? "default" : "outline"}
-                onClick={() => setEditMode(!editMode)}
-                className="text-xs h-7 gap-1.5 ml-auto"
-              >
-                <Pencil className="w-3 h-3" />
-                {editMode ? 'Fertig' : 'Bearbeiten'}
+              <Button size="sm" variant={editMode ? "default" : "outline"}
+                onClick={() => setEditMode(!editMode)} className="text-xs h-7 gap-1.5 ml-auto">
+                <Pencil className="w-3 h-3" />{editMode ? 'Fertig' : 'Bearbeiten'}
               </Button>
             )}
           </div>
 
-          {/* Übungen */}
-          {!workout.is_assessment && workout.exercises && (
-            editMode ? (
-              <PlanExerciseEditor
-                exercises={workout.exercises}
-                workoutId={workout.id}
-                onUpdate={onWorkoutUpdated}
-                catalogExercises={catalogExercises}
-              />
-            ) : workout.exercises.length > 0 ? (
-              <ExerciseTable exercises={workout.exercises} onExerciseUpdated={onExerciseUpdated} />
-            ) : (
-              <div className="text-center py-4 text-muted-foreground text-sm">
-                Keine Übungen. <button onClick={() => setEditMode(true)} className="text-primary underline">Jetzt hinzufügen</button>
-              </div>
-            )
-          )}
-
-          {/* NEU: Assessment-Übungen als Tabelle */}
+          {/* Assessment-Info */}
           {workout.is_assessment && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Assessment-Übungen (immer)</p>
@@ -257,17 +521,18 @@ const WorkoutCard: React.FC<{
                       <th className="text-center px-2 py-1.5 font-medium text-amber-700 text-xs w-14">Sätze</th>
                       <th className="text-center px-2 py-1.5 font-medium text-amber-700 text-xs w-16">Wdh.</th>
                       <th className="text-left px-2 py-1.5 font-medium text-amber-700 text-xs">Muster</th>
+                      <th className="text-left px-2 py-1.5 font-medium text-amber-700 text-xs">Messgröße</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { name: 'Kniebeuge (Bodyweight)',     sets: 3, reps: '8–10',      pattern: 'Squat',     measure: 'Score 1–5' },
-                      { name: 'Hip Hinge (leichtes RDL)',   sets: 3, reps: '8–10',      pattern: 'Hinge',     measure: 'Score 1–5' },
-                      { name: 'Schulter-Mobilitätstest',    sets: 1, reps: '3/Seite',   pattern: 'Mobilität', measure: '± cm (li/re)' },
-                      { name: 'Push-up Test',               sets: 1, reps: 'Max.',      pattern: 'Push',      measure: 'Anz. Wdh.' },
-                      { name: 'Plank',                      sets: 1, reps: 'Max. Zeit', pattern: 'Core',      measure: 'Sek.' },
-                      { name: 'Einbeiniger Stand',          sets: 1, reps: 'Max. Zeit', pattern: 'Balance',   measure: 'Sek. (li/re)' },
-                      { name: 'Vorwärtsbeugen stehend',     sets: 1, reps: '3 Versuche',pattern: 'Mobilität', measure: '± cm' },
+                      { name: 'Kniebeuge (Bodyweight)', sets: 3, reps: '8–10', pattern: 'Squat', measure: 'Score 1–5' },
+                      { name: 'Hip Hinge (leichtes RDL)', sets: 3, reps: '8–10', pattern: 'Hinge', measure: 'Score 1–5' },
+                      { name: 'Schulter-Mobilitätstest', sets: 1, reps: '3/Seite', pattern: 'Mobilität', measure: '± cm (li/re)' },
+                      { name: 'Push-up Test', sets: 1, reps: 'Max.', pattern: 'Push', measure: 'Anz. Wdh.' },
+                      { name: 'Plank', sets: 1, reps: 'Max. Zeit', pattern: 'Core', measure: 'Sek.' },
+                      { name: 'Einbeiniger Stand', sets: 1, reps: 'Max. Zeit', pattern: 'Balance', measure: 'Sek. (li/re)' },
+                      { name: 'Vorwärtsbeugen stehend', sets: 1, reps: '3 Versuche', pattern: 'Mobilität', measure: '± cm' },
                     ].map((ex, i) => (
                       <tr key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-amber-50/30'}>
                         <td className="px-3 py-1.5 font-medium text-sm">{ex.name}</td>
@@ -280,12 +545,56 @@ const WorkoutCard: React.FC<{
                   </tbody>
                 </table>
               </div>
-              {workout.exercises && workout.exercises.length > 0 && (
+              {trueMain.length > 0 && (
                 <div className="mt-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">+ Plan-Übungen</p>
-                  <ExerciseTable exercises={workout.exercises} onExerciseUpdated={onExerciseUpdated} />
+                  <ExerciseTable exercises={trueMain} onExerciseUpdated={onExerciseUpdated} />
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Normales Workout mit Warm-Up / Main / Cool-Down */}
+          {!workout.is_assessment && (
+            <div className="space-y-2">
+              {/* Warm-Up */}
+              <WarmupCooldownSection
+                slot="warmup"
+                exercises={allWarmup}
+                workoutId={workout.id}
+                mainExercises={trueMain}
+                onRefresh={onWorkoutUpdated}
+                onExerciseUpdated={onExerciseUpdated}
+              />
+
+              {/* Hauptteil */}
+              {editMode ? (
+                <PlanExerciseEditor
+                  exercises={trueMain}
+                  workoutId={workout.id}
+                  onUpdate={onWorkoutUpdated}
+                  catalogExercises={catalogExercises}
+                />
+              ) : trueMain.length > 0 ? (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Hauptteil</p>
+                  <ExerciseTable exercises={trueMain} onExerciseUpdated={onExerciseUpdated} />
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  Keine Übungen. <button onClick={() => setEditMode(true)} className="text-primary underline">Jetzt hinzufügen</button>
+                </div>
+              )}
+
+              {/* Cool-Down */}
+              <WarmupCooldownSection
+                slot="cooldown"
+                exercises={allCooldown}
+                workoutId={workout.id}
+                mainExercises={trueMain}
+                onRefresh={onWorkoutUpdated}
+                onExerciseUpdated={onExerciseUpdated}
+              />
             </div>
           )}
 
@@ -295,6 +604,8 @@ const WorkoutCard: React.FC<{
     </div>
   );
 };
+
+// ── ImportDialog ──────────────────────────────────────────────────────────────
 
 interface ImportDialogProps { open: boolean; onClose: () => void; onImported: () => void; clientId: string; trainerId: string; }
 
@@ -333,20 +644,23 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
         const { data: workoutData, error: workoutError } = await supabase.from('plan_workouts').insert({
           plan_id: planData.id, week_number: workout.week_number, week_label: workout.week_label,
           day_label: workout.day_label, notes: workout.notes || null, order_in_week: workout.order_in_week,
-          session_order: workout.session_order,
-          phase_type: workout.phase_type,
-          cycle_number: workout.cycle_number,
+          session_order: workout.session_order, phase_type: workout.phase_type, cycle_number: workout.cycle_number,
         }).select().single();
         if (workoutError || !workoutData) throw workoutError;
         if (workout.exercises.length > 0) {
           const { error: exError } = await supabase.from('plan_exercises').insert(
             workout.exercises.map(ex => {
               const match = matchResults.get(ex.name);
+              // Warm-Up/Cool-Down aus dem Import automatisch dem richtigen Slot zuweisen
+              let slot: string | null = null;
+              if (/^warm.?up:/i.test(ex.name)) slot = 'warmup';
+              else if (/^cool.?down:/i.test(ex.name)) slot = 'cooldown';
               return {
                 workout_id: workoutData.id, name: ex.name, sets: ex.sets,
                 reps_target: ex.reps_target || null, weight_target: ex.weight_target || null,
                 rest_seconds: ex.rest_seconds, notes: ex.notes || null, order_in_workout: ex.order_in_workout,
                 exercise_id: match?.exerciseId || null,
+                exercise_slot: slot,
               };
             })
           );
@@ -365,7 +679,7 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
   const handleClose = () => { setStep('paste'); setMarkdown(''); setParsed(null); setValidation(null); onClose(); };
 
   return (
-    <Dialog open={open} onOpenChange={open => { if (!open) handleClose(); }}>
+    <Dialog open={open} onOpenChange={o => { if (!o) handleClose(); }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
@@ -399,14 +713,6 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
                 {validation.stats.workouts} Einheiten · {validation.stats.exercises} Übungen
                 {validation.stats.cycles > 1 && ` · ${validation.stats.cycles} Zyklen`}
               </p>
-              {(validation.stats.phases.deload > 0 || validation.stats.phases.test > 0) && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {validation.stats.phases.load > 0 && `${validation.stats.phases.load}× Load`}
-                  {validation.stats.phases.deload > 0 && ` · ${validation.stats.phases.deload}× Deload`}
-                  {validation.stats.phases.test > 0 && ` · ${validation.stats.phases.test}× Test`}
-                  {validation.stats.phases.intro > 0 && ` · ${validation.stats.phases.intro}× Intro`}
-                </p>
-              )}
               {validation.warnings.map((w, i) => <p key={i} className="text-xs text-warning mt-1">⚠ {w}</p>)}
             </div>
             <div>
@@ -444,9 +750,7 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// KI-WORKOUT-BUILDER DIALOG
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── AIBuilderDialog ───────────────────────────────────────────────────────────
 
 interface AIBuilderDialogProps {
   open: boolean; onClose: () => void; onImported: () => void;
@@ -466,8 +770,7 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
   const [validation, setValidation] = useState<ReturnType<typeof validateParsedPlan> | null>(null);
 
   const handleGenerate = async () => {
-    setLoading(true);
-    setStep('generating');
+    setLoading(true); setStep('generating');
     try {
       const config: PlanConfig = { weeks, sessionsPerWeek, includeDeload, focus: focus || undefined };
       const data = await loadClientDataForPrompt(clientId);
@@ -475,8 +778,7 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
       const systemPrompt = generateSystemPrompt(data, config);
       const userPrompt = generateUserPrompt(clientName, config);
       const response = await fetch('/api/claude-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [{ role: 'user', content: systemPrompt + '\n\n' + userPrompt }], max_tokens: 8000 }),
       });
       if (!response.ok) throw new Error('API-Fehler');
@@ -486,17 +788,10 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
       setGeneratedMarkdown(markdown);
       const parsedPlan = parsePlan(markdown);
       if (!parsedPlan || parsedPlan.workouts.length === 0) {
-        toast.error('Plan konnte nicht geparst werden. Versuche es erneut.');
-        setStep('config'); setLoading(false); return;
+        toast.error('Plan konnte nicht geparst werden. Versuche es erneut.'); setStep('config'); setLoading(false); return;
       }
-      setParsed(parsedPlan);
-      setValidation(validateParsedPlan(parsedPlan));
-      setStep('preview');
-    } catch (err) {
-      console.error('KI-Plan Fehler:', err);
-      toast.error('Fehler bei der Plan-Generierung');
-      setStep('config');
-    }
+      setParsed(parsedPlan); setValidation(validateParsedPlan(parsedPlan)); setStep('preview');
+    } catch (err) { console.error('KI-Plan Fehler:', err); toast.error('Fehler bei der Plan-Generierung'); setStep('config'); }
     setLoading(false);
   };
 
@@ -527,11 +822,14 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
           const { error: exError } = await supabase.from('plan_exercises').insert(
             workout.exercises.map(ex => {
               const match = matchResults.get(ex.name);
+              let slot: string | null = null;
+              if (/^warm.?up:/i.test(ex.name)) slot = 'warmup';
+              else if (/^cool.?down:/i.test(ex.name)) slot = 'cooldown';
               return {
                 workout_id: workoutData.id, name: ex.name, sets: ex.sets,
                 reps_target: ex.reps_target || null, weight_target: ex.weight_target || null,
                 rest_seconds: ex.rest_seconds, notes: ex.notes || null, order_in_workout: ex.order_in_workout,
-                exercise_id: match?.exerciseId || null,
+                exercise_id: match?.exerciseId || null, exercise_slot: slot,
               };
             })
           );
@@ -553,15 +851,12 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            KI-Workout-Builder
+            <Sparkles className="w-5 h-5 text-primary" />KI-Workout-Builder
           </DialogTitle>
         </DialogHeader>
         {step === 'config' && (
           <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">
-              Erstelle automatisch einen Trainingsplan für <strong>{clientName}</strong> basierend auf Erstgespräch, Assessment und Equipment.
-            </p>
+            <p className="text-sm text-muted-foreground">Erstelle automatisch einen Trainingsplan für <strong>{clientName}</strong>.</p>
             <div className="grid gap-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -596,8 +891,7 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
               </div>
             </div>
             <Button onClick={handleGenerate} disabled={loading} className="w-full gap-2">
-              <Wand2 className="w-4 h-4" />
-              Plan generieren
+              <Wand2 className="w-4 h-4" />Plan generieren
             </Button>
           </div>
         )}
@@ -606,7 +900,7 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
             <div className="text-center">
               <p className="font-medium">Plan wird erstellt...</p>
-              <p className="text-sm text-muted-foreground">Das dauert etwa 10-20 Sekunden</p>
+              <p className="text-sm text-muted-foreground">Das dauert etwa 10–20 Sekunden</p>
             </div>
           </div>
         )}
@@ -614,21 +908,17 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
           <div className="space-y-4">
             <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-3">
               <div className="flex items-center gap-2 text-green-400 mb-2">
-                <CheckCircle className="w-4 h-4" />
-                <span className="font-medium">Plan erfolgreich generiert!</span>
+                <CheckCircle className="w-4 h-4" /><span className="font-medium">Plan erfolgreich generiert!</span>
               </div>
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div><p className="text-muted-foreground">Einheiten</p><p className="font-semibold">{validation.stats.workouts}</p></div>
                 <div><p className="text-muted-foreground">Übungen</p><p className="font-semibold">{validation.stats.exercises}</p></div>
-                <div><p className="text-muted-foreground">Wochen</p><p className="font-semibold">{validation.stats.weeks.length}</p></div>
+                <div><p className="text-muted-foreground">Wochen</p><p className="font-semibold">{validation.stats.weeks?.length ?? weeks}</p></div>
               </div>
             </div>
             {validation.warnings.length > 0 && (
               <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
-                <p className="text-amber-400 text-sm font-medium mb-1">Hinweise:</p>
-                <ul className="text-xs text-muted-foreground space-y-0.5">
-                  {validation.warnings.map((w, i) => <li key={i}>• {w}</li>)}
-                </ul>
+                {validation.warnings.map((w, i) => <p key={i} className="text-xs text-amber-700">⚠ {w}</p>)}
               </div>
             )}
             <div className="border rounded-lg p-3 max-h-[300px] overflow-y-auto">
@@ -657,6 +947,8 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
     </Dialog>
   );
 };
+
+// ── TrainingPlanTab (Haupt-Komponente) ────────────────────────────────────────
 
 const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName }) => {
   const { user } = useAuth();
@@ -721,9 +1013,6 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
     toast.success(isAssessment ? 'Als Assessment markiert' : 'Assessment-Markierung entfernt');
   };
 
-  const handleOpenAssessment = (workout: PlanWorkout) => { setActiveAssessment(workout); };
-  const handleAssessmentComplete = () => { setActiveAssessment(null); loadPlans(); };
-
   const handleDelete = async (planId: string, planName: string) => {
     if (!window.confirm(`Plan "${planName}" wirklich löschen?`)) return;
     const { error } = await supabase.from('training_plans').delete().eq('id', planId);
@@ -752,7 +1041,7 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
           clientId={clientId}
           clientName={clientName}
           onClose={() => setActiveAssessment(null)}
-          onComplete={handleAssessmentComplete}
+          onComplete={() => { setActiveAssessment(null); loadPlans(); }}
         />
       )}
 
@@ -818,7 +1107,7 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
                     workout={workout}
                     onExerciseUpdated={handleExerciseUpdated}
                     onToggleAssessment={handleToggleAssessment}
-                    onOpenAssessment={handleOpenAssessment}
+                    onOpenAssessment={setActiveAssessment}
                     onWorkoutUpdated={loadPlans}
                     clientName={clientName}
                     catalogExercises={catalogExercises}
@@ -849,7 +1138,6 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
                       ))}
                     </select>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">Der Zeiger rückt nach jedem abgeschlossenen Workout automatisch vor.</p>
                 </CardContent>
               </Card>
             )}
@@ -871,7 +1159,7 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
 
         {archivedPlans.length > 0 && (
           <div>
-            <button onClick={() => setShowArchive(v => !v)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={() => setShowArchive(v => !v)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
               {showArchive ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               {archivedPlans.length} archivierter Plan{archivedPlans.length > 1 ? 'e' : ''}
             </button>
@@ -882,7 +1170,7 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
                     <CardContent className="p-3 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium">{plan.name}</p>
-                        <p className="text-xs text-muted-foreground">Importiert {format(new Date(plan.created_at), 'd. MMM yyyy', { locale: de })}{plan.weeks_total && ` · ${plan.weeks_total} Wochen`}</p>
+                        <p className="text-xs text-muted-foreground">Importiert {format(new Date(plan.created_at), 'd. MMM yyyy', { locale: de })}</p>
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleActivate(plan.id)} className="text-xs">Aktivieren</Button>
