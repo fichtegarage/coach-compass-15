@@ -35,10 +35,11 @@ const AppRoutes = () => {
 
   return (
     <Routes>
+      {/* Kunden-App – direkt auf / und /book, kein Redirect */}
+      <Route path="/" element={<BookingPage />} />
       <Route path="/book" element={<BookingPage />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/" element={<Navigate to="/book" replace />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/clients" element={<ClientsPage />} />
