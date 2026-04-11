@@ -6,8 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Circle, Lock, AlertCircle } from "lucide-react";
 
 interface AssessmentGuideProps {
   clientId: string;
@@ -46,183 +45,101 @@ const ASSESSMENT_EXERCISES = [
       "Hüfte nach hinten schieben",
       "Rücken bleibt neutral",
     ],
-    measureHint: "Score 1–5 (1=stark eingeschränkt, 5=perfekt)",
-  },
-  {
-    id: "shoulder_r",
-    name: "Schulter-Mobilitätstest (rechts)",
-    type: "shoulder_cm",
-    cues: [
-      "Rechte Hand von oben, linke von unten",
-      "Hinter dem Rücken zusammenführen",
-      "Keine Rotation des Oberkörpers",
-    ],
-    measureHint: "cm: + = Überlappung (gut), – = Lücke (eingeschränkt)",
-  },
-  {
-    id: "shoulder_l",
-    name: "Schulter-Mobilitätstest (links)",
-    type: "shoulder_cm",
-    cues: [
-      "Linke Hand von oben, rechte von unten",
-      "Hinter dem Rücken zusammenführen",
-      "Keine Rotation des Oberkörpers",
-    ],
-    measureHint: "cm: + = Überlappung (gut), – = Lücke (eingeschränkt)",
+    measureHint: "Score 1–5",
   },
   {
     id: "pushup",
-    name: "Push-up Test",
+    name: "Push-up",
     type: "reps",
     cues: [
       "Hände schulterbreit",
-      "Körper Brett von Kopf bis Ferse",
+      "Körper gerade wie ein Brett",
       "Brust berührt fast den Boden",
-      "Ellbogen ~45° vom Körper",
+      "Ellbogen 45° vom Körper",
     ],
-    measureHint: "Anzahl sauberer Wiederholungen",
+    measureHint: "Maximale saubere Wiederholungen",
+  },
+  {
+    id: "row",
+    name: "TRX / Inverted Row",
+    type: "reps",
+    cues: [
+      "Körper gerade, Fersen am Boden",
+      "Schulterblätter zusammenziehen",
+      "Brust zur Verankerung ziehen",
+      "Kontrollierte Negative",
+    ],
+    measureHint: "Maximale saubere Wiederholungen",
   },
   {
     id: "plank",
     name: "Plank",
     type: "seconds",
     cues: [
-      "Unterarme und Zehen",
-      "Hüfte nicht hängen lassen",
-      "Bauch angespannt",
-      "Schultern über Ellbogen",
+      "Unterarme parallel, Ellbogen unter Schultern",
+      "Becken neutral (kein Hohlkreuz)",
+      "Gesäß und Core aktiv",
+      "Blick zum Boden",
     ],
-    measureHint: "Sekunden halten",
+    measureHint: "Haltezeit in Sekunden",
   },
   {
-    id: "balance",
-    name: "Einbeinstand",
+    id: "shoulder_mobility",
+    name: "Schultermobilität",
+    type: "score",
+    cues: [
+      "Arm hinter Kopf, anderer hinter Rücken",
+      "Fingerspitzen annähern",
+      "Beide Seiten testen",
+      "Keine Schmerzprovokation!",
+    ],
+    measureHint: "Score 1–5 (beide Seiten)",
+  },
+  {
+    id: "single_leg",
+    name: "Single-Leg Balance",
     type: "seconds",
     cues: [
       "Augen offen, dann geschlossen",
       "Standbein minimal gebeugt",
-      "Arme seitlich ausgestreckt",
+      "Arme seitlich",
+      "Beide Seiten messen",
     ],
-    measureHint: "Sekunden je Seite (Augen offen / geschlossen)",
+    measureHint: "Haltezeit in Sekunden (beste Seite)",
   },
 ];
 
-type ArrivalMode = "walking_cycling" | "car_transit" | "unknown";
-
-const WARMUP_EXERCISES = [
-  { id: "armcircles", label: "Armkreisen vorwärts + rückwärts (10×)" },
-  { id: "hipcircles", label: "Hüftkreisen (10× je Seite)" },
-  { id: "legswings", label: "Leg Swings (10× je Seite)" },
-  { id: "retractions", label: "Schulterblatt-Retraktionen (10×)" },
-  { id: "airsquats", label: "Air Squats (10×)" },
-];
-
-function WarmUpBlock() {
-  const [arrival, setArrival] = useState<ArrivalMode>("unknown");
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [cardioChecked, setCardioChecked] = useState(false);
-
-  const needsCardio = arrival !== "walking_cycling";
-  const allDone =
-    WARMUP_EXERCISES.every((e) => checked[e.id]) &&
-    (!needsCardio || cardioChecked);
-
-  function toggle(id: string) {
-    setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
+function getScoreColor(val: string, type: string): string {
+  const n = parseFloat(val);
+  if (isNaN(n)) return "";
+  if (type === "score") {
+    if (n >= 4) return "text-green-600";
+    if (n >= 3) return "text-yellow-600";
+    return "text-red-600";
   }
-
-  return (
-    <Card className="border-orange-200 bg-orange-50">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base text-orange-800">
-          🔥 Warm-up
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Anreise */}
-        <div>
-          <p className="text-sm font-medium text-orange-700 mb-2">
-            Wie ist der Kunde angekommen?
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: "walking_cycling", label: "🚶 Zu Fuß / Fahrrad" },
-              { value: "car_transit", label: "🚗 Auto / ÖPNV" },
-              { value: "unknown", label: "❓ Unbekannt" },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setArrival(opt.value as ArrivalMode)}
-                className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                  arrival === opt.value
-                    ? "bg-orange-500 text-white border-orange-500"
-                    : "bg-white text-orange-700 border-orange-300 hover:bg-orange-100"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Cardio (nur wenn nötig) */}
-        {needsCardio && (
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="cardio"
-              checked={cardioChecked}
-              onCheckedChange={(v) => setCardioChecked(!!v)}
-            />
-            <label
-              htmlFor="cardio"
-              className={`text-sm cursor-pointer ${
-                cardioChecked ? "line-through text-muted-foreground" : ""
-              }`}
-            >
-              5 Min lockeres Gehen / Fahrrad
-            </label>
-          </div>
-        )}
-
-        {arrival === "walking_cycling" && (
-          <p className="text-xs text-orange-600 italic">
-            ✓ Anreise zählt als Cardio-Warm-up – kein zusätzliches Aufwärmen nötig.
-          </p>
-        )}
-
-        {/* Mobility-Checkliste */}
-        <div className="space-y-2">
-          {WARMUP_EXERCISES.map((ex) => (
-            <div key={ex.id} className="flex items-center gap-2">
-              <Checkbox
-                id={ex.id}
-                checked={!!checked[ex.id]}
-                onCheckedChange={() => toggle(ex.id)}
-              />
-              <label
-                htmlFor={ex.id}
-                className={`text-sm cursor-pointer ${
-                  checked[ex.id] ? "line-through text-muted-foreground" : ""
-                }`}
-              >
-                {ex.label}
-              </label>
-            </div>
-          ))}
-        </div>
-
-        {allDone && (
-          <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
-            <CheckCircle2 className="h-4 w-4" />
-            Warm-up abgeschlossen – bereit für das Assessment!
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+  if (type === "reps") {
+    if (n >= 10) return "text-green-600";
+    if (n >= 5) return "text-yellow-600";
+    return "text-red-600";
+  }
+  if (type === "seconds") {
+    if (n >= 60) return "text-green-600";
+    if (n >= 30) return "text-yellow-600";
+    return "text-red-600";
+  }
+  return "";
 }
 
-function PreparationBanner({ clientId }: { clientId: string }) {
+function getScoreEmoji(val: string, type: string): string {
+  const color = getScoreColor(val, type);
+  if (color === "text-green-600") return "🟢";
+  if (color === "text-yellow-600") return "🟡";
+  if (color === "text-red-600") return "🔴";
+  return "⚪";
+}
+
+// ─── Erstgespräch-Banner ───────────────────────────────────────
+function ConversationBanner({ clientId }: { clientId: string }) {
   const [conversation, setConversation] = useState<ClientConversation | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -242,339 +159,364 @@ function PreparationBanner({ clientId }: { clientId: string }) {
   }, [clientId]);
 
   if (loading) return null;
+  if (!conversation) return null;
 
-  if (!conversation) {
+  const items = [
+    { label: "Ziele", value: conversation.goals, icon: "🎯" },
+    { label: "Erfahrung", value: conversation.experience, icon: "📈" },
+    { label: "Kontraindikationen", value: conversation.contraindications, icon: "⚠️" },
+    { label: "Barrieren", value: conversation.barriers, icon: "🚧" },
+  ].filter((i) => i.value);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">📋 Erstgespräch-Zusammenfassung</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {items.map((item) => (
+          <div key={item.label} className="text-sm">
+            <span className="font-medium text-slate-700">{item.icon} {item.label}: </span>
+            <span className="text-slate-600">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Assessment-Zusammenfassung ────────────────────────────────
+function AssessmentSummary({
+  scores,
+  coachNotes,
+  onCoachNotesChange,
+  onFinish,
+  saving,
+  saveError,
+}: {
+  scores: Record<string, string>;
+  coachNotes: string;
+  onCoachNotesChange: (v: string) => void;
+  onFinish: () => void;
+  saving: boolean;
+  saveError: string | null;
+  workoutId?: string;
+}) {
+  const rows = ASSESSMENT_EXERCISES.map((ex) => ({
+    name: ex.name,
+    value: scores[ex.id] ?? "",
+    type: ex.type,
+  }));
+
+  const scored = rows.filter((r) => r.value !== "");
+  const strengths = scored.filter((r) => getScoreColor(r.value, r.type) === "text-green-600");
+  const focus = scored.filter((r) => getScoreColor(r.value, r.type) === "text-red-600");
+
+  return (
+    <div className="space-y-4">
+      <h3 className="font-semibold text-slate-800">📊 Assessment-Ergebnisse</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b">
+              <th className="text-left py-1 pr-4 font-medium text-slate-600">Übung</th>
+              <th className="text-left py-1 font-medium text-slate-600">Ergebnis</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.name} className="border-b border-slate-100">
+                <td className="py-1 pr-4 text-slate-700">{r.name}</td>
+                <td className={`py-1 font-semibold ${getScoreColor(r.value, r.type)}`}>
+                  {getScoreEmoji(r.value, r.type)} {r.value || "–"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {strengths.length > 0 && (
+        <div className="rounded-lg bg-green-50 border border-green-200 p-3">
+          <p className="text-xs font-semibold text-green-700 uppercase mb-1">💪 Stärken</p>
+          <ul className="text-sm text-green-800 space-y-0.5">
+            {strengths.map((s) => <li key={s.name}>✓ {s.name}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {focus.length > 0 && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+          <p className="text-xs font-semibold text-red-700 uppercase mb-1">🎯 Fokuspunkte</p>
+          <ul className="text-sm text-red-800 space-y-0.5">
+            {focus.map((f) => <li key={f.name}>→ {f.name}</li>)}
+          </ul>
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <Label htmlFor="coach-notes">Coach-Notizen</Label>
+        <Textarea
+          id="coach-notes"
+          value={coachNotes}
+          onChange={(e) => onCoachNotesChange(e.target.value)}
+          placeholder="Gesamteindruck, Besonderheiten, nächste Schritte..."
+          rows={4}
+        />
+      </div>
+
+      {saveError && (
+        <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{saveError}</span>
+        </div>
+      )}
+
+      <Button onClick={onFinish} disabled={saving} className="w-full">
+        {saving ? "Wird gespeichert..." : "✅ Assessment abschließen"}
+      </Button>
+    </div>
+  );
+}
+
+// ─── Haupt-Komponente ──────────────────────────────────────────
+export default function AssessmentGuide({ clientId, workoutId, onComplete }: AssessmentGuideProps) {
+  // Phase 1 – Tagesform
+  const [sleep, setSleep] = useState("");
+  const [energy, setEnergy] = useState("");
+  const [complaints, setComplaints] = useState("");
+  const [tagesformDone, setTagesformDone] = useState(false);
+
+  // Phase 2 – Warm-up
+  const [arrival, setArrival] = useState<"walk" | "bike" | "car" | "">("");
+  const [warmupChecks, setWarmupChecks] = useState<Record<string, boolean>>({});
+
+  // Phase 4 – Scores
+  const [scores, setScores] = useState<Record<string, string>>({});
+
+  // Phase 5 – Abschluss
+  const [coachNotes, setCoachNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const WARMUP_ITEMS = [
+    { id: "cardio", label: arrival === "car" ? "5 Min Ergometer / Rudern" : "✓ Anreise zählt als Cardio" },
+    { id: "foam", label: "Foam Rolling: Waden, IT-Band, Brustwirbelsäule" },
+    { id: "hip90", label: "Hip 90/90 – 5x pro Seite" },
+    { id: "worldsgreatest", label: "World's Greatest Stretch – 5x pro Seite" },
+    { id: "shouldercircles", label: "Schulterkreisen + Armkreisen – 10x" },
+    { id: "birddog", label: "Bird-Dog – 5x pro Seite" },
+    { id: "glute", label: "Glute Bridge – 10x" },
+  ];
+
+  const allWarmupDone = WARMUP_ITEMS.every((i) => warmupChecks[i.id]);
+
+  function toggleWarmup(id: string) {
+    setWarmupChecks((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  async function handleFinish() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = {
+        client_id: clientId,
+        workout_id: workoutId ?? null,
+        assessment_scores: scores,
+        coach_notes: coachNotes,
+        sleep_score: sleep,
+        energy_score: energy,
+        complaints,
+        completed_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("workout_logs").insert(payload);
+      if (error) {
+        setSaveError(`Fehler beim Speichern: ${error.message}`);
+        return;
+      }
+      setSaved(true);
+      onComplete?.();
+    } catch (e: unknown) {
+      setSaveError(`Unbekannter Fehler: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (saved) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 mb-4">
-        <AlertCircle className="h-4 w-4 shrink-0" />
-        <span>Kein Erstgespräch gefunden – Ziele und Kontraindikationen unbekannt.</span>
+      <div className="text-center py-12 space-y-2">
+        <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
+        <p className="text-lg font-semibold text-slate-800">Assessment abgeschlossen!</p>
+        <p className="text-sm text-slate-500">Ergebnisse wurden gespeichert.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 mb-4 space-y-2 text-sm">
-      <div className="flex items-center gap-2 font-semibold text-blue-800 mb-1">
-        <CheckCircle2 className="h-4 w-4" />
-        Erstgespräch – Kurzübersicht
-      </div>
-      {conversation.goals && (
-        <div>
-          <span className="font-medium text-blue-700">Ziele: </span>
-          <span className="text-blue-900">{conversation.goals}</span>
-        </div>
-      )}
-      {conversation.experience && (
-        <div>
-          <span className="font-medium text-blue-700">Erfahrung: </span>
-          <span className="text-blue-900">{conversation.experience}</span>
-        </div>
-      )}
-      {conversation.barriers && (
-        <div>
-          <span className="font-medium text-blue-700">Barrieren: </span>
-          <span className="text-blue-900">{conversation.barriers}</span>
-        </div>
-      )}
-      {conversation.motivation_type && (
-        <div>
-          <span className="font-medium text-blue-700">Motivation: </span>
-          <span className="text-blue-900">{conversation.motivation_type}</span>
-        </div>
-      )}
-      {conversation.contraindications && (
-        <div className="flex items-start gap-1 rounded bg-red-100 px-2 py-1 text-red-800">
-          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>
-            <span className="font-semibold">Kontraindikationen: </span>
-            {conversation.contraindications}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function AssessmentGuide({
-  clientId,
-  workoutId,
-  onComplete,
-}: AssessmentGuideProps) {
-  const [activeTab, setActiveTab] = useState("guide");
-  const [scores, setScores] = useState<Record<string, string>>({});
-  const [notes, setNotes] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [planExercises, setPlanExercises] = useState<any[]>([]);
-  const [setLogs, setSetLogs] = useState<
-    Record<string, { reps: string; weight: string; logged: boolean }[]>
-  >({});
-  const [workoutCompleted, setWorkoutCompleted] = useState(false);
-
-  useEffect(() => {
-    if (!workoutId) return;
-    async function loadPlanExercises() {
-      const { data: workout } = await supabase
-        .from("workouts")
-        .select("training_plan_id")
-        .eq("id", workoutId)
-        .single();
-      if (!workout?.training_plan_id) return;
-
-      const { data: planExs } = await supabase
-        .from("plan_exercises")
-        .select("*, exercises(name)")
-        .eq("plan_id", workout.training_plan_id)
-        .order("order_index");
-
-      if (planExs) {
-        const formatted = planExs.map((pe) => ({
-          id: pe.id,
-          name: pe.exercises?.name || "Unbekannte Übung",
-          sets: pe.sets || 3,
-          reps: pe.reps || "10",
-          weight: pe.weight_kg || 0,
-        }));
-        setPlanExercises(formatted);
-        const initialLogs: Record<
-          string,
-          { reps: string; weight: string; logged: boolean }[]
-        > = {};
-        formatted.forEach((ex) => {
-          initialLogs[ex.id] = Array(ex.sets)
-            .fill(null)
-            .map(() => ({
-              reps: ex.reps.toString(),
-              weight: ex.weight.toString(),
-              logged: false,
-            }));
-        });
-        setSetLogs(initialLogs);
-      }
-    }
-    loadPlanExercises();
-  }, [workoutId]);
-
-  async function submitScores() {
-    if (!workoutId) return;
-    const scoresWithNotes = { ...scores, notes };
-    const { error } = await supabase
-      .from("workouts")
-      .update({ assessment_scores: scoresWithNotes })
-      .eq("id", workoutId);
-    if (!error) {
-      setSubmitted(true);
-      if (onComplete) onComplete();
-    }
-  }
-
-  async function logSet(exerciseId: string, exerciseName: string, setIndex: number) {
-    if (!workoutId) return;
-    const setData = setLogs[exerciseId]?.[setIndex];
-    if (!setData) return;
-
-    const { data: existing } = await supabase
-      .from("set_logs")
-      .select("id")
-      .eq("workout_id", workoutId)
-      .eq("exercise_name", exerciseName)
-      .eq("set_number", setIndex + 1)
-      .maybeSingle();
-
-    const payload = {
-      workout_id: workoutId,
-      exercise_name: exerciseName,
-      set_number: setIndex + 1,
-      reps_done: Number(setData.reps) || 0,
-      weight_kg: Number(setData.weight) || 0,
-    };
-
-    if (existing) {
-      await supabase.from("set_logs").update(payload).eq("id", existing.id);
-    } else {
-      await supabase.from("set_logs").insert(payload);
-    }
-
-    setSetLogs((prev) => {
-      const updated = [...(prev[exerciseId] || [])];
-      updated[setIndex] = { ...updated[setIndex], logged: true };
-      return { ...prev, [exerciseId]: updated };
-    });
-  }
-
-  async function completeWorkout() {
-    if (!workoutId) return;
-    await supabase
-      .from("workouts")
-      .update({ completed_at: new Date().toISOString() })
-      .eq("id", workoutId);
-    setWorkoutCompleted(true);
-    if (onComplete) onComplete();
-  }
-
-  return (
     <div className="space-y-4">
-      <PreparationBanner clientId={clientId} />
+      {/* Phase 3 – Erstgespräch-Banner */}
+      <ConversationBanner clientId={clientId} />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="guide">📋 Assessment</TabsTrigger>
-          <TabsTrigger value="workout">💪 Workout</TabsTrigger>
+      <Tabs defaultValue="tagesform">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="tagesform">1 Tagesform</TabsTrigger>
+          <TabsTrigger value="warmup" disabled={!tagesformDone}>
+            {!tagesformDone && <Lock className="h-3 w-3 mr-1" />}2 Warm-up
+          </TabsTrigger>
+          <TabsTrigger value="assessment" disabled={!allWarmupDone || !tagesformDone}>
+            {(!allWarmupDone || !tagesformDone) && <Lock className="h-3 w-3 mr-1" />}3 Assessment
+          </TabsTrigger>
+          <TabsTrigger value="summary">4 Ergebnisse</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="guide" className="space-y-4">
-          <WarmUpBlock />
+        {/* Phase 1 – Tagesform */}
+        <TabsContent value="tagesform" className="space-y-4 pt-4">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Tagesform-Check</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label>😴 Schlafqualität (1–5)</Label>
+                <Input
+                  type="number" min={1} max={5}
+                  value={sleep}
+                  onChange={(e) => setSleep(e.target.value)}
+                  placeholder="z.B. 4"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>⚡ Energielevel (1–5)</Label>
+                <Input
+                  type="number" min={1} max={5}
+                  value={energy}
+                  onChange={(e) => setEnergy(e.target.value)}
+                  placeholder="z.B. 3"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>🩹 Beschwerden / Schmerzen</Label>
+                <Textarea
+                  value={complaints}
+                  onChange={(e) => setComplaints(e.target.value)}
+                  placeholder="Keine / Knie links leicht empfindlich..."
+                  rows={2}
+                />
+              </div>
+              <Button
+                className="w-full"
+                disabled={!sleep || !energy}
+                onClick={() => setTagesformDone(true)}
+              >
+                {tagesformDone ? "✅ Gespeichert" : "Tagesform bestätigen →"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          <div className="text-sm text-muted-foreground">
-            Bewerte jede Übung und trage die Messwerte ein.
-          </div>
-
-          {ASSESSMENT_EXERCISES.map((ex) => (
-            <Card key={ex.id}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">{ex.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-1">
-                  {ex.cues.map((cue, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm">
-                      <span className="text-muted-foreground mt-0.5">•</span>
-                      <span>{cue}</span>
-                    </div>
+        {/* Phase 2 – Warm-up */}
+        <TabsContent value="warmup" className="space-y-4 pt-4">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Warm-up Checkliste</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label>🚗 Anreise</Label>
+                <div className="flex gap-2">
+                  {(["walk", "bike", "car"] as const).map((mode) => (
+                    <Button
+                      key={mode}
+                      variant={arrival === mode ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setArrival(mode)}
+                    >
+                      {mode === "walk" ? "🚶 Zu Fuß" : mode === "bike" ? "🚲 Rad" : "🚗 Auto"}
+                    </Button>
                   ))}
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">
-                    {ex.measureHint}
-                  </Label>
+              </div>
+
+              <div className="space-y-2">
+                {WARMUP_ITEMS.map((item) => {
+                  const checked = !!warmupChecks[item.id];
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => toggleWarmup(item.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border text-left transition-colors ${
+                        checked
+                          ? "bg-green-600 border-green-600 text-white"
+                          : "bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
+                      }`}
+                    >
+                      {checked
+                        ? <CheckCircle2 className="h-5 w-5 shrink-0 text-white" />
+                        : <Circle className="h-5 w-5 shrink-0 text-slate-400" />}
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {allWarmupDone && (
+                <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-800">
+                  ✅ Warm-up abgeschlossen – weiter zum Assessment!
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Phase 3 – Assessment-Übungen */}
+        <TabsContent value="assessment" className="space-y-4 pt-4">
+          {ASSESSMENT_EXERCISES.map((ex) => (
+            <Card key={ex.id}>
+              <CardHeader>
+                <CardTitle className="text-base">{ex.name}</CardTitle>
+                <p className="text-xs text-slate-500">{ex.measureHint}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <ul className="space-y-1">
+                  {ex.cues.map((cue) => (
+                    <li key={cue} className="flex items-start gap-2 text-sm text-slate-600">
+                      <span className="text-blue-400 mt-0.5">→</span>{cue}
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex items-center gap-3">
                   <Input
-                    className="mt-1"
-                    placeholder="Messwert eintragen..."
-                    value={scores[ex.id] || ""}
+                    type="number"
+                    min={0}
+                    placeholder={ex.type === "score" ? "1–5" : ex.type === "reps" ? "Wdh." : "Sek."}
+                    value={scores[ex.id] ?? ""}
                     onChange={(e) =>
                       setScores((prev) => ({ ...prev, [ex.id]: e.target.value }))
                     }
+                    className="w-28"
                   />
+                  <span className={`text-lg font-bold ${getScoreColor(scores[ex.id] ?? "", ex.type)}`}>
+                    {getScoreEmoji(scores[ex.id] ?? "", ex.type)}
+                  </span>
                 </div>
               </CardContent>
             </Card>
           ))}
-
-          <div>
-            <Label>Notizen</Label>
-            <Textarea
-              placeholder="Allgemeine Beobachtungen, Auffälligkeiten..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          {!submitted ? (
-            <Button onClick={submitScores} className="w-full">
-              ✓ Assessment speichern
-            </Button>
-          ) : (
-            <div className="text-center text-green-600 font-medium">
-              ✓ Assessment gespeichert
-            </div>
-          )}
         </TabsContent>
 
-        <TabsContent value="workout" className="space-y-4">
-          {!workoutId ? (
-            <div className="text-sm text-muted-foreground">
-              Kein Workout verknüpft.
-            </div>
-          ) : (
-            <>
-              {planExercises.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  Keine Plan-Übungen gefunden.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {planExercises.map((ex) => (
-                    <Card key={ex.id}>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">{ex.name}</CardTitle>
-                        <div className="text-sm text-muted-foreground">
-                          {ex.sets} Sätze × {ex.reps} Wdh.
-                          {ex.weight > 0 && ` @ ${ex.weight} kg`}
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          {(setLogs[ex.id] || []).map((set, setIndex) => (
-                            <div
-                              key={setIndex}
-                              className={`flex items-center gap-2 ${
-                                set.logged ? "opacity-50" : ""
-                              }`}
-                            >
-                              <span className="text-sm w-12 text-muted-foreground">
-                                Satz {setIndex + 1}
-                              </span>
-                              <Input
-                                type="number"
-                                placeholder="Wdh"
-                                value={set.reps}
-                                onChange={(e) => {
-                                  const updated = [...(setLogs[ex.id] || [])];
-                                  updated[setIndex] = {
-                                    ...updated[setIndex],
-                                    reps: e.target.value,
-                                  };
-                                  setSetLogs((prev) => ({
-                                    ...prev,
-                                    [ex.id]: updated,
-                                  }));
-                                }}
-                                className="w-20"
-                              />
-                              <Input
-                                type="number"
-                                placeholder="kg"
-                                value={set.weight}
-                                onChange={(e) => {
-                                  const updated = [...(setLogs[ex.id] || [])];
-                                  updated[setIndex] = {
-                                    ...updated[setIndex],
-                                    weight: e.target.value,
-                                  };
-                                  setSetLogs((prev) => ({
-                                    ...prev,
-                                    [ex.id]: updated,
-                                  }));
-                                }}
-                                className="w-20"
-                              />
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => logSet(ex.id, ex.name, setIndex)}
-                              >
-                                ✓
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {!workoutCompleted ? (
-                <Button onClick={completeWorkout} className="w-full">
-                  ✓ Workout abschließen
-                </Button>
-              ) : (
-                <div className="text-center text-green-600 font-medium">
-                  ✓ Workout abgeschlossen
-                </div>
-              )}
-            </>
-          )}
+        {/* Phase 4 – Zusammenfassung */}
+        <TabsContent value="summary" className="pt-4">
+          <Card>
+            <CardContent className="pt-4">
+              <AssessmentSummary
+                scores={scores}
+                coachNotes={coachNotes}
+                onCoachNotesChange={setCoachNotes}
+                onFinish={handleFinish}
+                saving={saving}
+                saveError={saveError}
+                workoutId={workoutId}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
