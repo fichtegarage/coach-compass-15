@@ -198,7 +198,7 @@ function PreparationBanner({ clientId }: { clientId: string }) {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-export function AssessmentGuide({
+export default function AssessmentGuide({
   clientId,
   workoutId,
   onComplete,
