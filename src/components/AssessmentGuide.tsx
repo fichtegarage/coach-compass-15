@@ -1,826 +1,817 @@
-/**
- * AssessmentGuide.tsx
- *
- * Coach-seitiges Assessment + integrierter Workout-Logger.
- *
- * Tab 1 – Assessment: 7 standardisierte Übungen mit Messungen + Tiefenfragen
- * Tab 2 – Workout:   Coach loggt Übungen auf behalf des Kunden
- *
- * Assessment-Übungen:
- * 1. Kniebeuge          → Bewegungsqualität (Score 1–5)
- * 2. Hip Hinge          → Bewegungsqualität (Score 1–5)
- * 3. Schulter-Mobilität → Abstand Hände in cm (li. + re.)
- * 4. Push-up Test       → Max. saubere Wiederholungen
- * 5. Plank              → Sekunden
- * 6. Einbeiniger Stand  → Sekunden (li. + re.)
- * 7. Vorwärtsbeugen     → Abstand Fingerkuppen–Boden in cm
- */
-
-import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Loader2, Save, CheckCircle, ChevronDown, ChevronUp,
-  Target, Lightbulb, Dumbbell, X, ClipboardList, Timer,
-  Ruler, Activity,
-} from 'lucide-react';
-import { toast } from 'sonner';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface AssessmentGuideProps {
-  workoutId: string;
   clientId: string;
-  clientName: string;
-  onClose: () => void;
-  onComplete: () => void;
+  workoutId?: string;
+  onComplete?: () => void;
 }
 
-// Messwerte für die 7 Assessment-Übungen
-interface AssessmentMeasurements {
-  squat_score:            number;   // 1–5
-  squat_notes:            string;
-  hinge_score:            number;   // 1–5
-  hinge_notes:            string;
-  shoulder_left_cm:       string;   // Abstand Hände links (cm, + = gut, - = schlecht)
-  shoulder_right_cm:      string;
-  shoulder_notes:         string;
-  pushup_reps:            string;   // Anzahl
-  pushup_notes:           string;
-  plank_seconds:          string;   // Sekunden
-  plank_notes:            string;
-  balance_left_seconds:   string;   // Sekunden links
-  balance_right_seconds:  string;   // Sekunden rechts
-  balance_notes:          string;
-  forward_fold_cm:        string;   // cm (+) = Hände über Boden, (-) = Hände unter Boden
-  forward_fold_notes:     string;
+interface ClientConversation {
+  goals?: string;
+  experience?: string;
+  contraindications?: string;
+  barriers?: string;
+  motivation_type?: string;
 }
 
-interface DeepQuestions {
-  motivation_detail:    string;
-  barriers:             string;
-  lifestyle_factors:    string;
-  recovery_capacity:    string;
-  training_preferences: string;
-}
-
-// Für den Coach-Logger
-interface SetEntry {
-  setNumber: number;
-  weight: string;
-  reps: string;
-  logged: boolean;
-}
-
-interface ExerciseLog {
-  exerciseId: string | null;
-  name: string;
-  setsTarget: number;
-  repsTarget: string;
-  patternId: string | null;
-  coachingCues: string[];
-  measurementHint?: string; // Hinweis was gemessen wird
-  notes: string;
-  sets: SetEntry[];
-}
-
-// ── Assessment-Übungen für den Workout-Logger-Tab ─────────────────────────────
-
-const ASSESSMENT_EXERCISES_LOG: Omit<ExerciseLog, 'sets'>[] = [
+const ASSESSMENT_EXERCISES = [
   {
-    exerciseId: null,
-    name: 'Kniebeuge (Bodyweight)',
-    setsTarget: 3,
-    repsTarget: '8-10',
-    patternId: 'squat',
-    coachingCues: ['Knie nach außen drücken', 'Brust hoch', 'Tiefe bewerten', 'Butt Wink beobachten'],
-    measurementHint: 'Score im Assessment-Tab vergeben',
-    notes: 'Bewegungsanalyse: Tiefe, Knie-Tracking, Rückenposition',
+    id: "squat",
+    name: "Kniebeuge (Bodyweight)",
+    type: "score",
+    cues: [
+      "Füße hüftbreit, Zehen leicht auswärts",
+      "Knie verfolgen Zehenrichtung",
+      "Brust aufrecht, Blick geradeaus",
+      "Tief wie möglich ohne Fersenheben",
+    ],
+    measureHint: "Score 1–5 (1=stark eingeschränkt, 5=perfekt)",
   },
   {
-    exerciseId: null,
-    name: 'Hip Hinge (leichtes RDL)',
-    setsTarget: 3,
-    repsTarget: '8-10',
-    patternId: 'hinge',
-    coachingCues: ['Hüfte nach hinten', 'Rücken gerade', 'Hamstrings spüren', 'Stange nah am Körper'],
-    measurementHint: 'Score im Assessment-Tab vergeben',
-    notes: 'Bewegungsanalyse: Hinge-Pattern, Hüftmobilität, Rückenposition',
+    id: "hinge",
+    name: "Hip Hinge",
+    type: "score",
+    cues: [
+      "Stab an Rücken (Kopf-BWS-Steißbein)",
+      "Knie minimal gebeugt",
+      "Hüfte nach hinten schieben",
+      "Rücken bleibt neutral",
+    ],
+    measureHint: "Score 1–5 (1=stark eingeschränkt, 5=perfekt)",
   },
   {
-    exerciseId: null,
-    name: 'Schulter-Mobilitätstest',
-    setsTarget: 1,
-    repsTarget: '3/Seite',
-    patternId: 'mobility',
-    coachingCues: ['Arm hinter Kopf', 'Anderer Arm hinter Rücken', 'Abstand Hände messen', 'Beide Seiten vergleichen'],
-    measurementHint: '→ Messung in cm im Assessment-Tab eintragen',
-    notes: 'Abstand der Hände: positiv = Hände überlappen, negativ = Lücke',
+    id: "shoulder",
+    name: "Schulter-Mobilitätstest",
+    type: "shoulder_cm",
+    cues: [
+      "Eine Hand von oben, eine von unten",
+      "Hinter dem Rücken zusammenführen",
+      "Keine Rotation des Oberkörpers",
+    ],
+    measureHint:
+      "cm: + = Überlappung (gut), – = Lücke (eingeschränkt), je Seite",
   },
   {
-    exerciseId: null,
-    name: 'Push-up Test',
-    setsTarget: 1,
-    repsTarget: 'Max.',
-    patternId: 'push',
-    coachingCues: ['Körper gerade halten', 'Volle ROM', 'Tempo kontrollieren', 'Zählen bis Technik bricht'],
-    measurementHint: '→ Anzahl sauberer Wdh. im Assessment-Tab eintragen',
-    notes: 'Maximale saubere Wiederholungen – bei Technikverfall abbrechen',
+    id: "pushup",
+    name: "Push-up Test",
+    type: "reps",
+    cues: [
+      "Hände schulterbreit",
+      "Körper Brett von Kopf bis Ferse",
+      "Brust berührt fast den Boden",
+      "Ellbogen ~45° vom Körper",
+    ],
+    measureHint: "Anzahl sauberer Wiederholungen",
   },
   {
-    exerciseId: null,
-    name: 'Plank (Unterarmstütz)',
-    setsTarget: 1,
-    repsTarget: 'Max. Zeit',
-    patternId: 'core',
-    coachingCues: ['Becken neutral', 'Core aktivieren', 'Gleichmäßige Atmung', 'Kein Hohlkreuz'],
-    measurementHint: '→ Sekunden im Assessment-Tab eintragen',
-    notes: 'Zeit stoppen bis Hüfte sinkt oder Technik bricht',
+    id: "plank",
+    name: "Plank",
+    type: "seconds",
+    cues: [
+      "Unterarme und Zehen",
+      "Hüfte nicht hängen lassen",
+      "Bauch angespannt",
+      "Schultern über Ellbogen",
+    ],
+    measureHint: "Sekunden bis Form bricht",
   },
   {
-    exerciseId: null,
-    name: 'Einbeiniger Stand',
-    setsTarget: 1,
-    repsTarget: 'Max. Zeit/Seite',
-    patternId: 'core',
-    coachingCues: ['Augen geradeaus', 'Standbein leicht gebeugt', 'Hüfte gerade', 'Beide Seiten vergleichen'],
-    measurementHint: '→ Sekunden pro Seite im Assessment-Tab eintragen',
-    notes: 'Zeit bis Aufsetzen oder Auslenkung > 45°. Augen offen.',
+    id: "balance",
+    name: "Einbeiniger Stand",
+    type: "balance_seconds",
+    cues: [
+      "Augen offen, flacher Untergrund",
+      "Hüfte gerade (kein Absinken)",
+      "Standbein leicht gebeugt",
+    ],
+    measureHint: "Sekunden links + rechts",
   },
   {
-    exerciseId: null,
-    name: 'Vorwärtsbeugen stehend',
-    setsTarget: 1,
-    repsTarget: '3 Versuche',
-    patternId: 'mobility',
-    coachingCues: ['Beine gerade', 'Langsam absenken', 'Abstand messen', 'Rückenform beobachten'],
-    measurementHint: '→ Abstand Fingerkuppen–Boden in cm im Assessment-Tab eintragen',
-    notes: 'Positiv (+) = Hände unter dem Boden, Negativ (-) = Lücke zum Boden',
+    id: "forward_fold",
+    name: "Vorwärtsbeugen stehend",
+    type: "cm",
+    cues: [
+      "Füße zusammen, Knie gestreckt",
+      "Langsam nach vorne beugen",
+      "Finger Richtung Boden",
+    ],
+    measureHint: "cm: + = unter Bodenniveau (gut), – = über Boden",
   },
 ];
 
-// ── Score-Labels ──────────────────────────────────────────────────────────────
-
-const SCORE_LABELS = [
-  { value: 1, label: 'Eingeschränkt',       color: 'bg-red-500' },
-  { value: 2, label: 'Verbesserungswürdig', color: 'bg-orange-500' },
-  { value: 3, label: 'Durchschnitt',        color: 'bg-yellow-500' },
-  { value: 4, label: 'Gut',                 color: 'bg-lime-500' },
-  { value: 5, label: 'Ausgezeichnet',       color: 'bg-green-500' },
-];
-
-// ── Tiefenfragen ──────────────────────────────────────────────────────────────
-
-const DEEP_QUESTIONS = [
-  { id: 'motivation_detail', label: 'Motivation & Ziel-Detail', placeholder: 'Was genau will der Kunde erreichen? Warum jetzt?',
-    prompts: ['Stell dir vor, du hast dein Ziel erreicht. Was ändert sich als erstes?', 'Wer würde die Veränderung als erstes bemerken?', 'Gibt es ein konkretes Ereignis, auf das du hinarbeitest?'] },
-  { id: 'barriers', label: 'Barrieren & Herausforderungen', placeholder: 'Was hat in der Vergangenheit nicht funktioniert?',
-    prompts: ['Was hat dich bisher davon abgehalten?', 'Woran sind frühere Versuche gescheitert?', 'Was ist deine größte Sorge?'] },
-  { id: 'lifestyle_factors', label: 'Lebensstil-Faktoren', placeholder: 'Schlaf, Stress, Beruf, Familie, Zeitfenster...',
-    prompts: ['Wie sieht ein typischer Tag aus?', 'Wie viel Schlaf bekommst du?', 'Wie würdest du dein Stresslevel einschätzen?'] },
-  { id: 'recovery_capacity', label: 'Regenerationsfähigkeit', placeholder: 'Wie schnell erholt sich der Kunde?',
-    prompts: ['Wie fühlst du dich am Tag nach dem Training?', 'Hast du Schlafprobleme?', 'Wie gehst du mit Stress um?'] },
-  { id: 'training_preferences', label: 'Trainings-Präferenzen', placeholder: 'Lieblingsübungen, Abneigungen, Zeit, Equipment...',
-    prompts: ['Welche Übungen machst du gerne?', 'Was möchtest du auf keinen Fall?', 'Wie viel Zeit pro Woche realistisch?'] },
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const ScoreButtons: React.FC<{ value: number; onChange: (v: number) => void }> = ({ value, onChange }) => (
-  <div className="space-y-1">
-    <div className="flex gap-1">
-      {SCORE_LABELS.map(({ value: v, color }) => (
-        <button key={v} onClick={() => onChange(v)}
-          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${value === v ? `${color} text-white` : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
-          {v}
-        </button>
-      ))}
-    </div>
-    <p className="text-xs text-center text-muted-foreground">
-      {SCORE_LABELS.find(s => s.value === value)?.label}
-    </p>
-  </div>
-);
-
-const MeasurementInput: React.FC<{
-  label: string; value: string; onChange: (v: string) => void;
-  unit: string; hint?: string; inputMode?: 'numeric' | 'decimal';
-}> = ({ label, value, onChange, unit, hint, inputMode = 'numeric' }) => (
-  <div className="space-y-1">
-    <label className="text-sm font-medium text-foreground">{label}</label>
-    {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    <div className="flex items-center gap-2">
-      <input
-        type="number" inputMode={inputMode} value={value}
-        onChange={e => onChange(e.target.value)}
-        onFocus={e => e.target.select()}
-        className="w-28 text-center text-xl font-bold rounded-lg py-2 px-3 border border-border focus:outline-none focus:border-primary bg-background"
-        placeholder="—"
-      />
-      <span className="text-sm text-muted-foreground font-medium">{unit}</span>
-    </div>
-  </div>
-);
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
-const AssessmentGuide: React.FC<AssessmentGuideProps> = ({
-  workoutId, clientId, clientName, onClose, onComplete,
-}) => {
-  const [activeTab, setActiveTab] = useState<'assessment' | 'workout'>('assessment');
+// ─── Vorbereitungs-Banner ────────────────────────────────────────────────────
+function PreparationBanner({ clientId }: { clientId: string }) {
+  const [conversation, setConversation] = useState<ClientConversation | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string | null>('measurements');
-  const [existingAssessmentId, setExistingAssessmentId] = useState<string | null>(null);
-  const [workoutLogId, setWorkoutLogId] = useState<string | null>(null);
-  const startTimeRef = useRef<Date>(new Date());
 
-  // ── Messungen ──────────────────────────────────────────────────────────────
-  const [measurements, setMeasurements] = useState<AssessmentMeasurements>({
-    squat_score: 3, squat_notes: '',
-    hinge_score: 3, hinge_notes: '',
-    shoulder_left_cm: '', shoulder_right_cm: '', shoulder_notes: '',
-    pushup_reps: '', pushup_notes: '',
-    plank_seconds: '', plank_notes: '',
-    balance_left_seconds: '', balance_right_seconds: '', balance_notes: '',
-    forward_fold_cm: '', forward_fold_notes: '',
-  });
-
-  const setM = (key: keyof AssessmentMeasurements, val: string | number) =>
-    setMeasurements(prev => ({ ...prev, [key]: val }));
-
-  // ── Tiefenfragen + Notizen ─────────────────────────────────────────────────
-  const [deepQuestions, setDeepQuestions] = useState({
-    motivation_detail: '', barriers: '', lifestyle_factors: '',
-    recovery_capacity: '', training_preferences: '',
-  });
-  const [coachNotes, setCoachNotes] = useState('');
-  const [strengths, setStrengths] = useState<string[]>([]);
-  const [focusAreas, setFocusAreas] = useState<string[]>([]);
-  const [contraindications, setContraindications] = useState<string[]>([]);
-  const [newStrength, setNewStrength] = useState('');
-  const [newFocus, setNewFocus] = useState('');
-  const [newContra, setNewContra] = useState('');
-
-  // ── Workout Logger ─────────────────────────────────────────────────────────
-  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
-  const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
-
-  // ── Load ───────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const load = async () => {
-      const { data: existing } = await supabase
-        .from('assessment_results').select('*').eq('workout_id', workoutId).maybeSingle();
-
-      if (existing) {
-        setExistingAssessmentId(existing.id);
-        if (existing.measurements) setMeasurements({ ...measurements, ...existing.measurements as AssessmentMeasurements });
-        if (existing.deep_questions) setDeepQuestions(existing.deep_questions as any);
-        setCoachNotes(existing.coach_notes || '');
-        setStrengths(existing.identified_strengths || []);
-        setFocusAreas(existing.focus_areas || []);
-        setContraindications(existing.contraindications || []);
-      }
-
-      const { data: existingLog } = await supabase.from('workout_logs')
-        .select('id').eq('plan_workout_id', workoutId).eq('client_id', clientId).is('completed_at', null).maybeSingle();
-      if (existingLog) setWorkoutLogId(existingLog.id);
-
-      // Plan-Übungen laden
-      const { data: planExercises } = await supabase.from('plan_exercises')
-        .select('id, name, sets, reps_target, rest_seconds, notes, exercise_id')
-        .eq('workout_id', workoutId).order('order_in_workout');
-
-      const assessmentLogs: ExerciseLog[] = ASSESSMENT_EXERCISES_LOG.map(ex => ({
-        ...ex,
-        sets: Array.from({ length: ex.setsTarget }, (_, i) => ({
-          setNumber: i + 1, weight: '', reps: ex.repsTarget, logged: false,
-        })),
-      }));
-
-      const planLogs: ExerciseLog[] = (planExercises || []).map(ex => ({
-        exerciseId: ex.exercise_id || null, name: ex.name,
-        setsTarget: ex.sets || 3, repsTarget: ex.reps_target || '10',
-        patternId: null, coachingCues: [], notes: ex.notes || '',
-        sets: Array.from({ length: ex.sets || 3 }, (_, i) => ({
-          setNumber: i + 1, weight: '', reps: ex.reps_target || '10', logged: false,
-        })),
-      }));
-
-      setExerciseLogs([...assessmentLogs, ...planLogs]);
+    async function load() {
+      const { data } = await supabase
+        .from("client_conversations")
+        .select("goals, experience, contraindications, barriers, motivation_type")
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setConversation(data);
       setLoading(false);
-    };
+    }
     load();
-  }, [workoutId, clientId]);
+  }, [clientId]);
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  if (loading) return null;
 
-  const addItem = (type: 'strength' | 'focus' | 'contra') => {
-    if (type === 'strength' && newStrength.trim()) { setStrengths(p => [...p, newStrength.trim()]); setNewStrength(''); }
-    if (type === 'focus' && newFocus.trim()) { setFocusAreas(p => [...p, newFocus.trim()]); setNewFocus(''); }
-    if (type === 'contra' && newContra.trim()) { setContraindications(p => [...p, newContra.trim()]); setNewContra(''); }
-  };
-
-  const removeItem = (type: 'strength' | 'focus' | 'contra', i: number) => {
-    if (type === 'strength') setStrengths(p => p.filter((_, j) => j !== i));
-    if (type === 'focus') setFocusAreas(p => p.filter((_, j) => j !== i));
-    if (type === 'contra') setContraindications(p => p.filter((_, j) => j !== i));
-  };
-
-  const handleLogSet = async (exerciseIndex: number, setIndex: number, weight: string, reps: string) => {
-    if (!reps) return;
-
-    let logId = workoutLogId;
-    if (!logId) {
-      const { data: newLog } = await supabase.from('workout_logs').insert({
-        client_id: clientId, plan_workout_id: workoutId,
-        started_at: startTimeRef.current.toISOString(),
-      }).select().single();
-      if (newLog) { logId = newLog.id; setWorkoutLogId(newLog.id); }
-    }
-    if (!logId) return;
-
-    const ex = exerciseLogs[exerciseIndex];
-    await supabase.from('set_logs').insert({
-      workout_log_id: logId, exercise_name: ex.name,
-      exercise_id: ex.exerciseId || null,
-      set_number: setIndex + 1,
-      reps_done: parseInt(reps) || 0,
-      weight_kg: parseFloat(weight) || 0,
-      logged_at: new Date().toISOString(),
-    });
-
-    setExerciseLogs(prev => {
-      const next = [...prev];
-      const sets = [...next[exerciseIndex].sets];
-      sets[setIndex] = { ...sets[setIndex], weight, reps, logged: true };
-      if (setIndex + 1 < sets.length && !sets[setIndex + 1].logged) {
-        sets[setIndex + 1] = { ...sets[setIndex + 1], weight, reps };
-      }
-      next[exerciseIndex] = { ...next[exerciseIndex], sets };
-      return next;
-    });
-
-    const allLogged = exerciseLogs[exerciseIndex].sets.map((s, i) => i === setIndex ? true : s.logged).every(Boolean);
-    if (allLogged && exerciseIndex < exerciseLogs.length - 1) {
-      setTimeout(() => setActiveExerciseIndex(exerciseIndex + 1), 400);
-    }
-  };
-
-  const saveAssessment = async () => {
-    const assessmentData = {
-      workout_id: workoutId, client_id: clientId,
-      measurements,
-      // movement_quality rückwärtskompatibel befüllen aus Scores
-      movement_quality: {
-        squat:    { score: measurements.squat_score,  notes: measurements.squat_notes,  cues: [] },
-        hinge:    { score: measurements.hinge_score,  notes: measurements.hinge_notes,  cues: [] },
-        push:     { score: 3, notes: measurements.pushup_notes,     cues: [] },
-        pull:     { score: 3, notes: '',              cues: [] },
-        core:     { score: 3, notes: measurements.plank_notes,      cues: [] },
-        mobility: { score: 3, notes: measurements.shoulder_notes,   cues: [] },
-      },
-      deep_questions: deepQuestions,
-      coach_notes: coachNotes,
-      identified_strengths: strengths,
-      focus_areas: focusAreas,
-      contraindications,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (existingAssessmentId) {
-      await supabase.from('assessment_results').update(assessmentData).eq('id', existingAssessmentId);
-    } else {
-      const { data } = await supabase.from('assessment_results').insert(assessmentData).select().single();
-      if (data) setExistingAssessmentId(data.id);
-    }
-  };
-
-  const handleInterimSave = async () => {
-    setSaving(true);
-    await saveAssessment();
-    await supabase.from('plan_workouts').update({ is_assessment: true, status: 'in_progress' }).eq('id', workoutId);
-    setSaving(false);
-    toast.success('Zwischenstand gespeichert');
-  };
-
-  const handleComplete = async () => {
-    setSaving(true);
-    await saveAssessment();
-
-    if (workoutLogId) {
-      await supabase.from('workout_logs').update({ completed_at: new Date().toISOString() }).eq('id', workoutLogId);
-    }
-
-    await supabase.from('plan_workouts').update({ is_assessment: true, status: 'completed' }).eq('id', workoutId);
-
-    await supabase.from('assessments').upsert({
-      client_id: clientId,
-      squat_score:    measurements.squat_score,
-      hinge_score:    measurements.hinge_score,
-      push_score:     3,
-      pull_score:     3,
-      stability_score: 3,
-      focus_points:   focusAreas.join(', '),
-      strengths:      strengths.join(', '),
-    }, { onConflict: 'client_id' }).catch(() => {});
-
-    setSaving(false);
-    toast.success('Assessment abgeschlossen!');
-    onComplete();
-  };
-
-  // ── SetRow ─────────────────────────────────────────────────────────────────
-  const SetRow: React.FC<{
-    set: SetEntry; isActive: boolean; targetReps: string;
-    onLog: (weight: string, reps: string) => void;
-  }> = ({ set, isActive, targetReps, onLog }) => {
-    const [w, setW] = useState(set.weight);
-    const [r, setR] = useState(set.reps || targetReps);
-
-    if (set.logged) return (
-      <div className="flex items-center gap-3 py-2 px-3 rounded-lg bg-primary/10 border border-primary/20 text-sm">
-        <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
-        <span className="text-muted-foreground">Satz {set.setNumber}</span>
-        <span className="ml-auto font-semibold">{set.weight ? `${set.weight} kg × ${set.reps}` : set.reps}</span>
-      </div>
-    );
-
-    if (!isActive) return (
-      <div className="flex items-center gap-3 py-2 px-3 rounded-lg bg-muted/40 text-sm opacity-50">
-        <span className="w-6 h-6 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center text-xs text-muted-foreground">{set.setNumber}</span>
-        <span className="text-muted-foreground">Satz {set.setNumber}</span>
-      </div>
-    );
-
+  if (!conversation) {
     return (
-      <div className="p-3 rounded-lg border-2 border-primary bg-card space-y-2">
-        <p className="text-xs font-medium text-muted-foreground">Satz {set.setNumber}</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Gewicht (kg)</p>
-            <input type="number" inputMode="decimal" value={w} onChange={e => setW(e.target.value)} onFocus={e => e.target.select()} placeholder="0"
-              className="w-full text-center text-xl font-bold rounded-lg py-2 border border-border focus:outline-none focus:border-primary bg-background" />
+      <Card className="border-amber-200 bg-amber-50">
+        <CardContent className="pt-4 pb-3">
+          <div className="flex items-center gap-2 text-amber-700 text-sm">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>Kein Erstgespräch gefunden – bitte vor dem Assessment nachholen.</span>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Wdh. / Sek.</p>
-            <input type="text" value={r} onChange={e => setR(e.target.value)} onFocus={e => e.target.select()} placeholder={targetReps}
-              className="w-full text-center text-xl font-bold rounded-lg py-2 border border-border focus:outline-none focus:border-primary bg-background" />
-          </div>
-        </div>
-        <button onClick={() => onLog(w, r)} disabled={!r}
-          className="w-full py-3 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40 text-primary-foreground font-bold text-sm active:scale-95 transition-all">
-          Satz abschließen ✓
-        </button>
-      </div>
+        </CardContent>
+      </Card>
     );
-  };
+  }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  if (loading) return (
-    <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-primary" />
-    </div>
-  );
-
-  const currentEx = exerciseLogs[activeExerciseIndex];
-  const activeSetIndex = currentEx?.sets.findIndex(s => !s.logged) ?? -1;
-  const totalSets = exerciseLogs.reduce((s, l) => s + l.sets.length, 0);
-  const loggedSets = exerciseLogs.reduce((s, l) => s + l.sets.filter(x => x.logged).length, 0);
+  const hasContraindications =
+    conversation.contraindications &&
+    conversation.contraindications.trim().length > 0 &&
+    conversation.contraindications.toLowerCase() !== "keine";
 
   return (
-    <div className="fixed inset-0 bg-background z-50 flex flex-col">
-      {/* Header */}
-      <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">Assessment</p>
-          <p className="text-lg font-bold">{clientName}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={handleInterimSave} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span className="ml-1">Speichern</span>
-          </Button>
-          <button onClick={onClose} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-      </div>
+    <Card className="border-blue-200 bg-blue-50">
+      <CardHeader className="pb-2 pt-4">
+        <CardTitle className="text-sm text-blue-800 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4" />
+          Erstgespräch – Zusammenfassung
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 pb-4">
+        {conversation.goals && (
+          <div className="text-sm">
+            <span className="font-medium text-blue-900">Ziele: </span>
+            <span className="text-blue-800">{conversation.goals}</span>
+          </div>
+        )}
+        {conversation.experience && (
+          <div className="text-sm">
+            <span className="font-medium text-blue-900">Erfahrung: </span>
+            <span className="text-blue-800">{conversation.experience}</span>
+          </div>
+        )}
+        {conversation.barriers && (
+          <div className="text-sm">
+            <span className="font-medium text-blue-900">Barrieren: </span>
+            <span className="text-blue-800">{conversation.barriers}</span>
+          </div>
+        )}
+        {hasContraindications ? (
+          <div className="text-sm flex items-start gap-1">
+            <span className="font-medium text-red-700">⚠ Kontraindikationen: </span>
+            <span className="text-red-700">{conversation.contraindications}</span>
+          </div>
+        ) : (
+          <div className="text-sm text-blue-700">
+            ✓ Keine Kontraindikationen
+          </div>
+        )}
+        {conversation.motivation_type && (
+          <div className="text-sm">
+            <span className="font-medium text-blue-900">Motivationstyp: </span>
+            <span className="text-blue-800">{conversation.motivation_type}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+// ────────────────────────────────────────────────────────────────────────────
 
-      {/* Tabs */}
-      <div className="flex border-b border-border bg-card flex-shrink-0">
-        {[
-          { id: 'assessment', icon: <ClipboardList className="w-4 h-4" />, label: 'Assessment' },
-          { id: 'workout',    icon: <Dumbbell className="w-4 h-4" />,      label: `Workout${loggedSets > 0 ? ` (${loggedSets}/${totalSets})` : ''}` },
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-              activeTab === tab.id ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}>
-            {tab.icon}{tab.label}
-          </button>
-        ))}
-      </div>
+export function AssessmentGuide({
+  clientId,
+  workoutId,
+  onComplete,
+}: AssessmentGuideProps) {
+  const [activeTab, setActiveTab] = useState("assessment");
+  const [measurements, setMeasurements] = useState<Record<string, string>>({});
+  const [deepQuestions, setDeepQuestions] = useState({
+    motivation: "",
+    barriers: "",
+    lifestyle: "",
+    regeneration: "",
+    preferences: "",
+  });
+  const [strengths, setStrengths] = useState("");
+  const [focusAreas, setFocusAreas] = useState("");
+  const [contraindications, setContraindications] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+  // Workout-Log State
+  const [planExercises, setPlanExercises] = useState<any[]>([]);
+  const [workoutLogId, setWorkoutLogId] = useState<string | null>(null);
+  const [setLogs, setSetLogs] = useState<
+    Record<string, { reps: string; weight: string }[]>
+  >({});
+  const [workoutStarted, setWorkoutStarted] = useState(false);
+  const [workoutCompleted, setWorkoutCompleted] = useState(false);
 
-        {/* ══ ASSESSMENT TAB ══ */}
-        {activeTab === 'assessment' && (
-          <div className="p-4 space-y-4">
+  useEffect(() => {
+    if (workoutId) {
+      loadPlanExercises();
+      loadExistingLog();
+      loadExistingAssessment();
+    }
+  }, [workoutId]);
 
-            {/* 1. Messungen */}
-            <Card>
-              <CardHeader className="cursor-pointer py-3" onClick={() => setExpandedSection(s => s === 'measurements' ? null : 'measurements')}>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Ruler className="w-5 h-5 text-primary" />
-                    Messwerte
-                  </CardTitle>
-                  {expandedSection === 'measurements' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </div>
-              </CardHeader>
-              {expandedSection === 'measurements' && (
-                <CardContent className="space-y-6">
+  async function loadPlanExercises() {
+    const { data } = await supabase
+      .from("plan_exercises")
+      .select("*")
+      .eq("plan_workout_id", workoutId)
+      .order("order_in_workout");
+    setPlanExercises(data || []);
+    if (data) {
+      const initialSets: Record<string, { reps: string; weight: string }[]> =
+        {};
+      data.forEach((ex) => {
+        initialSets[ex.id] = Array(ex.sets || 3)
+          .fill(null)
+          .map(() => ({ reps: "", weight: "" }));
+      });
+      setSetLogs(initialSets);
+    }
+  }
 
-                  {/* Kniebeuge */}
-                  <div className="space-y-2 pb-4 border-b border-border">
-                    <p className="font-semibold flex items-center gap-2">🦵 Kniebeuge (Bodyweight)</p>
-                    <ScoreButtons value={measurements.squat_score} onChange={v => setM('squat_score', v)} />
-                    <Textarea placeholder="Beobachtungen: Tiefe, Knie-Tracking, Butt Wink..." rows={2}
-                      value={measurements.squat_notes} onChange={e => setM('squat_notes', e.target.value)} />
-                  </div>
+  async function loadExistingLog() {
+    const { data: log } = await supabase
+      .from("workout_logs")
+      .select("*")
+      .eq("plan_workout_id", workoutId)
+      .eq("client_id", clientId)
+      .maybeSingle();
+    if (log) {
+      setWorkoutLogId(log.id);
+      setWorkoutStarted(true);
+      if (log.completed_at) setWorkoutCompleted(true);
+      const { data: sets } = await supabase
+        .from("set_logs")
+        .select("*")
+        .eq("workout_log_id", log.id);
+      if (sets && sets.length > 0) {
+        const grouped: Record<string, { reps: string; weight: string }[]> = {};
+        sets.forEach((s) => {
+          const key = s.exercise_id || s.exercise_name;
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key][s.set_number - 1] = {
+            reps: String(s.reps_done || ""),
+            weight: String(s.weight_kg || ""),
+          };
+        });
+        setSetLogs((prev) => ({ ...prev, ...grouped }));
+      }
+    }
+  }
 
-                  {/* Hip Hinge */}
-                  <div className="space-y-2 pb-4 border-b border-border">
-                    <p className="font-semibold flex items-center gap-2">🏋️ Hip Hinge</p>
-                    <ScoreButtons value={measurements.hinge_score} onChange={v => setM('hinge_score', v)} />
-                    <Textarea placeholder="Beobachtungen: Hinge-Pattern, Rückenposition, Hamstring-Aktivierung..." rows={2}
-                      value={measurements.hinge_notes} onChange={e => setM('hinge_notes', e.target.value)} />
-                  </div>
+  async function loadExistingAssessment() {
+    const { data } = await supabase
+      .from("assessment_results")
+      .select("*")
+      .eq("workout_id", workoutId)
+      .maybeSingle();
+    if (data) {
+      if (data.measurements)
+        setMeasurements(data.measurements as Record<string, string>);
+      if (data.deep_questions)
+        setDeepQuestions(
+          data.deep_questions as {
+            motivation: string;
+            barriers: string;
+            lifestyle: string;
+            regeneration: string;
+            preferences: string;
+          }
+        );
+      if (data.identified_strengths)
+        setStrengths(data.identified_strengths.join(", "));
+      if (data.focus_areas) setFocusAreas(data.focus_areas.join(", "));
+      if (data.contraindications)
+        setContraindications(data.contraindications.join(", "));
+      if (data.notes) setNotes(data.notes);
+    }
+  }
 
-                  {/* Schulter-Mobilitätstest */}
-                  <div className="space-y-3 pb-4 border-b border-border">
-                    <p className="font-semibold flex items-center gap-2">🙌 Schulter-Mobilitätstest</p>
-                    <p className="text-xs text-muted-foreground">Arm hinter Kopf + anderer Arm hinter Rücken → Abstand der Hände messen.<br/>
-                      <span className="text-green-600 font-medium">Positiv (+)</span> = Hände überlappen &nbsp;|&nbsp;
-                      <span className="text-red-600 font-medium">Negativ (-)</span> = Lücke zwischen den Händen
-                    </p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <MeasurementInput label="Linke Seite" value={measurements.shoulder_left_cm}
-                        onChange={v => setM('shoulder_left_cm', v)} unit="cm" inputMode="decimal" />
-                      <MeasurementInput label="Rechte Seite" value={measurements.shoulder_right_cm}
-                        onChange={v => setM('shoulder_right_cm', v)} unit="cm" inputMode="decimal" />
-                    </div>
-                    <Textarea placeholder="Asymmetrien, Einschränkungen..." rows={2}
-                      value={measurements.shoulder_notes} onChange={e => setM('shoulder_notes', e.target.value)} />
-                  </div>
+  async function startWorkout() {
+    const { data: log } = await supabase
+      .from("workout_logs")
+      .insert({
+        client_id: clientId,
+        plan_workout_id: workoutId,
+        started_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (log) {
+      setWorkoutLogId(log.id);
+      setWorkoutStarted(true);
+    }
+  }
 
-                  {/* Push-up Test */}
-                  <div className="space-y-3 pb-4 border-b border-border">
-                    <p className="font-semibold flex items-center gap-2">💪 Push-up Test</p>
-                    <p className="text-xs text-muted-foreground">Maximale saubere Wiederholungen. Abbrechen wenn Technik bricht.</p>
-                    <MeasurementInput label="Wiederholungen" value={measurements.pushup_reps}
-                      onChange={v => setM('pushup_reps', v)} unit="Wdh."
-                      hint="Nur saubere Wdh. zählen (Körper gerade, volle ROM)" />
-                    <Textarea placeholder="Beobachtungen: Schulterblatt-Kontrolle, Core-Stabilität..." rows={2}
-                      value={measurements.pushup_notes} onChange={e => setM('pushup_notes', e.target.value)} />
-                  </div>
+  async function logSet(
+    exerciseId: string,
+    exerciseName: string,
+    setIndex: number
+  ) {
+    if (!workoutLogId) return;
+    const setData = setLogs[exerciseId]?.[setIndex];
+    if (!setData) return;
+    await supabase.from("set_logs").upsert(
+      {
+        workout_log_id: workoutLogId,
+        exercise_id: exerciseId,
+        exercise_name: exerciseName,
+        set_number: setIndex + 1,
+        reps_done: Number(setData.reps) || 0,
+        weight_kg: Number(setData.weight) || 0,
+      },
+      { onConflict: "workout_log_id,exercise_id,set_number" }
+    );
+  }
 
-                  {/* Plank */}
-                  <div className="space-y-3 pb-4 border-b border-border">
-                    <p className="font-semibold flex items-center gap-2"><Timer className="w-4 h-4" /> Plank</p>
-                    <MeasurementInput label="Haltezeit" value={measurements.plank_seconds}
-                      onChange={v => setM('plank_seconds', v)} unit="Sek."
-                      hint="Abbrechen wenn Hüfte sinkt oder Technik bricht" />
-                    <Textarea placeholder="Beobachtungen: Beckenposition, Atemkontrolle..." rows={2}
-                      value={measurements.plank_notes} onChange={e => setM('plank_notes', e.target.value)} />
-                  </div>
+  async function completeWorkout() {
+    if (!workoutLogId) return;
+    await supabase
+      .from("workout_logs")
+      .update({ completed_at: new Date().toISOString() })
+      .eq("id", workoutLogId);
+    await supabase
+      .from("plan_workouts")
+      .update({ status: "completed" })
+      .eq("id", workoutId);
+    setWorkoutCompleted(true);
+  }
 
-                  {/* Einbeiniger Stand */}
-                  <div className="space-y-3 pb-4 border-b border-border">
-                    <p className="font-semibold flex items-center gap-2">🦶 Einbeiniger Stand</p>
-                    <p className="text-xs text-muted-foreground">Augen offen, Standbein leicht gebeugt. Zeit bis Aufsetzen oder starke Auslenkung.</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <MeasurementInput label="Links" value={measurements.balance_left_seconds}
-                        onChange={v => setM('balance_left_seconds', v)} unit="Sek." />
-                      <MeasurementInput label="Rechts" value={measurements.balance_right_seconds}
-                        onChange={v => setM('balance_right_seconds', v)} unit="Sek." />
-                    </div>
-                    <Textarea placeholder="Asymmetrien, Kompensationsmuster..." rows={2}
-                      value={measurements.balance_notes} onChange={e => setM('balance_notes', e.target.value)} />
-                  </div>
+  async function saveAssessment() {
+    setSaving(true);
+    const measurementsData: Record<string, string | number> = {};
+    ASSESSMENT_EXERCISES.forEach((ex) => {
+      if (ex.type === "score") {
+        measurementsData[`${ex.id}_score`] = measurements[`${ex.id}_score`] || "";
+        measurementsData[`${ex.id}_notes`] = measurements[`${ex.id}_notes`] || "";
+      } else if (ex.type === "shoulder_cm") {
+        measurementsData["shoulder_left_cm"] = measurements["shoulder_left_cm"] || "";
+        measurementsData["shoulder_right_cm"] = measurements["shoulder_right_cm"] || "";
+        measurementsData["shoulder_notes"] = measurements["shoulder_notes"] || "";
+      } else if (ex.type === "reps") {
+        measurementsData["pushup_reps"] = measurements["pushup_reps"] || "";
+        measurementsData["pushup_notes"] = measurements["pushup_notes"] || "";
+      } else if (ex.type === "seconds") {
+        measurementsData["plank_seconds"] = measurements["plank_seconds"] || "";
+        measurementsData["plank_notes"] = measurements["plank_notes"] || "";
+      } else if (ex.type === "balance_seconds") {
+        measurementsData["balance_left_seconds"] = measurements["balance_left_seconds"] || "";
+        measurementsData["balance_right_seconds"] = measurements["balance_right_seconds"] || "";
+        measurementsData["balance_notes"] = measurements["balance_notes"] || "";
+      } else if (ex.type === "cm") {
+        measurementsData["forward_fold_cm"] = measurements["forward_fold_cm"] || "";
+        measurementsData["forward_fold_notes"] = measurements["forward_fold_notes"] || "";
+      }
+    });
 
-                  {/* Vorwärtsbeugen */}
-                  <div className="space-y-3">
-                    <p className="font-semibold flex items-center gap-2">🤸 Vorwärtsbeugen stehend</p>
-                    <p className="text-xs text-muted-foreground">
-                      Beine gestreckt, langsam beugen.<br/>
-                      <span className="text-green-600 font-medium">Positiv (+)</span> = Finger unter Bodenniveau &nbsp;|&nbsp;
-                      <span className="text-red-600 font-medium">Negativ (-)</span> = Finger oberhalb Boden
-                    </p>
-                    <MeasurementInput label="Abstand Fingerkuppen–Boden" value={measurements.forward_fold_cm}
-                      onChange={v => setM('forward_fold_cm', v)} unit="cm" inputMode="decimal" />
-                    <Textarea placeholder="Beobachtungen: Rückenform, Hamstring-Spannung..." rows={2}
-                      value={measurements.forward_fold_notes} onChange={e => setM('forward_fold_notes', e.target.value)} />
-                  </div>
+    const payload = {
+      workout_id: workoutId,
+      client_id: clientId,
+      measurements: measurementsData,
+      deep_questions: deepQuestions,
+      identified_strengths: strengths
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      focus_areas: focusAreas
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      contraindications: contraindications
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      notes,
+    };
 
-                </CardContent>
-              )}
-            </Card>
+    const { data: existing } = await supabase
+      .from("assessment_results")
+      .select("id")
+      .eq("workout_id", workoutId)
+      .maybeSingle();
 
-            {/* 2. Tiefenfragen */}
-            <Card>
-              <CardHeader className="cursor-pointer py-3" onClick={() => setExpandedSection(s => s === 'questions' ? null : 'questions')}>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Lightbulb className="w-5 h-5 text-primary" />
-                    Tiefenfragen
-                  </CardTitle>
-                  {expandedSection === 'questions' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </div>
-              </CardHeader>
-              {expandedSection === 'questions' && (
-                <CardContent className="space-y-4">
-                  {DEEP_QUESTIONS.map(q => (
-                    <div key={q.id} className="space-y-2">
-                      <label className="text-sm font-medium">{q.label}</label>
-                      <div className="text-xs text-muted-foreground space-y-0.5">
-                        {q.prompts.map((p, i) => <p key={i}>💬 „{p}"</p>)}
-                      </div>
-                      <Textarea placeholder={q.placeholder} rows={3}
-                        value={deepQuestions[q.id as keyof typeof deepQuestions]}
-                        onChange={e => setDeepQuestions(prev => ({ ...prev, [q.id]: e.target.value }))} />
-                    </div>
-                  ))}
-                </CardContent>
-              )}
-            </Card>
+    if (existing) {
+      await supabase
+        .from("assessment_results")
+        .update(payload)
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("assessment_results").insert(payload);
+    }
 
-            {/* 3. Stärken, Fokus, Kontraindikationen */}
-            <Card>
-              <CardHeader className="cursor-pointer py-3" onClick={() => setExpandedSection(s => s === 'strengths' ? null : 'strengths')}>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Target className="w-5 h-5 text-primary" />
-                    Stärken, Fokus & Kontraindikationen
-                  </CardTitle>
-                  {expandedSection === 'strengths' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </div>
-              </CardHeader>
-              {expandedSection === 'strengths' && (
-                <CardContent className="space-y-4">
-                  {[
-                    { type: 'strength' as const, label: '✅ Stärken', color: 'green', items: strengths, val: newStrength, setVal: setNewStrength },
-                    { type: 'focus' as const,    label: '🎯 Fokuspunkte', color: 'orange', items: focusAreas, val: newFocus, setVal: setNewFocus },
-                    { type: 'contra' as const,   label: '⚠️ Kontraindikationen', color: 'red', items: contraindications, val: newContra, setVal: setNewContra },
-                  ].map(({ type, label, color, items, val, setVal }) => (
-                    <div key={type}>
-                      <p className={`text-sm font-medium text-${color}-600 mb-2`}>{label}</p>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {items.map((item, i) => (
-                          <span key={i} className={`bg-${color}-100 text-${color}-800 px-2 py-1 rounded-full text-xs flex items-center gap-1`}>
-                            {item}<button onClick={() => removeItem(type, i)}>×</button>
-                          </span>
-                        ))}
-                      </div>
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  }
+
+  function updateMeasurement(key: string, value: string) {
+    setMeasurements((prev) => ({ ...prev, [key]: value }));
+  }
+
+  return (
+    <div className="space-y-4 mt-4">
+
+      {/* ── Phase 1: Vorbereitungs-Banner ── */}
+      <PreparationBanner clientId={clientId} />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="workout">📋 Workout</TabsTrigger>
+          <TabsTrigger value="assessment">📊 Assessment</TabsTrigger>
+        </TabsList>
+
+        {/* ===== TAB 1: ASSESSMENT ===== */}
+        <TabsContent value="assessment" className="space-y-6">
+
+          {/* Bewegungsanalyse */}
+          <div>
+            <h3 className="font-semibold mb-3">Bewegungsanalyse</h3>
+            <div className="space-y-4">
+              {ASSESSMENT_EXERCISES.map((ex) => (
+                <Card key={ex.id}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{ex.name}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{ex.measureHint}</p>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {ex.type === "score" && (
+                      <Input
+                        type="number"
+                        min="1"
+                        max="5"
+                        placeholder="Score 1–5"
+                        value={measurements[`${ex.id}_score`] || ""}
+                        onChange={(e) =>
+                          updateMeasurement(`${ex.id}_score`, e.target.value)
+                        }
+                      />
+                    )}
+                    {ex.type === "shoulder_cm" && (
                       <div className="flex gap-2">
-                        <Input value={val} onChange={e => setVal(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && addItem(type)} className="text-sm" placeholder="Hinzufügen..." />
-                        <Button size="sm" onClick={() => addItem(type)}>+</Button>
+                        <Input
+                          type="number"
+                          placeholder="Links (cm)"
+                          value={measurements["shoulder_left_cm"] || ""}
+                          onChange={(e) =>
+                            updateMeasurement("shoulder_left_cm", e.target.value)
+                          }
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Rechts (cm)"
+                          value={measurements["shoulder_right_cm"] || ""}
+                          onChange={(e) =>
+                            updateMeasurement("shoulder_right_cm", e.target.value)
+                          }
+                        />
                       </div>
-                    </div>
-                  ))}
-                </CardContent>
-              )}
-            </Card>
-
-            {/* 4. Notizen */}
-            <Card>
-              <CardHeader className="py-3"><CardTitle className="text-base">📝 Allgemeine Notizen</CardTitle></CardHeader>
-              <CardContent>
-                <Textarea placeholder="Beobachtungen, Eindrücke, nächste Schritte..." value={coachNotes}
-                  onChange={e => setCoachNotes(e.target.value)} rows={4} />
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* ══ WORKOUT TAB ══ */}
-        {activeTab === 'workout' && (
-          <div className="flex flex-col h-full">
-            {/* Fortschritt */}
-            <div className="px-4 py-2 bg-card border-b border-border">
-              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                <span>{loggedSets} / {totalSets} Sätze</span>
-                <span>{totalSets > 0 ? Math.round((loggedSets / totalSets) * 100) : 0}%</span>
-              </div>
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all duration-500"
-                  style={{ width: `${totalSets > 0 ? (loggedSets / totalSets) * 100 : 0}%` }} />
-              </div>
-            </div>
-
-            {/* Navigation */}
-            <div className="flex gap-2 px-4 py-2 overflow-x-auto flex-shrink-0 border-b border-border">
-              {exerciseLogs.map((log, i) => {
-                const done = log.sets.every(s => s.logged);
-                const isAssEx = i < ASSESSMENT_EXERCISES_LOG.length;
-                return (
-                  <button key={i} onClick={() => setActiveExerciseIndex(i)}
-                    className={`flex-shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      i === activeExerciseIndex ? 'bg-primary text-primary-foreground'
-                      : done ? 'bg-primary/20 text-primary'
-                      : isAssEx ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                      : 'bg-muted text-muted-foreground'
-                    }`}>
-                    {log.name.split(' ')[0]}{done && ' ✓'}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Aktive Übung */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {currentEx && (
-                <>
-                  <div>
-                    {activeExerciseIndex < ASSESSMENT_EXERCISES_LOG.length && (
-                      <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full mb-1 inline-block">
-                        Assessment-Übung
-                      </span>
                     )}
-                    <h2 className="text-xl font-bold">{currentEx.name}</h2>
-                    <p className="text-sm text-muted-foreground">{currentEx.setsTarget} Sätze · {currentEx.repsTarget}</p>
-                  </div>
+                    {ex.type === "reps" && (
+                      <Input
+                        type="number"
+                        placeholder="Wiederholungen"
+                        value={measurements["pushup_reps"] || ""}
+                        onChange={(e) =>
+                          updateMeasurement("pushup_reps", e.target.value)
+                        }
+                      />
+                    )}
+                    {ex.type === "seconds" && (
+                      <Input
+                        type="number"
+                        placeholder="Sekunden"
+                        value={measurements["plank_seconds"] || ""}
+                        onChange={(e) =>
+                          updateMeasurement("plank_seconds", e.target.value)
+                        }
+                      />
+                    )}
+                    {ex.type === "balance_seconds" && (
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          placeholder="Links (sek)"
+                          value={measurements["balance_left_seconds"] || ""}
+                          onChange={(e) =>
+                            updateMeasurement(
+                              "balance_left_seconds",
+                              e.target.value
+                            )
+                          }
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Rechts (sek)"
+                          value={measurements["balance_right_seconds"] || ""}
+                          onChange={(e) =>
+                            updateMeasurement(
+                              "balance_right_seconds",
+                              e.target.value
+                            )
+                          }
+                        />
+                      </div>
+                    )}
+                    {ex.type === "cm" && (
+                      <Input
+                        type="number"
+                        placeholder="cm"
+                        value={measurements["forward_fold_cm"] || ""}
+                        onChange={(e) =>
+                          updateMeasurement("forward_fold_cm", e.target.value)
+                        }
+                      />
+                    )}
+                    <Textarea
+                      placeholder="Notizen..."
+                      value={
+                        ex.type === "shoulder_cm"
+                          ? measurements["shoulder_notes"] || ""
+                          : ex.type === "reps"
+                          ? measurements["pushup_notes"] || ""
+                          : ex.type === "seconds"
+                          ? measurements["plank_notes"] || ""
+                          : ex.type === "balance_seconds"
+                          ? measurements["balance_notes"] || ""
+                          : ex.type === "cm"
+                          ? measurements["forward_fold_notes"] || ""
+                          : measurements[`${ex.id}_notes`] || ""
+                      }
+                      onChange={(e) => {
+                        const key =
+                          ex.type === "shoulder_cm"
+                            ? "shoulder_notes"
+                            : ex.type === "reps"
+                            ? "pushup_notes"
+                            : ex.type === "seconds"
+                            ? "plank_notes"
+                            : ex.type === "balance_seconds"
+                            ? "balance_notes"
+                            : ex.type === "cm"
+                            ? "forward_fold_notes"
+                            : `${ex.id}_notes`;
+                        updateMeasurement(key, e.target.value);
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
 
-                  {/* Coaching Cues */}
-                  {currentEx.coachingCues.length > 0 && (
-                    <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2">
-                      <p className="text-xs font-semibold text-amber-700 mb-1.5">🎯 Coaching Cues</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {currentEx.coachingCues.map(cue => (
-                          <span key={cue} className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">{cue}</span>
+          <Separator />
+
+          {/* Tiefenfragen */}
+          <div>
+            <h3 className="font-semibold mb-3">Tiefenfragen</h3>
+            <div className="space-y-3">
+              <div>
+                <Label>Motivation</Label>
+                <Textarea
+                  value={deepQuestions.motivation}
+                  onChange={(e) =>
+                    setDeepQuestions((p) => ({ ...p, motivation: e.target.value }))
+                  }
+                  placeholder="Warum jetzt? Was ist der eigentliche Antrieb?"
+                />
+              </div>
+              <div>
+                <Label>Barrieren</Label>
+                <Textarea
+                  value={deepQuestions.barriers}
+                  onChange={(e) =>
+                    setDeepQuestions((p) => ({ ...p, barriers: e.target.value }))
+                  }
+                  placeholder="Was hat bisher nicht funktioniert?"
+                />
+              </div>
+              <div>
+                <Label>Lifestyle</Label>
+                <Textarea
+                  value={deepQuestions.lifestyle}
+                  onChange={(e) =>
+                    setDeepQuestions((p) => ({ ...p, lifestyle: e.target.value }))
+                  }
+                  placeholder="Alltag, Beruf, Stress..."
+                />
+              </div>
+              <div>
+                <Label>Regeneration</Label>
+                <Textarea
+                  value={deepQuestions.regeneration}
+                  onChange={(e) =>
+                    setDeepQuestions((p) => ({ ...p, regeneration: e.target.value }))
+                  }
+                  placeholder="Schlaf, Erholung, Rhythmus..."
+                />
+              </div>
+              <div>
+                <Label>Präferenzen</Label>
+                <Textarea
+                  value={deepQuestions.preferences}
+                  onChange={(e) =>
+                    setDeepQuestions((p) => ({ ...p, preferences: e.target.value }))
+                  }
+                  placeholder="Was macht Spaß, was nicht?"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Auswertung */}
+          <div>
+            <h3 className="font-semibold mb-3">Auswertung</h3>
+            <div className="space-y-3">
+              <div>
+                <Label>Stärken (kommagetrennt)</Label>
+                <Input
+                  value={strengths}
+                  onChange={(e) => setStrengths(e.target.value)}
+                  placeholder="z.B. Mobilität Hüfte, Oberkörperstabilität"
+                />
+              </div>
+              <div>
+                <Label>Fokus-Bereiche (kommagetrennt)</Label>
+                <Input
+                  value={focusAreas}
+                  onChange={(e) => setFocusAreas(e.target.value)}
+                  placeholder="z.B. Schulterrotation, Rumpfkraft"
+                />
+              </div>
+              <div>
+                <Label>Kontraindikationen (kommagetrennt)</Label>
+                <Input
+                  value={contraindications}
+                  onChange={(e) => setContraindications(e.target.value)}
+                  placeholder="z.B. Knieschmerzen rechts"
+                />
+              </div>
+              <div>
+                <Label>Notizen</Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Weitere Beobachtungen..."
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={saveAssessment} disabled={saving}>
+              {saving ? "Speichere..." : saved ? "✓ Gespeichert" : "Assessment speichern"}
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ===== TAB 2: WORKOUT ===== */}
+        <TabsContent value="workout" className="space-y-4">
+          {!workoutStarted ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">Workout noch nicht gestartet</p>
+              <Button onClick={startWorkout}>▶ Workout starten</Button>
+            </div>
+          ) : (
+            <>
+              {/* Assessment-Übungen als Präfix */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-amber-700">📋 Assessment-Übungen</h3>
+                {ASSESSMENT_EXERCISES.map((ex) => (
+                  <Card key={ex.id} className="border-amber-200 bg-amber-50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-amber-800">
+                        {ex.name}
+                      </CardTitle>
+                      <p className="text-xs text-amber-600">{ex.measureHint}</p>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="text-xs text-amber-700 space-y-0.5">
+                        {ex.cues.map((cue, i) => (
+                          <li key={i}>• {cue}</li>
                         ))}
-                      </div>
-                    </div>
-                  )}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
 
-                  {/* Mess-Hinweis */}
-                  {currentEx.measurementHint && (
-                    <div className="rounded-xl bg-blue-50 border border-blue-100 px-3 py-2 flex items-center gap-2">
-                      <Ruler className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                      <p className="text-xs text-blue-700 font-medium">{currentEx.measurementHint}</p>
-                    </div>
-                  )}
+              <Separator />
 
-                  {/* Plan-Hinweis */}
-                  {currentEx.notes && (
-                    <div className="rounded-xl bg-muted/50 border border-border px-3 py-2">
-                      <p className="text-xs text-muted-foreground">💡 {currentEx.notes}</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    {currentEx.sets.map((set, si) => (
-                      <SetRow key={si} set={set} isActive={si === activeSetIndex}
-                        targetReps={currentEx.repsTarget}
-                        onLog={(w, r) => handleLogSet(activeExerciseIndex, si, w, r)} />
-                    ))}
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    {activeExerciseIndex > 0 && (
-                      <Button variant="outline" size="sm" onClick={() => setActiveExerciseIndex(i => i - 1)} className="flex-1">← Zurück</Button>
-                    )}
-                    {activeExerciseIndex < exerciseLogs.length - 1 && (
-                      <Button variant="outline" size="sm" onClick={() => setActiveExerciseIndex(i => i + 1)} className="flex-1">Nächste →</Button>
-                    )}
-                  </div>
-                </>
+              {/* Plan-Übungen */}
+              {planExercises.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold">💪 Plan-Übungen</h3>
+                  {planExercises.map((ex) => (
+                    <Card key={ex.id}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">{ex.name}</CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {ex.sets} Sätze × {ex.reps_target} Wdh.
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {(setLogs[ex.id] || []).map((set, setIndex) => (
+                            <div
+                              key={setIndex}
+                              className="flex items-center gap-2"
+                            >
+                              <span className="text-sm text-muted-foreground w-16">
+                                Satz {setIndex + 1}
+                              </span>
+                              <Input
+                                type="number"
+                                placeholder="Wdh"
+                                value={set.reps}
+                                onChange={(e) => {
+                                  const updated = [...(setLogs[ex.id] || [])];
+                                  updated[setIndex] = {
+                                    ...updated[setIndex],
+                                    reps: e.target.value,
+                                  };
+                                  setSetLogs((prev) => ({
+                                    ...prev,
+                                    [ex.id]: updated,
+                                  }));
+                                }}
+                                className="w-20"
+                              />
+                              <Input
+                                type="number"
+                                placeholder="kg"
+                                value={set.weight}
+                                onChange={(e) => {
+                                  const updated = [...(setLogs[ex.id] || [])];
+                                  updated[setIndex] = {
+                                    ...updated[setIndex],
+                                    weight: e.target.value,
+                                  };
+                                  setSetLogs((prev) => ({
+                                    ...prev,
+                                    [ex.id]: updated,
+                                  }));
+                                }}
+                                className="w-20"
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  logSet(ex.id, ex.name, setIndex)
+                                }
+                              >
+                                ✓
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               )}
-            </div>
-          </div>
-        )}
-      </div>
 
-      {/* Footer */}
-      <div className="bg-card border-t border-border px-4 py-3 flex gap-2 flex-shrink-0">
-        <Button variant="outline" onClick={handleInterimSave} disabled={saving} className="flex-1">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Save className="w-4 h-4 mr-1.5" />}
-          Zwischenspeichern
-        </Button>
-        <Button onClick={handleComplete} disabled={saving} className="flex-1">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <CheckCircle className="w-4 h-4 mr-1.5" />}
-          Abschließen
-        </Button>
-      </div>
+              {!workoutCompleted ? (
+                <Button onClick={completeWorkout} className="w-full">
+                  ✓ Workout abschließen
+                </Button>
+              ) : (
+                <div className="text-center text-green-600 font-medium">
+                  ✓ Workout abgeschlossen
+                </div>
+              )}
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
-};
-
-export default AssessmentGuide;
+}
