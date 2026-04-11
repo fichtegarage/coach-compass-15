@@ -50,6 +50,8 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+navigateFallback: "index.html",
+navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             // Supabase API – network first, fallback to cache
