@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import AssessmentGuide from "@/components/AssessmentGuide";
 
 const ASSESSMENT_EXERCISES = [
@@ -35,38 +34,32 @@ export default function SessionCoachView({ clientId, workoutId, isAssessment, on
   const [exercises, setExercises] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!workoutId) return;
+    if (!workoutId || isAssessment) return;
     supabase
       .from("workouts")
       .select("exercises")
       .eq("id", workoutId)
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.exercises) setExercises(data.exercises);
+        if (data?.exercises) setExercises(data.exercises as any[]);
       });
-  }, [workoutId]);
+  }, [workoutId, isAssessment]);
 
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
     try {
-      const payload = {
+      const { error } = await supabase.from("session_logs").insert({
         client_id: clientId,
         workout_id: workoutId ?? null,
-        assessment_scores: scores,
+        assessment_scores: isAssessment ? scores : null,
         coach_notes: coachNotes,
-        sleep_score: sleep,
-        energy_score: energy,
+        sleep,
+        energy,
         complaints,
-        completed_at: new Date().toISOString(),
-      };
-      const { error } = await supabase.from("workout_logs").insert(payload);
-      if (error) {
-        setSaveError(`Fehler beim Speichern: ${error.message}`);
-        return;
-      }
+      });
+      if (error) throw error;
 
-      // Assessment abgeschlossen → Timestamp auf Client setzen
       if (isAssessment) {
         await supabase
           .from("clients")
@@ -75,7 +68,9 @@ export default function SessionCoachView({ clientId, workoutId, isAssessment, on
       }
 
       setSaved(true);
-      setTimeout(() => onClose(), 1500);
+      setTimeout(() => onClose(), 1000);
+    } catch (e: any) {
+      setSaveError(e.message);
     } finally {
       setSaving(false);
     }
@@ -83,48 +78,49 @@ export default function SessionCoachView({ clientId, workoutId, isAssessment, on
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-6">
+      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold">{isAssessment ? "🧪 Assessment-Session" : "🏋️ Training-Session"}</h2>
-          <Button variant="ghost" onClick={onClose}>✕</Button>
+          <h2 className="text-lg font-semibold">
+            {isAssessment ? "Assessment durchführen" : "Session dokumentieren"}
+          </h2>
+          <Button variant="ghost" size="sm" onClick={onClose}>✕</Button>
         </div>
 
         {isAssessment && (
-          <AssessmentGuide clientId={clientId} />
-        )}
-
-        {isAssessment && (
-          <Card className="border-amber-200 bg-amber-50">
-            <CardHeader>
-              <CardTitle className="text-base text-amber-800">Assessment-Übungen</CardTitle>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Bewegungsscreening</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {ASSESSMENT_EXERCISES.map((ex) => (
-                <div key={ex.name} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">{ex.name}</span>
-                    <span className="text-xs text-amber-600">{ex.metric}</span>
+            <CardContent className="space-y-3">
+              <AssessmentGuide exercises={ASSESSMENT_EXERCISES} />
+              <div className="space-y-2 mt-3">
+                {ASSESSMENT_EXERCISES.map((ex) => (
+                  <div key={ex.name} className="flex items-center gap-3">
+                    <span className="w-48 text-sm font-medium">{ex.name}</span>
+                    <input
+                      className="flex-1 border rounded px-2 py-1 text-sm"
+                      placeholder={ex.metric}
+                      value={scores[ex.name] ?? ""}
+                      onChange={(e) => setScores((s) => ({ ...s, [ex.name]: e.target.value }))}
+                    />
                   </div>
-                  <p className="text-xs text-slate-500">{ex.cue}</p>
-                  <input
-                    className="w-full border rounded px-2 py-1 text-sm"
-                    placeholder="Ergebnis / Beobachtung"
-                    value={scores[ex.name] ?? ""}
-                    onChange={(e) => setScores((s) => ({ ...s, [ex.name]: e.target.value }))}
-                  />
-                </div>
-              ))}
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}
 
         {!isAssessment && exercises.length > 0 && (
           <Card>
-            <CardHeader><CardTitle className="text-base">Übungen</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Übungen</CardTitle>
+            </CardHeader>
             <CardContent>
               <ul className="space-y-1">
                 {exercises.map((ex: any, i: number) => (
-                  <li key={i} className="text-sm">{ex.name} — {ex.sets}×{ex.reps} {ex.weight ? `@ ${ex.weight}` : ""}</li>
+                  <li key={i} className="text-sm text-slate-600">
+                    {ex.name} — {ex.sets}×{ex.reps} {ex.weight ? `@ ${ex.weight}` : ""}
+                  </li>
                 ))}
               </ul>
             </CardContent>
@@ -132,38 +128,49 @@ export default function SessionCoachView({ clientId, workoutId, isAssessment, on
         )}
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Check-in</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Check-in</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">Schlaf (1–10)</label>
-              <input type="range" min={1} max={10} value={sleep} onChange={(e) => setSleep(Number(e.target.value))} className="w-full" />
-              <span className="text-sm">{sleep}</span>
+            <div className="flex gap-6">
+              <div>
+                <label className="text-sm text-slate-500">Schlaf (1–10)</label>
+                <input type="number" min={1} max={10} value={sleep}
+                  onChange={(e) => setSleep(Number(e.target.value))}
+                  className="block border rounded px-2 py-1 w-16 text-sm mt-1" />
+              </div>
+              <div>
+                <label className="text-sm text-slate-500">Energie (1–10)</label>
+                <input type="number" min={1} max={10} value={energy}
+                  onChange={(e) => setEnergy(Number(e.target.value))}
+                  className="block border rounded px-2 py-1 w-16 text-sm mt-1" />
+              </div>
             </div>
             <div>
-              <label className="text-sm font-medium">Energie (1–10)</label>
-              <input type="range" min={1} max={10} value={energy} onChange={(e) => setEnergy(Number(e.target.value))} className="w-full" />
-              <span className="text-sm">{energy}</span>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Beschwerden / Besonderheiten</label>
-              <Textarea value={complaints} onChange={(e) => setComplaints(e.target.value)} placeholder="z.B. Knieschmerzen links" />
+              <label className="text-sm text-slate-500">Beschwerden</label>
+              <Textarea value={complaints} onChange={(e) => setComplaints(e.target.value)}
+                placeholder="Schmerzen, Einschränkungen…" className="mt-1" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Coach-Notizen</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Coach-Notizen</CardTitle>
+          </CardHeader>
           <CardContent>
-            <Textarea value={coachNotes} onChange={(e) => setCoachNotes(e.target.value)} placeholder="Beobachtungen, Anpassungen, nächste Schritte..." />
+            <Textarea value={coachNotes} onChange={(e) => setCoachNotes(e.target.value)}
+              placeholder="Beobachtungen, nächste Schritte…" />
           </CardContent>
         </Card>
 
         {saveError && <p className="text-red-500 text-sm">{saveError}</p>}
-        {saved && <p className="text-green-600 text-sm font-medium">✅ Session gespeichert!</p>}
-
-        <Button onClick={handleSave} disabled={saving || saved} className="w-full">
-          {saving ? "Speichert..." : saved ? "Gespeichert" : "Session abschließen"}
-        </Button>
+        {saved
+          ? <p className="text-green-600 font-medium text-center">✓ Gespeichert</p>
+          : <Button className="w-full" onClick={handleSave} disabled={saving}>
+              {saving ? "Speichern…" : "Session abschließen"}
+            </Button>
+        }
       </div>
     </div>
   );
