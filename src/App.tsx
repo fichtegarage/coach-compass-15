@@ -1,6 +1,5 @@
 import { HashRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import BookingPage from "./pages/BookingPage";
 
 const Inner = () => {
   const { loading } = useAuth();
@@ -11,10 +10,14 @@ const Inner = () => {
   );
   return (
     <Routes>
-      <Route path="/" element={<BookingPage />} />
+      <Route path="/" element={
+        <div style={{ color:'white', background:'green', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem' }}>
+          ✅ Route / gefunden – kein Redirect
+        </div>
+      } />
       <Route path="*" element={
         <div style={{ color:'white', background:'red', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem' }}>
-          ❌ Route nicht gefunden: {window.location.hash}
+          ❌ Umgeleitet zu: {window.location.hash}
         </div>
       } />
     </Routes>
