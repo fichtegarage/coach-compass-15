@@ -197,7 +197,7 @@ const BookingPage: React.FC = () => {
     setLoading(true);
     const weekEnd = addDays(weekStart, 7);
     const [slotsRes, bookingsRes] = await Promise.all([
-      supabase.from('availability_slots').select('*').eq('is_bookable', true).gte('start_time', weekStart.toISOString()).lt('start_time', weekEnd.toISOString()).order('start_time'),
+      supabase.from('availability_slots').select('*').eq('is_bookable', true).gte('start_time', new Date() > weekStart ? new Date().toISOString() : weekStart.toISOString()).lt('start_time', weekEnd.toISOString()).order('start_time'),
       supabase.from('booking_requests').select('*, availability_slots(start_time, end_time, slot_type)').eq('client_id', clientId).order('requested_at', { ascending: false }),
     ]);
     setSlots(slotsRes.data || []);
@@ -458,9 +458,13 @@ const BookingPage: React.FC = () => {
             )}
 
             <div className="flex items-center justify-between">
-              <button onClick={() => setWeekStart(w => addDays(w, -7))} className="w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors">
-                <ChevronLeft className="w-5 h-5 text-slate-300" />
-              </button>
+              <button
+  onClick={() => setWeekStart(w => addDays(w, -7))}
+  disabled={weekStart <= startOfWeek(new Date(), { weekStartsOn: 1 })}
+  className="w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+>
+  <ChevronLeft className="w-5 h-5 text-slate-300" />
+</button>
               <p className="text-sm font-semibold text-slate-300">
                 {format(weekStart, 'd. MMM', { locale: de })} – {format(addDays(weekStart, 6), 'd. MMM yyyy', { locale: de })}
               </p>
