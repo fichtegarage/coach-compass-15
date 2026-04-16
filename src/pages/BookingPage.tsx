@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfWeek, addDays, isBefore, isSameDay, startOfDay, differenceInDays, differenceInHours } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -8,13 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, MapPin, Video, Phone, Loader2, LogOut, Users, Camera } from 'lucide-react';
 import { buildEmail } from '@/lib/emailTemplate';
 import ClientPlanView from '@/components/ClientPlanView';
 import ClientMetricsWidget from '@/components/ClientMetricsWidget';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
 import CycleTracker from '@/components/CycleTracker';
-import ClientProgressPhotos from '@/components/ClientProgressPhotos';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
@@ -84,9 +83,12 @@ const LegalFooter: React.FC = () => {
   const [modal, setModal] = useState<'impressum' | 'datenschutz' | null>(null);
   return (
     <>
-      <footer className="py-4 flex gap-4 justify-center">
-        <button onClick={() => setModal('impressum')} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Impressum</button>
-        <button onClick={() => setModal('datenschutz')} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Datenschutz</button>
+      <footer className="py-4 flex flex-col items-center gap-2">
+        <img src="/Logo-white.svg" alt="Jakob Neumann Training" className="h-6 w-auto opacity-30" />
+        <div className="flex gap-4">
+          <button onClick={() => setModal('impressum')} className="text-xs text-slate-500 hover:text-slate-400 transition-colors">Impressum</button>
+          <button onClick={() => setModal('datenschutz')} className="text-xs text-slate-500 hover:text-slate-400 transition-colors">Datenschutz</button>
+        </div>
       </footer>
       {modal === 'impressum' && <LegalModal title="Impressum" content={impressumText} onClose={() => setModal(null)} />}
       {modal === 'datenschutz' && <LegalModal title="Datenschutzerklärung" content={datenschutzText} onClose={() => setModal(null)} />}
@@ -131,6 +133,9 @@ const BookingPage: React.FC = () => {
     const email = localStorage.getItem('booking_client_email') || sessionStorage.getItem('booking_client_email') || null;
     return email === 'undefined' ? null : email;
   });
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
@@ -145,6 +150,7 @@ const BookingPage: React.FC = () => {
   const [bookingMessage, setBookingMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [activeView, setActiveView] = useState<'calendar' | 'bookings' | 'plan'>('plan');
+  const [summaryEnabled, setSummaryEnabled] = useState(true);
   const [showCheckin, setShowCheckin] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [clientNotifications, setClientNotifications] = useState<any[]>([]);
@@ -165,7 +171,12 @@ const BookingPage: React.FC = () => {
     if (!code) return;
     setCodeLoading(true);
     setCodeError('');
-    const { data, error } = await supabase.from('clients').select('id, full_name, email').eq('booking_code', code).eq('booking_code_active', true).maybeSingle();
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, full_name, email')
+      .eq('booking_code', code)
+      .eq('booking_code_active', true)
+      .maybeSingle();
     if (error || !data || !data.id) {
       setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
       setCodeLoading(false);
@@ -190,29 +201,71 @@ const BookingPage: React.FC = () => {
     setClientName('');
     setClientEmail(null);
     setPackageInfo(null);
+    setProfilePhotoUrl(null);
+  };
+
+  const handleProfilePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !clientId) return;
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+    setUploadingPhoto(true);
+    const ext = file.name.split('.').pop() || 'jpg';
+    const filePath = `${clientId}/profile-${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from('client-photos')
+      .upload(filePath, file, { upsert: true });
+    if (uploadError) {
+      toast.error('Foto konnte nicht hochgeladen werden');
+      setUploadingPhoto(false);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
+    const newUrl = urlData.publicUrl;
+    setProfilePhotoUrl(newUrl);
+    await supabase.from('clients').update({ profile_photo_url: newUrl }).eq('id', clientId);
+    toast.success('Profilbild gespeichert ✓');
+    setUploadingPhoto(false);
   };
 
   const loadData = async () => {
     if (!clientId) return;
     setLoading(true);
+    const now = new Date();
     const weekEnd = addDays(weekStart, 7);
+    const slotStart = now > weekStart ? now.toISOString() : weekStart.toISOString();
+
     const [slotsRes, bookingsRes] = await Promise.all([
-      supabase.from('availability_slots').select('*').eq('is_bookable', true).gte('start_time', new Date() > weekStart ? new Date().toISOString() : weekStart.toISOString()).lt('start_time', weekEnd.toISOString()).order('start_time'),
+      supabase.from('availability_slots').select('*').eq('is_bookable', true).gte('start_time', slotStart).lt('start_time', weekEnd.toISOString()).order('start_time'),
       supabase.from('booking_requests').select('*, availability_slots(start_time, end_time, slot_type)').eq('client_id', clientId).order('requested_at', { ascending: false }),
     ]);
     setSlots(slotsRes.data || []);
     setBookings(bookingsRes.data || []);
     setNotifications((bookingsRes.data || []).filter((b: any) => b.responded_at && (b.status === 'confirmed' || b.status === 'rejected')).slice(0, 3));
 
-    const { data: clientData } = await supabase.from('clients').select('*, packages!packages_client_id_fkey(id, package_name, sessions_included, end_date, is_duo, partner_client_id)').eq('id', clientId).maybeSingle();
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('*, packages!packages_client_id_fkey(id, package_name, sessions_included, end_date, is_duo, partner_client_id)')
+      .eq('id', clientId)
+      .maybeSingle();
+
     if (clientData) {
       if (clientData.email && clientData.email !== clientEmail) {
         setClientEmail(clientData.email);
         sessionStorage.setItem('booking_client_email', clientData.email);
       }
+      if (clientData.profile_photo_url) {
+        setProfilePhotoUrl(clientData.profile_photo_url);
+      }
+      if (typeof clientData.email_weekly_summary === 'boolean') setSummaryEnabled(clientData.email_weekly_summary);
+
       const myPkgs = Array.isArray(clientData.packages) ? clientData.packages : (clientData.packages ? [clientData.packages] : []);
-      const { data: partnerPkgs } = await supabase.from('packages').select('id, package_name, sessions_included, end_date, is_duo, partner_client_id, client_id').eq('partner_client_id', clientId);
+      const { data: partnerPkgs } = await supabase
+        .from('packages')
+        .select('id, package_name, sessions_included, end_date, is_duo, partner_client_id, client_id')
+        .eq('partner_client_id', clientId);
       const allPkgs = [...myPkgs, ...(partnerPkgs || [])];
+
       for (const pkg of allPkgs) {
         const { count } = await supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('package_id', pkg.id).in('status', ['Completed', 'No-Show']);
         const used = count || 0;
@@ -279,16 +332,15 @@ const BookingPage: React.FC = () => {
     const { error } = await supabase.from('booking_requests').insert({ slot_id: selectedSlot.id, client_id: clientId, status: 'pending', client_message: bookingMessage || null });
     if (error) { toast.error('Buchungsanfrage konnte nicht gesendet werden.'); setSubmitting(false); return; }
     const slotDate = format(new Date(selectedSlot.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
-    const duoHint = packageInfo?.isDuo ? `<p><strong>Duo Training</strong> mit ${duoPartnerName || 'deinem Trainingspartner'}</p>` : '';
     toast.success('Deine Anfrage wurde gesendet!');
     await sendEmail('jakob.neumann@posteo.de', 'Neue Buchungsanfrage 📅',
-      `<p><strong>${clientName}</strong> hat eine neue Buchungsanfrage gestellt.</p><p>Termin: <strong>${slotDate} Uhr</strong></p>${packageInfo?.isDuo ? '<p>⚠️ Duo-Paket</p>' : ''}${bookingMessage ? `<p>Nachricht: „${bookingMessage}"</p>` : ''}<p><a href="https://buchung.jakob-neumann.net">Zur App</a></p>`
+      `<p><strong>${clientName}</strong> hat eine neue Buchungsanfrage gestellt.</p><p>Termin: <strong>${slotDate} Uhr</strong></p>${packageInfo?.isDuo ? '<p>⚠️ Duo-Paket – bitte auch Partner-Session einplanen.</p>' : ''}${bookingMessage ? `<p>Nachricht: „${bookingMessage}"</p>` : ''}<p><a href="https://buchung.jakob-neumann.net">Zur App</a></p>`
     );
     if (clientEmail) {
       await sendEmail(clientEmail, 'Deine Buchungsanfrage wurde eingereicht', buildEmail(`
         <p>Hallo ${clientName},</p>
         <p>deine Anfrage für den Termin am <strong>${slotDate} Uhr</strong> wurde eingereicht.</p>
-        ${duoHint}
+        ${packageInfo?.isDuo && duoPartnerName ? `<p><strong>Duo Training</strong> mit ${duoPartnerName}</p>` : ''}
         <p>Du erhältst eine weitere Benachrichtigung, sobald der Termin bestätigt wurde.</p>
       `));
     }
@@ -310,7 +362,11 @@ const BookingPage: React.FC = () => {
 
   const remainingDays = useMemo(() => packageInfo?.endDate ? differenceInDays(new Date(packageInfo.endDate), new Date()) : null, [packageInfo]);
 
-  // ── Login-Screen ────────────────────────────────────────────────────────────
+  const initials = clientName
+    ? clientName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+    : '?';
+
+  // ── Login-Screen ─────────────────────────────────────────────────────────────
   if (!clientId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-100 flex flex-col items-center justify-center px-4" style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -334,28 +390,67 @@ const BookingPage: React.FC = () => {
             </Button>
           </form>
         </div>
-        <LegalFooter />
+        <footer className="py-4 flex gap-4 justify-center">
+          <span className="text-xs text-slate-400">buchung.jakob-neumann.net</span>
+        </footer>
       </div>
     );
   }
 
-  // ── App ─────────────────────────────────────────────────────────────────────
+  // ── App ──────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col" style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {showCheckin && clientId && (
         <WeeklyCheckin clientId={clientId} clientName={clientName} onDone={() => setShowCheckin(false)} />
       )}
 
+      {/* Hidden file input for photo upload */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleProfilePhotoUpload}
+      />
+
+      {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-3">
+
+            {/* Left: Profile photo + name */}
             <div className="flex items-center gap-3">
-              <img src="/Logo-white.svg" alt="Jakob Neumann Training" className="h-10 w-auto" />
+              {/* Tappable profile photo */}
+              <button
+                onClick={() => photoInputRef.current?.click()}
+                className="relative flex-shrink-0 group"
+                title="Profilbild ändern"
+              >
+                <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-600 flex items-center justify-center ring-2 ring-orange-500/40 group-hover:ring-orange-500/80 transition-all">
+                  {profilePhotoUrl ? (
+                    <img src={profilePhotoUrl} alt={clientName} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-white font-bold text-lg leading-none">{initials}</span>
+                  )}
+                  {uploadingPhoto && (
+                    <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center">
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+                {/* Camera badge */}
+                <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center shadow-md group-hover:bg-orange-400 transition-colors">
+                  <Camera className="w-2.5 h-2.5 text-white" />
+                </div>
+              </button>
+
               <div>
-                <p className="text-white font-bold text-lg leading-tight">{clientName}</p>
+                <p className="text-white font-bold text-base leading-tight">{clientName}</p>
                 <p className="text-orange-400 text-xs">Stronger Every Day</p>
               </div>
             </div>
+
+            {/* Right: Package info + logout */}
             <div className="flex items-center gap-3">
               {packageInfo && (
                 <div className="text-right hidden sm:block">
@@ -375,6 +470,8 @@ const BookingPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Tab Navigation */}
           <div className="flex gap-1 bg-slate-700/50 rounded-xl p-1">
             {[{ id: 'plan', label: '🏋️ Training' }, { id: 'calendar', label: '📅 Buchen' }, { id: 'bookings', label: '📋 Termine' }].map(tab => (
               <button key={tab.id} onClick={() => setActiveView(tab.id as any)} className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === tab.id ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
@@ -418,15 +515,16 @@ const BookingPage: React.FC = () => {
 
       <div className="max-w-4xl mx-auto px-4 py-4 flex-1 w-full">
 
+        {/* ── TRAINING TAB ── */}
         {activeView === 'plan' && (
           <div className="space-y-4">
             <ClientPlanView clientId={clientId} />
             <ClientMetricsWidget clientId={clientId} />
             <CycleTracker clientId={clientId} />
-            <ClientProgressPhotos clientId={clientId} />
           </div>
         )}
 
+        {/* ── BUCHEN TAB ── */}
         {activeView === 'calendar' && (
           <div className="space-y-4">
             {packageInfo && (
@@ -459,12 +557,12 @@ const BookingPage: React.FC = () => {
 
             <div className="flex items-center justify-between">
               <button
-  onClick={() => setWeekStart(w => addDays(w, -7))}
-  disabled={weekStart <= startOfWeek(new Date(), { weekStartsOn: 1 })}
-  className="w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
->
-  <ChevronLeft className="w-5 h-5 text-slate-300" />
-</button>
+                onClick={() => setWeekStart(w => addDays(w, -7))}
+                disabled={weekStart <= startOfWeek(new Date(), { weekStartsOn: 1 })}
+                className="w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-5 h-5 text-slate-300" />
+              </button>
               <p className="text-sm font-semibold text-slate-300">
                 {format(weekStart, 'd. MMM', { locale: de })} – {format(addDays(weekStart, 6), 'd. MMM yyyy', { locale: de })}
               </p>
@@ -480,7 +578,6 @@ const BookingPage: React.FC = () => {
                 {weekDays.map(day => {
                   const dayKey = format(day, 'yyyy-MM-dd');
                   const daySlots = slotsByDay[dayKey] || [];
-                  const isPastDay = isBefore(day, startOfDay(new Date())) && !isSameDay(day, new Date());
                   if (daySlots.length === 0) return null;
                   return (
                     <div key={dayKey}>
@@ -493,11 +590,9 @@ const BookingPage: React.FC = () => {
                           const isBooked = myBookingSlotIds.has(slot.id);
                           const totalBooked = allSlotBookings[slot.id] || 0;
                           const isFull = totalBooked >= (slot.max_bookings ?? 1) && !isBooked;
-                          const isPast = isPastDay || isBefore(new Date(slot.start_time), new Date());
+                          const isPast = isBefore(new Date(slot.start_time), new Date());
                           return (
-                            <button
-                              key={slot.id}
-                              disabled={isBooked || isFull || isPast}
+                            <button key={slot.id} disabled={isBooked || isFull || isPast}
                               onClick={() => { if (!isBooked && !isFull && !isPast) setSelectedSlot(slot); }}
                               className={`w-full rounded-xl border p-3 flex items-center gap-3 transition-all text-left ${
                                 isBooked ? 'bg-primary/10 border-primary/30 opacity-70 cursor-not-allowed'
@@ -536,6 +631,7 @@ const BookingPage: React.FC = () => {
           </div>
         )}
 
+        {/* ── TERMINE TAB ── */}
         {activeView === 'bookings' && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-white">Meine Termine</h2>
@@ -547,7 +643,7 @@ const BookingPage: React.FC = () => {
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-sm font-semibold text-white">{format(new Date(s.session_date), "EEEE, d. MMM · HH:mm", { locale: de })} Uhr</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{s.session_type === 'Duo Training' ? '👥 Duo Training' : s.session_type} · {s.duration_minutes} Min.</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{s.session_type} · {s.duration_minutes} Min.</p>
                       </div>
                       <Badge className="bg-success/10 text-success border-success/20 text-xs flex-shrink-0">Bestätigt</Badge>
                     </div>
@@ -591,6 +687,7 @@ const BookingPage: React.FC = () => {
         )}
       </div>
 
+      {/* Booking Dialog */}
       <Dialog open={!!selectedSlot} onOpenChange={open => { if (!open) { setSelectedSlot(null); setBookingMessage(''); } }}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
