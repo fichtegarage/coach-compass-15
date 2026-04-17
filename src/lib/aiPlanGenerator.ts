@@ -433,9 +433,9 @@ ${config.includeDeload ? `
 2. JEDE Einheit (### Tag X) MUSS eine Tabelle mit mindestens 3 Übungen haben
 3. Keine leeren Einheiten
 4. Tabellenformat mit | immer einhalten
-5. 4. Pausenangaben immer mit "s" (z.B. 90s)
-5. ${config.sessionsPerWeek <= 4 ? 'PFLICHT: Jede Einheit ist ein GANZKÖRPERTRAINING mit Übungen für Beine, Rücken/Bizeps, Brust/Trizeps und Core. KEIN reiner Oberkörper- oder Unterkörpertag!' : 'Split-Struktur möglich: z.B. Push/Pull/Legs, Upper/Lower oder Muskelgruppen-Split'}`;
-6. Bei zeitbasierten Übungen (⏱) statt Wdh. die Sekunden eintragen (z.B. "30s")`;
+5. Pausenangaben immer mit "s" (z.B. 90s)
+6. ${config.sessionsPerWeek <= 4 ? 'PFLICHT: Jede Einheit ist ein GANZKÖRPERTRAINING mit Übungen für Beine, Rücken/Bizeps, Brust/Trizeps und Core. KEIN reiner Oberkörper- oder Unterkörpertag!' : 'Split-Struktur möglich: z.B. Push/Pull/Legs, Upper/Lower oder Muskelgruppen-Split'}`;
+7. Bei zeitbasierten Übungen (⏱) statt Wdh. die Sekunden eintragen (z.B. "30s")`;
 }
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
