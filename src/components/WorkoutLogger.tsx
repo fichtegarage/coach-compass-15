@@ -8,6 +8,7 @@
  * - Große Tipp-Flächen (Gym-tauglich, eine Hand)
  * - Letzter Wert wird automatisch vorausgefüllt
  * - Rest-Timer startet automatisch nach jedem Satz
+ * - SUPERSET-SUPPORT: Timer nur nach letzter Übung im Superset
  * - PR-Erkennung in Echtzeit (🏆)
  * - Zusammenfassung nach Abschluss
  */
@@ -27,7 +28,8 @@ interface PlanExercise {
   rest_seconds: number | null;
   notes: string | null;
   alternative_name: string | null;
-  exercise_id?: string | null; // ← NEU: Verknüpfung zur exercises-Tabelle
+  superset_label: string | null;
+  superset_order: number;
 }
 
 interface PlanWorkout {
@@ -53,22 +55,23 @@ interface ExerciseLog {
 interface WorkoutLoggerProps {
   workout: PlanWorkout;
   clientId: string;
-  planId?: string;
-  sessionId?: string;
+  planId?: string;      // für Zeiger-Vorrücken nach Abschluss
+  sessionId?: string;   // optional – verknüpft Log mit PT-Session
   onClose: () => void;
   onComplete: (summary: WorkoutSummary) => void;
 }
 
 interface WorkoutSummary {
-  duration: number;
+  duration: number; // minutes
   totalSets: number;
-  totalVolume: number;
+  totalVolume: number; // kg
   prs: string[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function parseRepsTarget(repsTarget: string): string {
+  // "8-10" → "8", "AMRAP" → "", "5" → "5"
   if (!repsTarget) return '';
   const match = repsTarget.match(/^\d+/);
   return match ? match[0] : '';
@@ -96,6 +99,7 @@ const RestTimer: React.FC<{ seconds: number; onDone: () => void }> = ({ seconds,
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center px-6">
       <p className="text-white/60 text-sm mb-4 uppercase tracking-widest">Pause</p>
+      {/* Circular progress */}
       <div className="relative w-40 h-40 mb-6">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
           <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
@@ -112,7 +116,11 @@ const RestTimer: React.FC<{ seconds: number; onDone: () => void }> = ({ seconds,
           <span className="text-5xl font-bold text-white tabular-nums">{remaining}</span>
         </div>
       </div>
-      <Button onClick={onDone} className="bg-white/20 hover:bg-white/30 text-white border-0 px-8" variant="outline">
+      <Button
+        onClick={onDone}
+        className="bg-white/20 hover:bg-white/30 text-white border-0 px-8"
+        variant="outline"
+      >
         Überspringen
       </Button>
     </div>
@@ -135,7 +143,9 @@ const SetRow: React.FC<{
     return (
       <div className="flex items-center gap-3 py-3 px-4 rounded-xl bg-primary/10 border border-primary/30">
         <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-          {set.isPR ? <Trophy className="w-3.5 h-3.5 text-white" /> : <Check className="w-3.5 h-3.5 text-white" />}
+          {set.isPR
+            ? <Trophy className="w-3.5 h-3.5 text-white" />
+            : <Check className="w-3.5 h-3.5 text-white" />}
         </div>
         <span className="text-sm text-slate-500">Satz {set.setNumber}</span>
         <span className="ml-auto text-sm font-semibold text-slate-700 tabular-nums">
@@ -161,6 +171,7 @@ const SetRow: React.FC<{
     );
   }
 
+  // Active set – large inputs
   return (
     <div className="py-3 px-4 rounded-xl bg-white border-2 border-primary shadow-sm">
       <div className="flex items-center gap-2 mb-3">
@@ -170,37 +181,56 @@ const SetRow: React.FC<{
         <span className="text-sm font-medium text-slate-700">Satz {set.setNumber}</span>
       </div>
       <div className="grid grid-cols-2 gap-3 mb-3">
+        {/* Weight */}
         <div>
           <p className="text-xs text-slate-400 mb-1">Gewicht (kg)</p>
           <input
-            type="number" inputMode="decimal" value={weight}
+            type="number"
+            inputMode="decimal"
+            value={weight}
             onChange={e => setWeight(e.target.value)}
-            onFocus={e => e.target.select()} placeholder="0"
+            onFocus={e => e.target.select()}
+            placeholder="0"
             className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
+          {/* Quick +/- */}
           <div className="flex gap-1 mt-1.5">
             {['-5', '-2.5', '+2.5', '+5'].map(v => (
-              <button key={v}
-                onClick={() => setWeight(w => Math.max(0, parseFloat(w || '0') + parseFloat(v)).toString())}
-                className="flex-1 text-xs py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors font-medium">
+              <button
+                key={v}
+                onClick={() => setWeight(w => {
+                  const n = parseFloat(w || '0') + parseFloat(v);
+                  return Math.max(0, n).toString();
+                })}
+                className="flex-1 text-xs py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors font-medium"
+              >
                 {v}
               </button>
             ))}
           </div>
         </div>
+        {/* Reps */}
         <div>
           <p className="text-xs text-slate-400 mb-1">Wiederholungen</p>
           <input
-            type="number" inputMode="numeric" value={reps}
+            type="number"
+            inputMode="numeric"
+            value={reps}
             onChange={e => setReps(e.target.value)}
-            onFocus={e => e.target.select()} placeholder={targetReps || '0'}
+            onFocus={e => e.target.select()}
+            placeholder={targetReps || '0'}
             className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
           <div className="flex gap-1 mt-1.5">
             {['-2', '-1', '+1', '+2'].map(v => (
-              <button key={v}
-                onClick={() => setReps(r => Math.max(0, parseInt(r || '0') + parseInt(v)).toString())}
-                className="flex-1 text-xs py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors font-medium">
+              <button
+                key={v}
+                onClick={() => setReps(r => {
+                  const n = parseInt(r || '0') + parseInt(v);
+                  return Math.max(0, n).toString();
+                })}
+                className="flex-1 text-xs py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors font-medium"
+              >
                 {v}
               </button>
             ))}
@@ -230,9 +260,10 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
   const [initializing, setInitializing] = useState(true);
   const startTimeRef = useRef<Date>(new Date());
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  // ── Init: workout_log anlegen + previousBest laden ────────────────────────
   useEffect(() => {
     const init = async () => {
+      // 1. workout_log erstellen
       const { data: logData } = await supabase
         .from('workout_logs')
         .insert({
@@ -247,53 +278,34 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
       if (!logData) { setInitializing(false); return; }
       setWorkoutLogId(logData.id);
 
-      // Für jede Übung: letzten besten Satz laden
-      // NEU: Lookup per exercise_id wenn vorhanden, sonst per exercise_name
+      // 2. Für jede Übung: letzten besten Satz laden
       const logs: ExerciseLog[] = await Promise.all(
         workout.exercises.map(async (ex) => {
-          const prevLogsQuery = supabase
-            .from('workout_logs')
-            .select('id')
-            .eq('client_id', clientId)
-            .neq('id', logData.id);
-
-          const { data: prevLogs } = await prevLogsQuery;
-          const prevLogIds = prevLogs?.map(l => l.id) || [];
-
-          let prevSets = null;
-          if (prevLogIds.length > 0) {
-            // NEU: Bevorzugt per exercise_id matchen (präziser)
-            if (ex.exercise_id) {
-              const { data } = await supabase
-                .from('set_logs')
-                .select('weight_kg, reps_done')
-                .eq('exercise_id', ex.exercise_id)
-                .in('workout_log_id', prevLogIds)
-                .order('logged_at', { ascending: false })
-                .limit(1);
-              prevSets = data;
-            }
-            // Fallback: per Name (Rückwärtskompatibilität)
-            if (!prevSets?.length) {
-              const { data } = await supabase
-                .from('set_logs')
-                .select('weight_kg, reps_done')
-                .eq('exercise_name', ex.name)
-                .in('workout_log_id', prevLogIds)
-                .order('logged_at', { ascending: false })
-                .limit(1);
-              prevSets = data;
-            }
-          }
+          const { data: prevSets } = await supabase
+            .from('set_logs')
+            .select('weight_kg, reps_done')
+            .eq('exercise_name', ex.name)
+            .in(
+              'workout_log_id',
+              (await supabase
+                .from('workout_logs')
+                .select('id')
+                .eq('client_id', clientId)
+                .neq('id', logData.id)
+              ).data?.map(l => l.id) || []
+            )
+            .order('logged_at', { ascending: false })
+            .limit(1);
 
           const prev = prevSets?.[0] ?? null;
+
           const setsCount = ex.sets || 3;
           const defaultReps = parseRepsTarget(ex.reps_target);
           const defaultWeight = prev ? String(prev.weight_kg) : '';
 
           return {
             exercise: ex,
-            previousBest: prev ? { weight: Number(prev.weight_kg), reps: Number(prev.reps_done) } : null,
+            previousBest: prev ? { weight: prev.weight_kg, reps: prev.reps_done } : null,
             sets: Array.from({ length: setsCount }, (_, i) => ({
               setNumber: i + 1,
               reps: defaultReps,
@@ -322,14 +334,13 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
     const setNumber = activeSetIndex + 1;
     const exercise = currentLog.exercise;
 
-    // NEU: exercise_id mitspeichern wenn vorhanden
+    // Satz in DB speichern
     const { data: setData } = await supabase
       .from('set_logs')
       .insert({
         workout_log_id: workoutLogId,
         plan_exercise_id: exercise.id,
         exercise_name: exercise.name,
-        exercise_id: exercise.exercise_id || null, // ← NEU
         set_number: setNumber,
         reps_done: parseInt(reps),
         weight_kg: parseFloat(weight),
@@ -340,10 +351,12 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
 
     const isPR = setData?.is_pr || false;
 
+    // Lokalen State updaten
     setExerciseLogs(prev => {
       const next = [...prev];
       const sets = [...next[currentExerciseIndex].sets];
       sets[activeSetIndex] = { ...sets[activeSetIndex], reps, weight, logged: true, isPR };
+      // Nächsten Satz mit gleichen Werten vorausfüllen (Satz-zu-Satz Vorausfüllen)
       if (activeSetIndex + 1 < sets.length && !sets[activeSetIndex + 1].logged) {
         sets[activeSetIndex + 1] = { ...sets[activeSetIndex + 1], reps, weight };
       }
@@ -353,52 +366,112 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
 
     setSaving(false);
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // SUPERSET REST-TIMER LOGIK
+    // ══════════════════════════════════════════════════════════════════════════
     const isLastSet = activeSetIndex === currentLog.sets.length - 1;
+    
     if (!isLastSet) {
+      // Nicht letzter Satz → normaler Ablauf
       const restTime = exercise.rest_seconds || 90;
       setRestSeconds(restTime);
       setShowRestTimer(true);
+    } else {
+      // Letzter Satz der Übung → prüfen ob Superset
+      const currentExercise = exerciseLogs[currentExerciseIndex]?.exercise;
+      const nextExercise = exerciseLogs[currentExerciseIndex + 1]?.exercise;
+      
+      // Ist die NÄCHSTE Übung im gleichen Superset?
+      const isInSameSuperset = 
+        currentExercise?.superset_label && 
+        nextExercise?.superset_label &&
+        currentExercise.superset_label === nextExercise.superset_label;
+      
+      if (!isInSameSuperset) {
+        // Kein Superset oder letzte Übung im Superset → Timer starten
+        const restTime = exercise.rest_seconds || 90;
+        setRestSeconds(restTime);
+        setShowRestTimer(true);
+      }
+      // Wenn isInSameSuperset = true → KEIN Timer, direkt weiter zur nächsten Übung
     }
-  }, [workoutLogId, currentLog, activeSetIndex, currentExerciseIndex]);
+    // ══════════════════════════════════════════════════════════════════════════
+  }, [workoutLogId, currentLog, activeSetIndex, currentExerciseIndex, exerciseLogs]);
 
   const handleFinish = async () => {
     if (!workoutLogId) return;
 
     const now = new Date();
-    await supabase.from('workout_logs').update({ completed_at: now.toISOString() }).eq('id', workoutLogId);
+    await supabase
+      .from('workout_logs')
+      .update({ completed_at: now.toISOString() })
+      .eq('id', workoutLogId);
 
-    // Zeiger vorrücken
+    // ── Zeiger vorrücken ──────────────────────────────────────────────────────
     if (planId && workout.id) {
+      // Nächstes Workout ermitteln
       const { data: nextWorkout } = await supabase
         .from('plan_workouts')
         .select('id, week_number, week_label, day_label')
         .eq('plan_id', planId)
-        .or(`week_number.gt.${(workout as any).week_number ?? 0},and(week_number.eq.${(workout as any).week_number ?? 0},order_in_week.gt.${(workout as any).order_in_week ?? 0})`)
+        .or(`week_number.gt.${workout.week_number ?? 0},and(week_number.eq.${workout.week_number ?? 0},order_in_week.gt.${workout.order_in_week ?? 0})`)
         .order('week_number', { ascending: true })
         .order('order_in_week', { ascending: true })
         .limit(1)
         .maybeSingle();
 
-      const { data: planMeta } = await supabase.from('training_plans').select('weeks_total').eq('id', planId).single();
+      // Maximale Woche im Plan ermitteln
+      const { data: planMeta } = await supabase
+        .from('training_plans')
+        .select('weeks_total')
+        .eq('id', planId)
+        .single();
+
       const maxWeek = planMeta?.weeks_total ?? null;
       const nextId = nextWorkout?.id ?? null;
       const nextWeek = nextWorkout?.week_number ?? null;
 
-      await supabase.from('training_plans').update({ next_plan_workout_id: nextId }).eq('id', planId);
+      // Zeiger updaten
+      await supabase
+        .from('training_plans')
+        .update({ next_plan_workout_id: nextId })
+        .eq('id', planId);
 
+      // Notification an Trainer: wenn nächste Woche = letzte Woche UND Paket läuft noch
       if (maxWeek && nextWeek === maxWeek) {
-        const { data: clientData } = await supabase.from('clients').select('packages(end_date)').eq('id', clientId).maybeSingle();
-        const endDate = (clientData?.packages as any)?.[0]?.end_date ?? (clientData?.packages as any)?.end_date ?? null;
-        const hasTimeLeft = endDate ? new Date(endDate) > new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) : true;
+        // Paket-Laufzeit prüfen
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('packages(end_date)')
+          .eq('id', clientId)
+          .maybeSingle();
+
+        const endDate = (clientData?.packages as any)?.[0]?.end_date
+          ?? (clientData?.packages as any)?.end_date
+          ?? null;
+
+        const hasTimeLeft = endDate
+          ? new Date(endDate) > new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // > 2 Wochen
+          : true;
+
         if (hasTimeLeft) {
-          await supabase.from('client_notifications').insert({ client_id: clientId, message: `⚠️ Plan-Ende naht: Letzte Woche des Trainingsplans erreicht. Bitte neuen Plan vorbereiten.` });
-          await supabase.from('plan_end_alerts').insert({ client_id: clientId, plan_id: planId, alerted_at: now.toISOString() }).catch(() => {});
+          await supabase.from('client_notifications').insert({
+            client_id: clientId,
+            message: `⚠️ Plan-Ende naht: ${clientId} erreicht die letzte Woche des Trainingsplans. Bitte neuen Plan vorbereiten.`,
+          });
+          await supabase.from('plan_end_alerts').insert({
+            client_id: clientId,
+            plan_id: planId,
+            alerted_at: now.toISOString(),
+          }).catch(() => {}); // Tabelle existiert noch nicht → ignorieren bis Migration
         }
       }
     }
 
+    // Zusammenfassung berechnen
     const duration = Math.round((now.getTime() - startTimeRef.current.getTime()) / 60000);
-    let totalSets = 0, totalVolume = 0;
+    let totalSets = 0;
+    let totalVolume = 0;
     const prs: string[] = [];
 
     exerciseLogs.forEach(log => {
@@ -429,9 +502,15 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
 
   return (
     <>
-      {showRestTimer && <RestTimer seconds={restSeconds} onDone={() => setShowRestTimer(false)} />}
+      {showRestTimer && (
+        <RestTimer
+          seconds={restSeconds}
+          onDone={() => setShowRestTimer(false)}
+        />
+      )}
 
       <div className="fixed inset-0 bg-slate-50 z-40 flex flex-col" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+
         {/* Header */}
         <div className="bg-white border-b border-slate-200 px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
@@ -440,14 +519,22 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
               <p className="text-base font-bold text-slate-900 leading-tight">{workout.day_label}</p>
             </div>
             <button
-              onClick={() => { if (window.confirm('Training abbrechen? Der bisherige Fortschritt wird gespeichert.')) onClose(); }}
+              onClick={() => {
+                if (window.confirm('Training abbrechen? Der bisherige Fortschritt wird gespeichert.')) {
+                  onClose();
+                }
+              }}
               className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"
             >
               <X className="w-4 h-4 text-slate-500" />
             </button>
           </div>
+          {/* Progress bar */}
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${progress * 100}%` }} />
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-500"
+              style={{ width: `${progress * 100}%` }}
+            />
           </div>
         </div>
 
@@ -458,11 +545,25 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
             const totalSets = log.sets.length;
             const done = loggedSets === totalSets;
             const active = i === currentExerciseIndex;
+            
+            // Superset-Label anzeigen
+            const supersetLabel = log.exercise.superset_label 
+              ? `${log.exercise.superset_label}${log.exercise.superset_order}`
+              : null;
+            
             return (
-              <button key={i} onClick={() => setCurrentExerciseIndex(i)}
+              <button
+                key={i}
+                onClick={() => setCurrentExerciseIndex(i)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  active ? 'bg-primary text-white' : done ? 'bg-primary/20 text-primary' : 'bg-slate-100 text-slate-500'
-                }`}>
+                  active
+                    ? 'bg-primary text-white'
+                    : done
+                    ? 'bg-primary/20 text-primary'
+                    : 'bg-slate-100 text-slate-500'
+                }`}
+              >
+                {supersetLabel && <span className="font-bold mr-1">{supersetLabel}</span>}
                 {log.exercise.name.split(' ')[0]}
                 {done && ' ✓'}
                 {!done && active && ` ${loggedSets}/${totalSets}`}
@@ -475,8 +576,23 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {currentLog && (
             <>
+              {/* Exercise Header */}
               <div className="flex items-start justify-between">
                 <div>
+                  {/* Superset-Badge */}
+                  {currentLog.exercise.superset_label && (
+                    <div className="inline-flex items-center gap-1.5 mb-1.5 px-2 py-0.5 rounded-full bg-blue-100 border border-blue-300">
+                      <span className="text-xs font-bold text-blue-700">
+                        {currentLog.exercise.superset_label}{currentLog.exercise.superset_order}
+                      </span>
+                      {exerciseLogs[currentExerciseIndex + 1]?.exercise?.superset_label === currentLog.exercise.superset_label && (
+                        <span className="text-xs text-blue-600">
+                          ↔ {exerciseLogs[currentExerciseIndex + 1].exercise.superset_label}{exerciseLogs[currentExerciseIndex + 1].exercise.superset_order}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
                   <h2 className="text-xl font-bold text-slate-900">{currentLog.exercise.name}</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
                     {currentLog.exercise.sets} Sätze · {currentLog.exercise.reps_target} Wdh.
@@ -487,13 +603,18 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                       Letztes Mal: {currentLog.previousBest.weight}kg × {currentLog.previousBest.reps}
                     </p>
                   )}
+                  {/* Ersatzübung */}
                   {currentLog.exercise.alternative_name && !currentLog.sets.some(s => s.logged) && (
                     <button
                       onClick={() => {
                         setExerciseLogs(prev => {
                           const next = [...prev];
                           const log = { ...next[currentExerciseIndex] };
-                          log.exercise = { ...log.exercise, name: log.exercise.alternative_name!, alternative_name: log.exercise.name };
+                          log.exercise = {
+                            ...log.exercise,
+                            name: log.exercise.alternative_name!,
+                            alternative_name: log.exercise.name,
+                          };
                           next[currentExerciseIndex] = log;
                           return next;
                         });
@@ -505,12 +626,18 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                   )}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => setCurrentExerciseIndex(i => Math.max(0, i - 1))} disabled={currentExerciseIndex === 0}
-                    className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center disabled:opacity-30">
+                  <button
+                    onClick={() => setCurrentExerciseIndex(i => Math.max(0, i - 1))}
+                    disabled={currentExerciseIndex === 0}
+                    className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center disabled:opacity-30"
+                  >
                     <ChevronLeft className="w-4 h-4 text-slate-600" />
                   </button>
-                  <button onClick={() => setCurrentExerciseIndex(i => Math.min(exerciseLogs.length - 1, i + 1))} disabled={currentExerciseIndex === exerciseLogs.length - 1}
-                    className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center disabled:opacity-30">
+                  <button
+                    onClick={() => setCurrentExerciseIndex(i => Math.min(exerciseLogs.length - 1, i + 1))}
+                    disabled={currentExerciseIndex === exerciseLogs.length - 1}
+                    className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center disabled:opacity-30"
+                  >
                     <ChevronRight className="w-4 h-4 text-slate-600" />
                   </button>
                 </div>
@@ -522,9 +649,13 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                 </div>
               )}
 
+              {/* Sets */}
               <div className="space-y-2">
                 {currentLog.sets.map((set, si) => (
-                  <SetRow key={si} set={set} isActive={si === activeSetIndex}
+                  <SetRow
+                    key={si}
+                    set={set}
+                    isActive={si === activeSetIndex}
                     targetReps={parseRepsTarget(currentLog.exercise.reps_target)}
                     previousWeight={currentLog.previousBest ? String(currentLog.previousBest.weight) : ''}
                     onLog={(reps, weight) => handleLogSet(reps, weight)}
@@ -538,8 +669,10 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
         {/* Footer */}
         <div className="bg-white border-t border-slate-200 px-4 py-3 flex-shrink-0 safe-area-bottom">
           {allDone ? (
-            <button onClick={handleFinish}
-              className="w-full py-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold text-lg transition-colors active:scale-95">
+            <button
+              onClick={handleFinish}
+              className="w-full py-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold text-lg transition-colors active:scale-95"
+            >
               Training abschließen 🎉
             </button>
           ) : (
