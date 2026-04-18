@@ -636,7 +636,7 @@ const BookingsPage: React.FC = () => {
                           const isScheduled = session.status === 'Scheduled';
                           const clientName = session.clients?.full_name?.split(' ')[0] || '?';
                           const secondClientName = session.second_client?.full_name?.split(' ')[0];
-                          const isDuoSession = session.session_type === 'Duo Training';
+                          const isDuoSession = secondClientName ? true : false;
                           return (
                             <button
                               key={session.id}
@@ -652,7 +652,7 @@ const BookingsPage: React.FC = () => {
                               } ${selectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               <span className="font-medium">{format(new Date(session.session_date), 'HH:mm')}</span>
-                              {' '}{clientName}{isDuoSession && secondClientName ? ' & ' + secondClientName : ''}
+                              {' '}{clientName}{isDuoSession ? ' & ' + secondClientName : ''}
                             </button>
                           );
                         }
