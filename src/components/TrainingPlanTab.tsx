@@ -218,27 +218,21 @@ const ExerciseRow: React.FC<{
 
   const handleCancel = () => { setValue(exercise.alternative_name || ''); setEditing(false); };
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // SUPERSET-LABEL BERECHNEN
-  // ══════════════════════════════════════════════════════════════════════════
+  // Superset-Label berechnen
   const supersetLabel = (exercise as any).superset_label 
     ? `${(exercise as any).superset_label}${(exercise as any).superset_order || 1}`
     : null;
-  // ══════════════════════════════════════════════════════════════════════════
 
   return (
     <tr className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
       <td className="px-3 py-2">
         <div className="flex items-center gap-2">
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* SUPERSET-BADGE (NEU) */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* Superset-Badge */}
           {supersetLabel && (
             <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-100 border border-blue-300 flex items-center justify-center">
               <span className="text-xs font-bold text-blue-700">{supersetLabel}</span>
             </div>
           )}
-          {/* ═══════════════════════════════════════════════════════════════ */}
           
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm">{exercise.name}</p>
