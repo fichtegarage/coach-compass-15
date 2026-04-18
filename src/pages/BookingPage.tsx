@@ -286,7 +286,16 @@ const BookingPage: React.FC = () => {
       }
     }
 
-    const { data: sessionsData } = await supabase.from('sessions').select('*').eq('client_id', clientId).eq('status', 'Scheduled').gte('session_date', new Date().toISOString()).order('session_date');
+    const { data: sessionsData } = await supabase
+      .from('sessions')
+      .select(`
+        *,
+        clients!sessions_client_id_fkey(full_name),
+        second_client:clients!sessions_second_client_id_fkey(full_name)
+      `)
+      .or(`client_id.eq.${clientId},second_client_id.eq.${clientId}`)
+      .eq('status', 'Scheduled')
+      .gte('session_date', new Date().toISOString()).order('session_date');
     setScheduledSessions(sessionsData || []);
 
     const { data: clientNotifs } = await supabase.from('client_notifications').select('*').eq('client_id', clientId).eq('is_read', false).order('created_at', { ascending: false });
