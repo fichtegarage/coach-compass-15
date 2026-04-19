@@ -190,55 +190,61 @@ function formatRest(seconds: number | null): string {
 const ExerciseRow: React.FC<{
   exercise: PlanExercise; index: number;
   onAlternativeSaved: (exerciseId: string, value: string) => void;
-  onDelete?: (exerciseId: string) => void;
-  compact?: boolean;
-}> = ({ exercise, index, onAlternativeSaved, onDelete, compact }) => {
+}> = ({ exercise, index, onAlternativeSaved }) => {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(exercise.alternative_name || '');
   const [saving, setSaving] = useState(false);
-
+ 
   const handleSave = async () => {
     setSaving(true);
     const { error } = await supabase.from('plan_exercises').update({ alternative_name: value.trim() || null }).eq('id', exercise.id);
-    if (error) toast.error('Konnte nicht gespeichert werden.');
+    if (error) { toast.error('Konnte nicht gespeichert werden.'); }
     else { onAlternativeSaved(exercise.id, value.trim()); toast.success('Ersatzübung gespeichert.'); }
     setSaving(false); setEditing(false);
   };
-
+ 
   const handleCancel = () => { setValue(exercise.alternative_name || ''); setEditing(false); };
-
+ 
+  const supersetLabel = (exercise as any).superset_label 
+    ? `${(exercise as any).superset_label}${(exercise as any).superset_order || 1}`
+    : null;
+ 
   return (
     <tr className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
       <td className="px-3 py-2">
-        <p className="font-medium text-sm">{exercise.name}</p>
-        {!compact && (editing ? (
-          <div className="flex items-center gap-1.5 mt-1">
-            <Input value={value} onChange={e => setValue(e.target.value)} placeholder="z.B. Kurzhantel-Bankdrücken" className="h-7 text-xs" autoFocus
-              onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }} />
-            <button onClick={handleSave} disabled={saving} className="text-primary flex-shrink-0">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-            <button onClick={handleCancel} className="text-muted-foreground flex-shrink-0"><X className="w-4 h-4" /></button>
+        <div className="flex items-center gap-2">
+          {supersetLabel && (
+            <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-100 border border-blue-300 flex items-center justify-center">
+              <span className="text-xs font-bold text-blue-700">{supersetLabel}</span>
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm">{exercise.name}</p>
+            {editing ? (
+              <div className="flex items-center gap-1.5 mt-1">
+                <Input value={value} onChange={e => setValue(e.target.value)} placeholder="z.B. Kurzhantel-Bankdrücken" className="h-7 text-xs" autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }} />
+                <button onClick={handleSave} disabled={saving} className="text-primary hover:text-primary flex-shrink-0">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                </button>
+                <button onClick={handleCancel} className="text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            ) : (
+              <button onClick={() => setEditing(true)} className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors group">
+                {exercise.alternative_name ? (
+                  <><span className="text-blue-500">⇄ {exercise.alternative_name}</span><Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-1" /></>
+                ) : (
+                  <span className="opacity-0 group-hover:opacity-60 transition-opacity italic">+ Ersatzübung hinterlegen</span>
+                )}
+              </button>
+            )}
           </div>
-        ) : (
-          <button onClick={() => setEditing(true)} className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors group">
-            {exercise.alternative_name
-              ? <><span className="text-blue-500">⇄ {exercise.alternative_name}</span><Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 ml-1" /></>
-              : <span className="opacity-0 group-hover:opacity-60 italic">+ Ersatzübung</span>}
-          </button>
-        ))}
+        </div>
       </td>
       <td className="px-3 py-2 text-center tabular-nums text-sm">{exercise.sets ?? '—'}</td>
       <td className="px-3 py-2 text-center tabular-nums text-sm">{exercise.reps_target || '—'}</td>
-      {!compact && <td className="px-3 py-2 text-center text-muted-foreground text-xs">{formatRest(exercise.rest_seconds)}</td>}
-      {!compact && <td className="px-3 py-2 text-muted-foreground text-xs">{exercise.notes || ''}</td>}
-      {onDelete && (
-        <td className="px-2 py-2">
-          <button onClick={() => onDelete(exercise.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </td>
-      )}
+      <td className="px-3 py-2 text-center text-muted-foreground text-xs">{formatRest(exercise.rest_seconds)}</td>
+      <td className="px-3 py-2 text-muted-foreground text-xs">{exercise.notes || ''}</td>
     </tr>
   );
 };
