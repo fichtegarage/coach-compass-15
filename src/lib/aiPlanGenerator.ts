@@ -357,14 +357,20 @@ export function generateSystemPrompt(
   const phase        = config.phase || 'accumulation';
   const phaseLabel   = PHASE_LABELS[phase] || phase;
 
-  let context = `Du bist ein erfahrener Personal Trainer. Erstelle einen **${config.weeks}-Wochen-Trainingsplan**.
-
+  let context = `Du bist ein erfahrener Personal Trainer. Erstelle einen **${config.weeks}-Wochen-Trainingsplan** für ${client.full_name}.
+${client.pinned_note ? `
+ 
+⚠️ WICHTIGER HINWEIS (IMMER BEACHTEN):
+${client.pinned_note}
+` : ''}
+ 
 ## Kundenprofil
 - Alter: ${calculateAge(client.date_of_birth)}
 - Ziel: ${client.fitness_goal_text || client.fitness_goal || 'Allgemeine Fitness'}
-- Trainingstage/Woche: ${config.sessionsPerWeek}
 - Mesozyklusphase: **${phaseLabel}**
+- Trainingstage/Woche: ${config.sessionsPerWeek}
 ${config.focus ? `- Fokus: ${config.focus}` : ''}
+`;
 - Trainingsstruktur: ${config.sessionsPerWeek <= 4 ? '**GANZKÖRPERTRAINING** – jede Einheit trainiert den gesamten Körper (Upper + Lower + Core). Kein Split!' : '**SPLIT erlaubt** – z.B. Push/Pull/Legs oder Upper/Lower'}
 `;
 
