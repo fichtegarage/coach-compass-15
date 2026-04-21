@@ -370,9 +370,8 @@ ${client.pinned_note}
 - Mesozyklusphase: **${phaseLabel}**
 - Trainingstage/Woche: ${config.sessionsPerWeek}
 ${config.focus ? `- Fokus: ${config.focus}` : ''}
-`;
 - Trainingsstruktur: ${config.sessionsPerWeek <= 4 ? '**GANZKÖRPERTRAINING** – jede Einheit trainiert den gesamten Körper (Upper + Lower + Core). Kein Split!' : '**SPLIT erlaubt** – z.B. Push/Pull/Legs oder Upper/Lower'}
-`;
+;
 
   if (conversation) {
     if (conversation.previous_experience) context += `- Erfahrung: ${conversation.previous_experience}\n`;
