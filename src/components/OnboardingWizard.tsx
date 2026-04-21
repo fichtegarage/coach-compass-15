@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +17,7 @@ import {
   createHealthRecord,
   getClient
 } from '@/lib/onboarding-api';
-import type { ConversationForm, HealthRecordForm } from '@/types/onboarding';
+import type { ConversationForm, HealthRecordForm, TrainingPreferences } from '@/types/onboarding';
 import { Users, UserPlus, ArrowLeft, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 
 // ============================================
@@ -29,6 +30,8 @@ interface FieldConfig {
   placeholder: string;
   multiline?: boolean;
   isClientField?: boolean;
+  type?: 'text' | 'date' | 'select' | 'checkbox-group';
+  options?: string[];
   deepQuestions?: {
     title: string;
     questions: string[];
@@ -44,22 +47,36 @@ interface PhaseConfig {
   prompts: string[];
   fields: FieldConfig[];
   isHealthSection?: boolean;
+  isPreferencesSection?: boolean;
 }
 
 const PHASES: PhaseConfig[] = [
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 1: BASICS (NEU!)
+  // ═══════════════════════════════════════════════════════════════
   {
-    id: 'ankommen',
-    title: 'Ankommen',
+    id: 'basics',
+    title: 'Basics',
     duration: '5 Min',
-    icon: '👋',
-    description: 'Beziehung aufbauen, keine Formulare',
+    icon: '📋',
+    description: 'Stammdaten für Vertrag & Kommunikation',
     prompts: [
-      'Begrüßung, Getränk anbieten',
-      'Kurz deine Arbeitsweise erklären',
-      'Entspannte Atmosphäre schaffen',
+      'Vollständigen Namen erfassen',
+      'Geburtsdatum für Altersberechnung',
+      'Vollständige Adresse (für Vertragserstellung)',
+      'Kontaktdaten & Notfallkontakt',
     ],
-    fields: [],
+    fields: [
+      { id: 'date_of_birth', label: 'Geburtsdatum', placeholder: 'TT.MM.JJJJ', type: 'date', isClientField: true },
+      { id: 'street_address', label: 'Straße & Hausnummer', placeholder: 'Musterstraße 123', isClientField: true },
+      { id: 'postal_code', label: 'Postleitzahl', placeholder: '12345', isClientField: true },
+      { id: 'city', label: 'Stadt', placeholder: 'Musterstadt', isClientField: true },
+    ],
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 2: KENNENLERNEN & MOTIVATION
+  // ═══════════════════════════════════════════════════════════════
   {
     id: 'kennenlernen',
     title: 'Kennenlernen',
@@ -67,17 +84,12 @@ const PHASES: PhaseConfig[] = [
     icon: '💬',
     description: 'Motivation und Geschichte verstehen',
     prompts: [
-      'Wie bist du auf mich gekommen?',
       'Was hat dich motiviert, jetzt etwas zu ändern?',
       'Was hast du bisher versucht?',
-      'Was hat funktioniert / was nicht?',
+      'Was hat früher GUT funktioniert?',
+      'Was hat dich bisher vom regelmäßigen Training abgehalten?',
     ],
     fields: [
-      {
-        id: 'contact_source',
-        label: 'Kontakt über',
-        placeholder: 'Empfehlung, Instagram, Studio...',
-      },
       {
         id: 'motivation',
         label: 'Motivation',
@@ -88,7 +100,7 @@ const PHASES: PhaseConfig[] = [
           questions: [
             'Stell dir vor, du hast dein Ziel erreicht. Du wachst morgens auf – was ist der erste Unterschied, den du bemerkst?',
             'Wer in deinem Leben würde die Veränderung als erstes bemerken? Was würde diese Person sagen?',
-            'Gibt es ein konkretes Ereignis, auf das du hinarbeitest? (Hochzeit, Urlaub, Klassentreffen, Fotoshooting...)',
+            'Gibt es ein konkretes Ereignis, auf das du hinarbeitest? (Hochzeit, Urlaub, Klassentreffen...)',
             'Wenn du an den Moment denkst, als du dachtest "Jetzt muss sich was ändern" – was war da gerade passiert?',
             'Was wäre in einem Jahr anders, wenn du dieses Ziel NIE erreichst? Wie würde sich das anfühlen?',
             'Mal ehrlich unter uns: Geht es dir eher ums Aussehen, ums Gefühl, oder um etwas ganz anderes?',
@@ -98,7 +110,7 @@ const PHASES: PhaseConfig[] = [
       {
         id: 'previous_experience',
         label: 'Bisherige Erfahrung',
-        placeholder: 'Was wurde schon versucht?',
+        placeholder: 'Was wurde schon versucht? Wie lange? Was hat funktioniert?',
         multiline: true,
         deepQuestions: {
           title: 'Tiefenfragen bei "hat nicht funktioniert"',
@@ -111,20 +123,54 @@ const PHASES: PhaseConfig[] = [
           ],
         },
       },
+      {
+        id: 'past_successes',
+        label: '✅ Frühere Erfolge (NEU)',
+        placeholder: 'Was hat in der Vergangenheit GUT funktioniert beim Training?',
+        multiline: true,
+        deepQuestions: {
+          title: 'Positive Anknüpfungspunkte finden',
+          questions: [
+            'Gab es mal eine Zeit, in der Training Spaß gemacht hat? Was war da anders?',
+            'Welche Art von Training hat dir früher am meisten Energie gegeben?',
+            'Hast du mal eine sportliche Herausforderung gemeistert, auf die du stolz warst?',
+            'Was war das längste, was du durchgehalten hast? Was hat dabei geholfen?',
+          ],
+        },
+      },
+      {
+        id: 'barriers',
+        label: '🚧 Hindernisse (NEU)',
+        placeholder: 'Was hat dich bisher vom regelmäßigen Training abgehalten?',
+        multiline: true,
+        deepQuestions: {
+          title: 'Barrieren identifizieren',
+          questions: [
+            'Was sind die drei größten Zeitfresser in deiner Woche?',
+            'Wenn du an einen typischen stressigen Tag denkst – wo würde Training realistisch reinpassen?',
+            'Gibt es Menschen in deinem Umfeld, die deine Ziele eher erschweren als unterstützen?',
+            'Was wäre das Schlimmste, was passieren könnte, wenn du mit Training anfängst?',
+          ],
+        },
+      },
     ],
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 3: IST-ZUSTAND
+  // ═══════════════════════════════════════════════════════════════
   {
     id: 'ist_zustand',
     title: 'Ist-Zustand',
     duration: '10 Min',
     icon: '📊',
-    description: 'Alltag, Training & Ernährung erfassen',
+    description: 'Alltag, Training & Lifestyle erfassen',
     prompts: [
       'Was arbeitest du? Wie sieht dein Alltag aus?',
+      'Wie gut spürst du deinen Körper?',
+      'Hast du Bedenken dich zu verletzen?',
       'Wie viel bewegst du dich außerhalb vom Training?',
       'Wie schläfst du? Wie viel Stress hast du?',
-      'Wie sieht dein aktuelles Training aus?',
-      'Wie ernährst du dich so grob?',
     ],
     fields: [
       {
@@ -132,6 +178,44 @@ const PHASES: PhaseConfig[] = [
         label: 'Beruf & Arbeitszeit',
         placeholder: 'Büro, Schichtdienst, körperlich...',
         isClientField: true,
+      },
+      {
+        id: 'training_experience',
+        label: 'Trainingserfahrung (Level)',
+        placeholder: 'Wähle das Erfahrungs-Level',
+        type: 'select',
+        isClientField: true,
+        options: ['Anfänger', 'Fortgeschritten', 'Wiedereinsteiger', 'Experte'],
+      },
+      {
+        id: 'body_awareness',
+        label: '🧠 Körperwahrnehmung (NEU)',
+        placeholder: 'Wie gut spürst du deinen Körper während Bewegung?',
+        multiline: true,
+        deepQuestions: {
+          title: 'Körperwahrnehmung einschätzen (wichtig für Coaching-Stil)',
+          questions: [
+            'Wenn du jetzt die Augen schließt: Wo spürst du Spannung in deinem Körper?',
+            'Merkst du beim Sport, wenn eine Übung falsch ausgeführt wird? Wie zeigt sich das?',
+            'Kannst du beschreiben, wo im Körper du bei einem Squat arbeiten solltest?',
+            'Wie schnell merkst du, wenn du dich überanstrengst?',
+          ],
+        },
+      },
+      {
+        id: 'injury_concerns',
+        label: '⚠️ Verletzungsangst (NEU)',
+        placeholder: 'Hast du Bedenken dich zu verletzen? Bewegungen die du meidest?',
+        multiline: true,
+        deepQuestions: {
+          title: 'Safety First - Ängste ernst nehmen',
+          questions: [
+            'Gibt es Bewegungen, bei denen du unsicher bist oder die du vermeidest?',
+            'Hattest du schon mal eine Verletzung beim Sport? Was ist passiert?',
+            'Was wäre deine größte Sorge, wenn wir heute anfangen würden?',
+            'Gibt es Bewegungen, bei denen du Schmerzen hast oder hattest?',
+          ],
+        },
       },
       {
         id: 'stress_level',
@@ -143,8 +227,7 @@ const PHASES: PhaseConfig[] = [
             'Wie oft denkst du abends noch an die Arbeit, wenn du eigentlich abschalten willst?',
             'Wann hattest du zuletzt einen Tag, an dem du an GAR NICHTS gedacht hast?',
             'Wie würde dein Partner / dein bester Freund deinen Stresslevel einschätzen?',
-            'Was machst du, um runterzukommen? Funktioniert das?',
-            'Merkst du Stress eher im Kopf (Gedankenkreisen) oder im Körper (Verspannungen, Schlaf)?',
+            'Merkst du Stress eher im Kopf (Gedankenkreisen) oder im Körper (Verspannungen)?',
           ],
         },
       },
@@ -159,7 +242,6 @@ const PHASES: PhaseConfig[] = [
             'Brauchst du Kaffee, um morgens in die Gänge zu kommen?',
             'Wie oft wachst du nachts auf? Kannst du dann wieder einschlafen?',
             'Schläfst du am Wochenende deutlich länger als unter der Woche?',
-            'Wann bist du das letzte Mal ohne Wecker aufgewacht und fühltest dich ausgeschlafen?',
           ],
         },
       },
@@ -178,7 +260,6 @@ const PHASES: PhaseConfig[] = [
             'Was war dein letztes Training – welcher Tag, welche Uhrzeit, was genau hast du gemacht?',
             'Wenn du an die letzten 4 Wochen denkst – wie viele Trainingseinheiten waren es wirklich?',
             'Wie lange dauert ein typisches Training bei dir – von Betreten bis Verlassen?',
-            'Was machst du in einer typischen Einheit? Beschreib mir den Ablauf.',
           ],
         },
       },
@@ -191,15 +272,17 @@ const PHASES: PhaseConfig[] = [
           questions: [
             'Was hast du GESTERN gegessen? Frühstück, Mittag, Abend, Snacks – so konkret wie möglich.',
             'Wie sieht ein typischer Dienstag bei dir aus – vom Aufstehen bis Schlafengehen, inklusive Essen?',
-            'Wann isst du aus echtem Hunger, und wann aus anderen Gründen? (Langeweile, Stress, Gewohnheit)',
-            'Wie oft bestellst du Essen oder isst auswärts pro Woche?',
+            'Wann isst du aus echtem Hunger, und wann aus anderen Gründen? (Langeweile, Stress)',
             'Trinkst du Kalorien? (Softdrinks, Säfte, Alkohol, Kaffee mit Milch/Zucker)',
-            'Gibt es Lebensmittel, bei denen du nicht aufhören kannst, wenn du einmal angefangen hast?',
           ],
         },
       },
     ],
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 4: GESUNDHEIT (unverändert)
+  // ═══════════════════════════════════════════════════════════════
   {
     id: 'gesundheit',
     title: 'Gesundheit',
@@ -211,14 +294,38 @@ const PHASES: PhaseConfig[] = [
       'Hattest du Operationen oder Verletzungen?',
       'Nimmst du regelmäßig Medikamente?',
       'Gibt es Bewegungseinschränkungen oder Schmerzen?',
-      'Rauchst du? Trinkst du regelmäßig Alkohol?',
     ],
     fields: [],
     isHealthSection: true,
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 5: PRÄFERENZEN & PLANUNG (NEU!)
+  // ═══════════════════════════════════════════════════════════════
+  {
+    id: 'praeferenzen',
+    title: 'Präferenzen',
+    duration: '10 Min',
+    icon: '⚙️',
+    description: 'Trainingsvorlieben & verfügbare Zeit',
+    prompts: [
+      'Wie oft pro Woche kannst du trainieren?',
+      'Wie viel Zeit hast du pro Workout?',
+      'Welche Trainingsgeräte bevorzugst du?',
+      'Wo möchtest du trainieren?',
+      'Wie stehst du zu Cardio und Mobility?',
+      'Wer unterstützt deine Ziele?',
+    ],
+    fields: [],
+    isPreferencesSection: true,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 6: ZIELE & WÜNSCHE
+  // ═══════════════════════════════════════════════════════════════
   {
     id: 'ziele',
-    title: 'Ziele & Wünsche',
+    title: 'Ziele',
     duration: '10 Min',
     icon: '🎯',
     description: 'Das eigentliche Warum verstehen',
@@ -226,7 +333,6 @@ const PHASES: PhaseConfig[] = [
       'Was möchtest du erreichen?',
       'Warum ist dir das wichtig?',
       'Woran würdest du merken, dass es funktioniert?',
-      'Gibt es einen Zeitrahmen?',
     ],
     fields: [
       {
@@ -247,8 +353,6 @@ const PHASES: PhaseConfig[] = [
             'Auf einer Skala von 1-10: Wie wichtig ist dir das WIRKLICH? ... Warum keine 10?',
             'Was bist du bereit, dafür aufzugeben oder zu verändern?',
             'Wofür brauchst du die zusätzliche Energie/Kraft/Ausdauer konkret?',
-            'Gibt es jemanden, für den du das auch tust? (Kinder, Partner, Eltern)',
-            'Was würdest du machen, wenn du fitter wärst, das du jetzt nicht machst?',
           ],
         },
       },
@@ -262,14 +366,16 @@ const PHASES: PhaseConfig[] = [
             'Woran würde dein bester Freund / dein Partner merken, dass es funktioniert hat?',
             'Gibt es ein konkretes Kleidungsstück, das wieder passen soll?',
             'Gibt es eine Zahl, die du im Kopf hast? (Gewicht, Körperfett, Wiederholungen...)',
-            'Gibt es ein Gefühl, das du wieder haben möchtest? Beschreib es mir.',
-            'Was müsste passieren, damit du nach 3 Monaten sagst: Das hat sich gelohnt?',
             'Stell dir vor, wir treffen uns in 6 Monaten – was erzählst du mir, was sich verändert hat?',
           ],
         },
       },
     ],
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 7: AUSBLICK
+  // ═══════════════════════════════════════════════════════════════
   {
     id: 'ausblick',
     title: 'Ausblick',
@@ -307,6 +413,29 @@ const PERSONALITY_TYPES = [
 
 const FITNESS_GOALS = ['Abnehmen', 'Muskelaufbau', 'Ausdauer', 'Reha', 'Allgemeine Fitness', 'Wettkampfvorbereitung'];
 const ACQUISITION_SOURCES = ['Empfehlung', 'Instagram', 'Website', 'Google', 'Laufkundschaft', 'Sonstiges'];
+
+// ✅ NEU - Training Preferences Options
+const EQUIPMENT_OPTIONS = [
+  { id: 'machines', label: 'Maschinen' },
+  { id: 'free_weights_barbell', label: 'Freie Gewichte (Langhantel)' },
+  { id: 'free_weights_dumbbell', label: 'Freie Gewichte (Kurzhanteln)' },
+  { id: 'bodyweight', label: 'Bodyweight / Eigengewicht' },
+];
+
+const LOCATION_OPTIONS = [
+  { id: 'gym_indoor', label: 'Gym (Indoor)' },
+  { id: 'outdoor', label: 'Draußen (Park/Outdoor)' },
+  { id: 'hybrid', label: 'Flexibel / Hybrid' },
+];
+
+const CARDIO_OPTIONS = [
+  { id: 'love_it', label: 'Ja gerne, gehört dazu' },
+  { id: 'minimal', label: 'Nur minimal (Warm-up)' },
+  { id: 'dislike', label: 'Ungern, lieber Kraft' },
+];
+
+const SESSIONS_PER_WEEK = ['1x', '2x', '3x', '4x', '5x+'];
+const SESSION_DURATION = ['30 Min', '45 Min', '60 Min', '90 Min', '120 Min+'];
 
 // ============================================
 // DEEP QUESTIONS COMPONENT
@@ -369,6 +498,20 @@ const DuoField: React.FC<DuoFieldProps> = ({ field, formData, updateField, nameA
     const labelColor = suffix === 'a' ? 'text-primary' : 'text-primary';
     const name = suffix === 'a' ? nameA : nameB;
 
+    if (field.type === 'select' && field.options) {
+      return (
+        <div className={`pl-3 border-l-2 ${suffix === 'a' ? colorA : colorB} space-y-1`}>
+          <p className={`text-xs font-semibold ${labelColor}`}>{name}</p>
+          <Select value={formData[id] || ''} onValueChange={v => updateField(id, v)}>
+            <SelectTrigger><SelectValue placeholder={field.placeholder} /></SelectTrigger>
+            <SelectContent>
+              {field.options.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    }
+
     return (
       <div className={`pl-3 border-l-2 ${suffix === 'a' ? colorA : colorB} space-y-1`}>
         <p className={`text-xs font-semibold ${labelColor}`}>{name}</p>
@@ -381,6 +524,7 @@ const DuoField: React.FC<DuoFieldProps> = ({ field, formData, updateField, nameA
           />
         ) : (
           <Input
+            type={field.type === 'date' ? 'date' : 'text'}
             value={formData[id] || ''}
             onChange={e => updateField(id, e.target.value)}
             placeholder={field.placeholder}
@@ -400,6 +544,168 @@ const DuoField: React.FC<DuoFieldProps> = ({ field, formData, updateField, nameA
       )}
     </div>
   );
+};
+
+// ============================================
+// PREFERENCES SECTION (NEU!)
+// ============================================
+
+interface PreferencesSectionProps {
+  formData: Record<string, any>;
+  updateField: (id: string, value: any) => void;
+  isDuo: boolean;
+  nameA?: string;
+  nameB?: string;
+}
+
+const PreferencesSection: React.FC<PreferencesSectionProps> = ({ formData, updateField, isDuo, nameA, nameB }) => {
+  
+  const renderPreferencesForClient = (suffix: '' | '_a' | '_b', label?: string) => {
+    const s = suffix;
+    const prefKey = `training_preferences${s}`;
+    const currentPrefs: TrainingPreferences = formData[prefKey] || {};
+
+    const updatePreference = (key: keyof TrainingPreferences, value: any) => {
+      const updated = { ...currentPrefs, [key]: value };
+      updateField(prefKey, updated);
+    };
+
+    const toggleEquipment = (equipId: string) => {
+      const current = currentPrefs.equipment || [];
+      const updated = current.includes(equipId)
+        ? current.filter(id => id !== equipId)
+        : [...current, equipId];
+      updatePreference('equipment', updated);
+    };
+
+    const toggleLocation = (locId: string) => {
+      const current = currentPrefs.location || [];
+      const updated = current.includes(locId)
+        ? current.filter(id => id !== locId)
+        : [...current, locId];
+      updatePreference('location', updated);
+    };
+
+    return (
+      <div className={isDuo ? `pl-3 border-l-2 border-primary/60 space-y-4` : 'space-y-4'}>
+        {isDuo && label && <p className="text-xs font-semibold text-primary">{label}</p>}
+
+        {/* Verfügbare Zeit */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">⏱️ Verfügbare Zeit</h4>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label className="text-xs">Sessions pro Woche</Label>
+              <Select
+                value={formData[`available_sessions_per_week${s}`] || ''}
+                onValueChange={v => updateField(`available_sessions_per_week${s}`, v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Wähle..." /></SelectTrigger>
+                <SelectContent>
+                  {SESSIONS_PER_WEEK.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Dauer pro Workout</Label>
+              <Select
+                value={formData[`max_session_duration_minutes${s}`] || ''}
+                onValueChange={v => updateField(`max_session_duration_minutes${s}`, v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Wähle..." /></SelectTrigger>
+                <SelectContent>
+                  {SESSION_DURATION.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        {/* Equipment */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">🏋️ Trainingsgeräte</h4>
+          <div className="space-y-2">
+            {EQUIPMENT_OPTIONS.map(eq => (
+              <div key={eq.id} className="flex items-center gap-2">
+                <Checkbox
+                  checked={currentPrefs.equipment?.includes(eq.id) || false}
+                  onCheckedChange={() => toggleEquipment(eq.id)}
+                />
+                <Label className="text-sm">{eq.label}</Label>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Location */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">📍 Trainingsort</h4>
+          <div className="space-y-2">
+            {LOCATION_OPTIONS.map(loc => (
+              <div key={loc.id} className="flex items-center gap-2">
+                <Checkbox
+                  checked={currentPrefs.location?.includes(loc.id) || false}
+                  onCheckedChange={() => toggleLocation(loc.id)}
+                />
+                <Label className="text-sm">{loc.label}</Label>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Cardio */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">🏃 Cardio-Präferenz</h4>
+          <Select
+            value={currentPrefs.cardio_preference || ''}
+            onValueChange={v => updatePreference('cardio_preference', v)}
+          >
+            <SelectTrigger><SelectValue placeholder="Wie stehst du zu Cardio?" /></SelectTrigger>
+            <SelectContent>
+              {CARDIO_OPTIONS.map(opt => <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Mobility */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">🧘 Mobility & Stretching</h4>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={currentPrefs.mobility_interest || false}
+              onCheckedChange={(checked) => updatePreference('mobility_interest', checked)}
+            />
+            <Label className="text-sm">Ja, ist mir wichtig / kann gerne dabei sein</Label>
+          </div>
+        </div>
+
+        {/* Support System */}
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium">🤝 Support-System (NEU)</h4>
+          <Textarea
+            value={formData[`support_system${s}`] || ''}
+            onChange={e => updateField(`support_system${s}`, e.target.value)}
+            placeholder="Wer in deinem Umfeld unterstützt deine Ziele?"
+            rows={2}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  if (isDuo && nameA && nameB) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">Erfasse die Präferenzen für beide Teilnehmer:</p>
+        {renderPreferencesForClient('_a', nameA)}
+        <div className="border-t pt-4 mt-4">
+          {renderPreferencesForClient('_b', nameB)}
+        </div>
+      </div>
+    );
+  }
+
+  return renderPreferencesForClient('');
 };
 
 // ============================================
@@ -444,11 +750,14 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
     starting_date: new Date().toISOString().split('T')[0],
     status: 'Active',
     acquisition_source: '',
+    street_address: '',
+    postal_code: '',
+    city: '',
   });
 
   // Conversation state
   const [currentPhase, setCurrentPhase] = useState(0);
-  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState<Record<string, any>>({});
   const [clientName, setClientName] = useState('');
   const [personalityType, setPersonalityType] = useState<string | null>(null);
   // Duo: separate personality type per client
@@ -481,6 +790,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         setClientName(client.full_name);
         if (client.occupation) setFormData(prev => ({ ...prev, occupation_a: client.occupation }));
         if (client.fitness_goal_text) setFormData(prev => ({ ...prev, fitness_goal_text_a: client.fitness_goal_text }));
+        if (client.training_experience) setFormData(prev => ({ ...prev, training_experience_a: client.training_experience }));
       }
     } catch (error) {
       console.error('Fehler beim Laden des Kunden:', error);
@@ -494,13 +804,14 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         setSecondClientName(client.full_name);
         if (client.occupation) setFormData(prev => ({ ...prev, occupation_b: client.occupation }));
         if (client.fitness_goal_text) setFormData(prev => ({ ...prev, fitness_goal_text_b: client.fitness_goal_text }));
+        if (client.training_experience) setFormData(prev => ({ ...prev, training_experience_b: client.training_experience }));
       }
     } catch (error) {
       console.error('Fehler beim Laden des zweiten Kunden:', error);
     }
   };
 
-  const updateField = (fieldId: string, value: string) => {
+  const updateField = (fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
   };
 
@@ -515,7 +826,6 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
   const buildConversationData = (suffix: 'a' | 'b' | ''): ConversationForm => {
     const s = suffix ? '_' + suffix : '';
     return {
-      contact_source: formData[`contact_source${s}`],
       motivation: formData[`motivation${s}`],
       previous_experience: formData[`previous_experience${s}`],
       stress_level: formData[`stress_level${s}`],
@@ -530,6 +840,11 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         : personalityType) as any,
       next_steps: formData[`next_steps${s}`],
       notes: formData[`notes${s}`],
+      body_awareness: formData[`body_awareness${s}`],
+      injury_concerns: formData[`injury_concerns${s}`],
+      past_successes: formData[`past_successes${s}`],
+      barriers: formData[`barriers${s}`],
+      support_system: formData[`support_system${s}`],
     };
   };
 
@@ -547,13 +862,38 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
     };
   };
 
+  const buildClientUpdate = (suffix: 'a' | 'b' | '') => {
+    const s = suffix ? '_' + suffix : '';
+    
+    // Convert sessions per week string to number
+    const sessionsStr = formData[`available_sessions_per_week${s}`] || '';
+    const sessionsNum = sessionsStr ? parseInt(sessionsStr.replace(/[^\d]/g, '')) : null;
+    
+    // Convert duration string to number
+    const durationStr = formData[`max_session_duration_minutes${s}`] || '';
+    const durationNum = durationStr ? parseInt(durationStr.replace(/[^\d]/g, '')) : null;
+    
+    return {
+      occupation: formData[`occupation${s}`],
+      training_experience: formData[`training_experience${s}`],
+      fitness_goal_text: formData[`fitness_goal_text${s}`],
+      date_of_birth: formData[`date_of_birth${s}`] || null,
+      street_address: formData[`street_address${s}`] || null,
+      postal_code: formData[`postal_code${s}`] || null,
+      city: formData[`city${s}`] || null,
+      available_sessions_per_week: sessionsNum,
+      max_session_duration_minutes: durationNum,
+      training_preferences: formData[`training_preferences${s}`] || {},
+      status: 'trial',
+    };
+  };
+
   // ============================================
   // HANDLE CLIENT SELECTION
   // ============================================
 
   const handleSelectExistingClient = (clientId: string) => {
     setSelectedClientId(clientId);
-    // Don't jump to conversation yet – wait to see if duo is toggled
   };
 
   const handleStartConversation = () => {
@@ -593,6 +933,9 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
           starting_date: clientForm.starting_date || null,
           status: 'prospect',
           acquisition_source: clientForm.acquisition_source || null,
+          street_address: clientForm.street_address || null,
+          postal_code: clientForm.postal_code || null,
+          city: clientForm.city || null,
         })
         .select()
         .single();
@@ -603,7 +946,6 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
       setExistingClient(newClient);
       setClientName(newClient.full_name);
       if (clientForm.fitness_goal_text) setFormData(prev => ({ ...prev, fitness_goal_text: clientForm.fitness_goal_text }));
-      if (clientForm.acquisition_source) setFormData(prev => ({ ...prev, contact_source: clientForm.acquisition_source }));
 
       setWizardStep('conversation');
       toast({ title: 'Kunde angelegt', description: `${newClient.full_name} wurde erstellt.` });
@@ -631,22 +973,12 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
         const suffix_b = 'b';
 
         // Client A
-        await supabase.from('clients').update({
-          occupation: formData.occupation_a,
-          fitness_goal_text: formData.fitness_goal_text_a,
-          status: 'trial',
-        }).eq('id', selectedClientId!);
-
+        await supabase.from('clients').update(buildClientUpdate(suffix_a)).eq('id', selectedClientId!);
         const convA = await createConversation(selectedClientId!, buildConversationData(suffix_a));
         await createHealthRecord(selectedClientId!, buildHealthData(suffix_a), convA.id);
 
         // Client B
-        await supabase.from('clients').update({
-          occupation: formData.occupation_b,
-          fitness_goal_text: formData.fitness_goal_text_b,
-          status: 'trial',
-        }).eq('id', secondClientId);
-
+        await supabase.from('clients').update(buildClientUpdate(suffix_b)).eq('id', secondClientId);
         const convB = await createConversation(secondClientId, buildConversationData(suffix_b));
         await createHealthRecord(secondClientId, buildHealthData(suffix_b), convB.id);
 
@@ -655,12 +987,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
 
       } else {
         // ── Solo ──────────────────────────────────────────────────────────
-        await supabase.from('clients').update({
-          occupation: formData.occupation,
-          fitness_goal_text: formData.fitness_goal_text,
-          status: 'trial',
-        }).eq('id', selectedClientId!);
-
+        await supabase.from('clients').update(buildClientUpdate('')).eq('id', selectedClientId!);
         const conversation = await createConversation(selectedClientId!, buildConversationData(''));
         await createHealthRecord(selectedClientId!, buildHealthData(''), conversation.id);
 
@@ -715,7 +1042,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                 </SelectContent>
               </Select>
 
-              {/* Duo toggle – only show if a client is selected */}
+              {/* Duo toggle */}
               {selectedClientId && (
                 <div className="space-y-3 pt-2 border-t border-border">
                   <div className="flex items-center gap-3">
@@ -809,6 +1136,18 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
               <div className="space-y-2">
                 <Label>Telefon (mit Vorwahl)</Label>
                 <Input value={clientForm.phone} onChange={e => updateClientForm('phone', e.target.value)} placeholder="+49..." />
+              </div>
+            </div>
+
+            {/* Adresse */}
+            <div className="space-y-3 pt-3 border-t">
+              <h4 className="text-sm font-medium">Adresse (für Vertrag)</h4>
+              <div className="space-y-2">
+                <Input value={clientForm.street_address} onChange={e => updateClientForm('street_address', e.target.value)} placeholder="Straße & Hausnummer" />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Input value={clientForm.postal_code} onChange={e => updateClientForm('postal_code', e.target.value)} placeholder="PLZ" />
+                <Input value={clientForm.city} onChange={e => updateClientForm('city', e.target.value)} placeholder="Stadt" />
               </div>
             </div>
           </CardContent>
@@ -912,58 +1251,87 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
             )}
 
             {/* Field summary */}
-            {PHASES.filter(p => p.fields.length > 0 || p.isHealthSection).map(p => (
-              <div key={p.id} className="space-y-2">
-                <h3 className="font-medium flex items-center gap-2"><span>{p.icon}</span> {p.title}</h3>
-                <div className="pl-4 space-y-2 text-sm">
-                  {p.isHealthSection ? (
-                    isDuo ? (
-                      HEALTH_QUESTIONS.map(q => {
-                        const vA = formData[q.id + '_a'];
-                        const vB = formData[q.id + '_b'];
-                        if (!vA && !vB) return null;
-                        return (
+            {PHASES.filter(p => p.fields.length > 0 || p.isHealthSection || p.isPreferencesSection).map(p => {
+              if (p.isPreferencesSection) {
+                // Special handling for preferences
+                return (
+                  <div key={p.id} className="space-y-2">
+                    <h3 className="font-medium flex items-center gap-2"><span>{p.icon}</span> {p.title}</h3>
+                    <div className="pl-4 space-y-2 text-sm">
+                      {isDuo ? (
+                        <>
+                          <p className="text-xs font-semibold text-muted-foreground">{clientName}</p>
+                          <p>Zeit: {formData.available_sessions_per_week_a || '—'} Sessions, {formData.max_session_duration_minutes_a || '—'} pro Workout</p>
+                          {formData.support_system_a && <p>Support: {formData.support_system_a}</p>}
+                          
+                          <p className="text-xs font-semibold text-muted-foreground mt-3">{secondClientName}</p>
+                          <p>Zeit: {formData.available_sessions_per_week_b || '—'} Sessions, {formData.max_session_duration_minutes_b || '—'} pro Workout</p>
+                          {formData.support_system_b && <p>Support: {formData.support_system_b}</p>}
+                        </>
+                      ) : (
+                        <>
+                          <p>Zeit: {formData.available_sessions_per_week || '—'} Sessions, {formData.max_session_duration_minutes || '—'} pro Workout</p>
+                          {formData.support_system && <p>Support: {formData.support_system}</p>}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={p.id} className="space-y-2">
+                  <h3 className="font-medium flex items-center gap-2"><span>{p.icon}</span> {p.title}</h3>
+                  <div className="pl-4 space-y-2 text-sm">
+                    {p.isHealthSection ? (
+                      isDuo ? (
+                        HEALTH_QUESTIONS.map(q => {
+                          const vA = formData[q.id + '_a'];
+                          const vB = formData[q.id + '_b'];
+                          if (!vA && !vB) return null;
+                          return (
+                            <div key={q.id}>
+                              <p className="text-muted-foreground text-xs font-medium">{q.label}</p>
+                              {vA && <p className="ml-2"><span className="text-primary text-xs">{clientName}:</span> {vA}</p>}
+                              {vB && <p className="ml-2"><span className="text-primary text-xs">{secondClientName}:</span> {vB}</p>}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        HEALTH_QUESTIONS.filter(q => formData[q.id]).map(q => (
                           <div key={q.id}>
-                            <p className="text-muted-foreground text-xs font-medium">{q.label}</p>
-                            {vA && <p className="ml-2"><span className="text-primary text-xs">{clientName}:</span> {vA}</p>}
-                            {vB && <p className="ml-2"><span className="text-primary text-xs">{secondClientName}:</span> {vB}</p>}
+                            <span className="text-muted-foreground">{q.label}:</span>{' '}
+                            <span>{formData[q.id]}</span>
                           </div>
-                        );
-                      })
+                        ))
+                      )
                     ) : (
-                      HEALTH_QUESTIONS.filter(q => formData[q.id]).map(q => (
-                        <div key={q.id}>
-                          <span className="text-muted-foreground">{q.label}:</span>{' '}
-                          <span>{formData[q.id]}</span>
-                        </div>
-                      ))
-                    )
-                  ) : (
-                    isDuo ? (
-                      p.fields.map(field => {
-                        const vA = formData[field.id + '_a'];
-                        const vB = formData[field.id + '_b'];
-                        if (!vA && !vB) return null;
-                        return (
+                      isDuo ? (
+                        p.fields.map(field => {
+                          const vA = formData[field.id + '_a'];
+                          const vB = formData[field.id + '_b'];
+                          if (!vA && !vB) return null;
+                          return (
+                            <div key={field.id}>
+                              <p className="text-muted-foreground text-xs font-medium">{field.label}</p>
+                              {vA && <p className="ml-2"><span className="text-primary text-xs">{clientName}:</span> {vA}</p>}
+                              {vB && <p className="ml-2"><span className="text-primary text-xs">{secondClientName}:</span> {vB}</p>}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        p.fields.map(field => (
                           <div key={field.id}>
-                            <p className="text-muted-foreground text-xs font-medium">{field.label}</p>
-                            {vA && <p className="ml-2"><span className="text-primary text-xs">{clientName}:</span> {vA}</p>}
-                            {vB && <p className="ml-2"><span className="text-primary text-xs">{secondClientName}:</span> {vB}</p>}
+                            <span className="text-muted-foreground">{field.label}:</span>{' '}
+                            <span>{formData[field.id] || '—'}</span>
                           </div>
-                        );
-                      })
-                    ) : (
-                      p.fields.map(field => (
-                        <div key={field.id}>
-                          <span className="text-muted-foreground">{field.label}:</span>{' '}
-                          <span>{formData[field.id] || '—'}</span>
-                        </div>
-                      ))
-                    )
-                  )}
+                        ))
+                      )
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div className="flex gap-3 pt-4">
               <Button variant="outline" onClick={() => setShowSummary(false)} className="flex-1">← Zurück bearbeiten</Button>
@@ -1078,7 +1446,14 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                 phase.fields.map(field => (
                   <div key={field.id}>
                     <label className="text-sm text-muted-foreground">{field.label}</label>
-                    {field.multiline ? (
+                    {field.type === 'select' && field.options ? (
+                      <Select value={formData[field.id] || ''} onValueChange={v => updateField(field.id, v)}>
+                        <SelectTrigger><SelectValue placeholder={field.placeholder} /></SelectTrigger>
+                        <SelectContent>
+                          {field.options.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : field.multiline ? (
                       <Textarea
                         value={formData[field.id] || ''}
                         onChange={e => updateField(field.id, e.target.value)}
@@ -1087,6 +1462,7 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                       />
                     ) : (
                       <Input
+                        type={field.type === 'date' ? 'date' : 'text'}
                         value={formData[field.id] || ''}
                         onChange={e => updateField(field.id, e.target.value)}
                         placeholder={field.placeholder}
@@ -1146,6 +1522,20 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* Preferences Section (NEU!) */}
+          {phase.isPreferencesSection && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium">⚙️ Präferenzen & Planung</h3>
+              <PreferencesSection
+                formData={formData}
+                updateField={updateField}
+                isDuo={isDuo}
+                nameA={clientName}
+                nameB={secondClientName}
+              />
             </div>
           )}
 
