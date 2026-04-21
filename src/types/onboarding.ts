@@ -7,6 +7,17 @@ export type ClientStatus = 'prospect' | 'trial' | 'active' | 'paused' | 'inactiv
 export type PersonalityType = 'success_oriented' | 'avoidance_oriented' | 'unclear';
 
 // ============================================
+// TRAINING PREFERENCES (NEW)
+// ============================================
+
+export interface TrainingPreferences {
+  equipment?: string[];  // ['machines', 'free_weights_barbell', 'free_weights_dumbbell', 'bodyweight']
+  location?: string[];   // ['gym_indoor', 'outdoor', 'hybrid']
+  cardio_preference?: 'love_it' | 'minimal' | 'dislike';
+  mobility_interest?: boolean;
+}
+
+// ============================================
 // EXISTING CLIENT TABLE (deine bestehende Struktur)
 // ============================================
 
@@ -41,6 +52,18 @@ export interface Client {
   instagram_handle: string | null;
   notes_internal: string | null;
   created_at: string;
+  
+  // ✅ NEU - Adresse
+  street_address: string | null;
+  postal_code: string | null;
+  city: string | null;
+  
+  // ✅ NEU - Verfügbare Zeit
+  available_sessions_per_week: number | null;
+  max_session_duration_minutes: number | null;
+  
+  // ✅ NEU - Trainingspräferenzen (JSONB)
+  training_preferences: TrainingPreferences | null;
 }
 
 // ============================================
@@ -74,6 +97,13 @@ export interface ClientConversation {
   personality_type: PersonalityType | null;
   next_steps: string | null;
   notes: string | null;
+  
+  // ✅ NEU - Tiefenfragen
+  body_awareness: string | null;
+  injury_concerns: string | null;
+  past_successes: string | null;
+  barriers: string | null;
+  support_system: string | null;
   
   // Meta
   conversation_date: string;
@@ -131,6 +161,11 @@ export interface NewClientForm {
   date_of_birth?: string;
   occupation?: string;
   instagram_handle?: string;
+  
+  // ✅ NEU - Adresse
+  street_address?: string;
+  postal_code?: string;
+  city?: string;
 }
 
 export interface ConversationForm {
@@ -147,6 +182,13 @@ export interface ConversationForm {
   personality_type?: PersonalityType;
   next_steps?: string;
   notes?: string;
+  
+  // ✅ NEU - Tiefenfragen
+  body_awareness?: string;
+  injury_concerns?: string;
+  past_successes?: string;
+  barriers?: string;
+  support_system?: string;
 }
 
 export interface HealthRecordForm {
@@ -170,6 +212,13 @@ export interface BodyDataForm {
   blood_pressure_systolic?: number;
   blood_pressure_diastolic?: number;
   notes?: string;
+}
+
+// ✅ NEU - Preferences Form
+export interface PreferencesForm {
+  available_sessions_per_week?: number;
+  max_session_duration_minutes?: number;
+  training_preferences?: TrainingPreferences;
 }
 
 // ============================================
@@ -239,6 +288,13 @@ export const FIELD_MAPPING = {
   erfolgskriterium: 'success_criteria',
   naechste_schritte: 'next_steps',
   notizen: 'notes',
+  
+  // ✅ NEU - Tiefenfragen
+  koerperwahrnehmung: 'body_awareness',
+  verletzungsangst: 'injury_concerns',
+  fruehere_erfolge: 'past_successes',
+  hindernisse: 'barriers',
+  unterstuetzung: 'support_system',
   
   // Health
   herz_kreislauf: 'cardiovascular',
