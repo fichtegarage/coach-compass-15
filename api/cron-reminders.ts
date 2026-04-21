@@ -133,7 +133,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timeZone: 'Europe/Berlin',
     });
     const typeLabel = sessionTypeLabels[session.session_type] || session.session_type;
-
+    
+    const firstName = (booking.customer_name || '').split(' ')[0] || 'Kunde';
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -145,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         to: client.email,
         subject: '⏰ Erinnerung: Dein Training in 2 Stunden',
         html: buildEmail(`
-          <p>Hallo ${client.full_name},</p>
+          <h1>Hallo ${firstName}</h1>
           <p>nur eine kurze Erinnerung: dein Training findet in ca. 2 Stunden statt.</p>
           <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:16px 0;">
             <p style="margin:0;font-weight:bold;font-size:1.05em;">📅 ${timeStr} Uhr</p>
