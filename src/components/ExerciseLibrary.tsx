@@ -422,15 +422,17 @@ const AddExerciseDialog: React.FC<{
     setSaving(true);
     try {
       const cues = coachingCues.split('\n').map(c => c.trim()).filter(Boolean);
+      const slug = generateSlug(name);
+
       const { error } = await supabase.from('exercises').insert({
-        name: name.trim() || nameDe.trim(),
+        name: name.trim(),
         name_de: nameDe.trim(),
-        description: description.trim() || null,
+        exercise_slug: slug,  // ✅ NEU!
         muscle_groups: muscleGroups,
         movement_pattern: movementPattern,
         exercise_type: exerciseType,
         difficulty,
-        coaching_cues: cues,
+        coaching_cues: cuesArray,
         context,
         required_equipment: requiredEquipment,
       });
