@@ -501,14 +501,54 @@ const ClientDetailPage: React.FC = () => {
   };
 
   const deleteSession = async () => {
-    if (!editingSessionId) return;
-    if (!window.confirm('Einheit wirklich löschen?')) return;
-    await supabase.from('sessions').delete().eq('id', editingSessionId);
-    toast.success('Einheit gelöscht');
-    setSessionDialogOpen(false);
-    setEditingSessionId(null);
-    loadAll();
-  };
+  if (!editingSessionId) return;
+  if (!window.confirm('Einheit wirklich absagen?')) return;
+
+  // Hole Session-Details
+  const { data: session } = await supabase
+    .from('sessions')
+    .select('session_date')
+    .eq('id', editingSessionId)
+    .single();
+
+  if (!session) {
+    toast.error('Session nicht gefunden');
+    return;
+  }
+
+  // 1. Ändere Session-Status (statt DELETE)
+  await supabase
+    .from('sessions')
+    .update({ status: 'Cancelled by Trainer' })
+    .eq('id', editingSessionId);
+
+  // 2. Finde matching availability_slots via Zeitfenster (±2min)
+  const sessionTime = new Date(session.session_date);
+  const windowStart = new Date(sessionTime.getTime() - 2 * 60000).toISOString();
+  const windowEnd = new Date(sessionTime.getTime() + 2 * 60000).toISOString();
+
+  const { data: matchingSlots } = await supabase
+    .from('availability_slots')
+    .select('id')
+    .gte('start_time', windowStart)
+    .lte('start_time', windowEnd);
+
+  if (matchingSlots && matchingSlots.length > 0) {
+    const slotIds = matchingSlots.map(s => s.id);
+
+    // 3. Storniere alle matching booking_requests
+    await supabase
+      .from('booking_requests')
+      .update({ status: 'cancelled' })
+      .in('slot_id', slotIds)
+      .eq('status', 'confirmed');
+  }
+
+  toast.success('Einheit abgesagt');
+  setSessionDialogOpen(false);
+  setEditingSessionId(null);
+  loadAll();
+};
 
   const savePackage = async () => {
     if (!user || !id) return;
