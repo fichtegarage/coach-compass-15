@@ -481,6 +481,16 @@ const EditExerciseDialog: React.FC<{
 }> = ({ exercise, open, onClose, onUpdated, equipment }) => {
   const [nameDe, setNameDe] = useState('');
   const [name, setName] = useState('');
+  // Generate URL-friendly slug from exercise name
+  const generateSlug = (text: string): string => {
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+      .replace(/\s+/g, '-')          // Spaces to hyphens
+      .replace(/-+/g, '-')           // Remove duplicate hyphens
+      .replace(/^-|-$/g, '');        // Trim hyphens
+  };
   const [description, setDescription] = useState('');
   const [muscleGroups, setMuscleGroups] = useState<string[]>([]);
   const [movementPattern, setMovementPattern] = useState('');
