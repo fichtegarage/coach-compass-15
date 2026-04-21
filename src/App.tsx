@@ -1,3 +1,4 @@
+import AssessmentPage from '@/pages/AssessmentPage';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -45,6 +46,7 @@ const AppRoutes = () => {
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/clients/new" element={<ClientFormPage />} />
         <Route path="/clients/:id" element={<ClientDetailPage />} />
+         <Route path="/clients/:clientId/assessment" element={<AssessmentPage />} />
         <Route path="/clients/:id/edit" element={<ClientFormPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
         <Route path="/bookings" element={<BookingsPage />} />
