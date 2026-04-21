@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp,
   StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2, Camera,
-  Key, Copy, RefreshCw, CalendarCheck, Download
+  Key, Copy, RefreshCw, CalendarCheck, Download, Lock
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInWeeks } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -1543,6 +1543,29 @@ const ClientDetailPage: React.FC = () => {
               />
             </CardContent>
           </Card>
+          <Card>
+  <CardHeader className="pb-2">
+    <CardTitle className="text-sm font-display flex items-center gap-2">
+      <Lock className="w-4 h-4" /> {/* Import: Lock von lucide-react */}
+      Interne Notizen
+    </CardTitle>
+  </CardHeader>
+  <CardContent>
+    <Textarea
+      defaultValue={client.notes_internal || ''}
+      onBlur={async (e) => {
+        await supabase.from('clients').update({ notes_internal: e.target.value }).eq('id', id);
+        toast.success('Interne Notizen gespeichert');
+      }}
+      rows={4}
+      placeholder="Vertrauliche Notizen (nur für dich sichtbar)..."
+      className="bg-muted/30"
+    />
+    <p className="text-xs text-muted-foreground mt-2">
+      💡 Diese Notizen sind nur für dich sichtbar und werden trotzdem dem AI-Builder mitgeteilt.
+    </p>
+  </CardContent>
+</Card>
         </TabsContent>
       </Tabs>
 
