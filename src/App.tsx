@@ -18,6 +18,9 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 import OnboardingPage from './pages/OnboardingPage';
 import ExercisesPage from './pages/ExercisesPage';
+import AssessmentPage from '@/pages/AssessmentPage';
+   
+   <Route path="/clients/:clientId/assessment" element={<AssessmentPage />} />
 
 const queryClient = new QueryClient();
 
