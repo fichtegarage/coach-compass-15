@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Loader2, Search, Plus, Dumbbell, ChevronDown, ChevronUp,
-  Target, Zap, Info, X
+  Target, Zap, Info, X, Filter
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -36,6 +36,8 @@ interface Exercise {
   id: string;
   name: string;
   name_de: string;
+  description?: string;
+  description_de?: string;
   muscle_groups: string[];
   movement_pattern: string;
   exercise_type: string;
@@ -124,8 +126,16 @@ const ExerciseCard: React.FC<{
               <Badge variant="outline" className="text-[10px]">
                 {exerciseTypeLabels[exercise.exercise_type] || exercise.exercise_type}
               </Badge>
+              {!exercise.description_de && (
+                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                  Keine Beschreibung
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground truncate mt-0.5">{exercise.name}</p>
+            {exercise.description_de && (
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{exercise.description_de}</p>
+            )}
             <div className="flex flex-wrap gap-1 mt-1.5">
               {exercise.muscle_groups.slice(0, 3).map(mg => (
                 <span key={mg} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
@@ -166,6 +176,16 @@ const ExerciseCard: React.FC<{
 
       {expanded && (
         <div className="px-4 pb-4 pt-2 border-t border-border space-y-3">
+          {/* Description */}
+          {exercise.description_de && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                Beschreibung
+              </p>
+              <p className="text-sm text-foreground">{exercise.description_de}</p>
+            </div>
+          )}
+
           {/* Equipment */}
           {requiredEquipmentNames.length > 0 && (
             <div>
@@ -246,6 +266,8 @@ interface AddExerciseDialogProps {
 const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, onAdded, equipment }) => {
   const [name, setName] = useState('');
   const [nameDe, setNameDe] = useState('');
+  const [description, setDescription] = useState('');
+  const [descriptionDe, setDescriptionDe] = useState('');
   const [muscleGroups, setMuscleGroups] = useState<string[]>([]);
   const [movementPattern, setMovementPattern] = useState('');
   const [exerciseType, setExerciseType] = useState('compound');
@@ -284,6 +306,8 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
       const { error } = await supabase.from('exercises').insert({
         name: name.trim(),
         name_de: nameDe.trim(),
+        description: description.trim() || null,
+        description_de: descriptionDe.trim() || null,
         exercise_slug: slug,
         muscle_groups: muscleGroups,
         movement_pattern: movementPattern,
@@ -303,6 +327,8 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
       // Reset
       setName('');
       setNameDe('');
+      setDescription('');
+      setDescriptionDe('');
       setMuscleGroups([]);
       setMovementPattern('');
       setExerciseType('compound');
@@ -362,6 +388,28 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="z.B. Bench Press"
+              />
+            </div>
+          </div>
+
+          {/* Descriptions */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Beschreibung (Deutsch)</Label>
+              <Textarea
+                value={descriptionDe}
+                onChange={e => setDescriptionDe(e.target.value)}
+                placeholder="Kurze Beschreibung der Übung..."
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label>Beschreibung (Englisch)</Label>
+              <Textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Short exercise description..."
+                rows={3}
               />
             </div>
           </div>
@@ -513,6 +561,7 @@ const ExerciseLibrary: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterPattern, setFilterPattern] = useState<string | null>(null);
   const [filterMuscle, setFilterMuscle] = useState<string | null>(null);
+  const [filterNoDescription, setFilterNoDescription] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   // ── Load Data ──────────────────────────────────────────────────────────────
@@ -553,11 +602,13 @@ const ExerciseLibrary: React.FC = () => {
       ex.name.toLowerCase().includes(search.toLowerCase());
     const matchesPattern = !filterPattern || ex.movement_pattern === filterPattern;
     const matchesMuscle = !filterMuscle || ex.muscle_groups.includes(filterMuscle);
-    return matchesSearch && matchesPattern && matchesMuscle;
+    const matchesNoDescription = !filterNoDescription || !ex.description_de;
+    return matchesSearch && matchesPattern && matchesMuscle && matchesNoDescription;
   });
 
   const patterns = [...new Set(exercises.map(e => e.movement_pattern))];
   const muscles = [...new Set(exercises.flatMap(e => e.muscle_groups))];
+  const exercisesWithoutDescription = exercises.filter(e => !e.description_de).length;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -575,7 +626,14 @@ const ExerciseLibrary: React.FC = () => {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-display font-bold">Übungsdatenbank</h2>
-          <p className="text-sm text-muted-foreground">{exercises.length} Übungen</p>
+          <p className="text-sm text-muted-foreground">
+            {exercises.length} Übungen
+            {exercisesWithoutDescription > 0 && (
+              <span className="text-amber-600 ml-2">
+                ({exercisesWithoutDescription} ohne Beschreibung)
+              </span>
+            )}
+          </p>
         </div>
         <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
           <Plus className="w-4 h-4" />
@@ -622,11 +680,28 @@ const ExerciseLibrary: React.FC = () => {
             </SelectContent>
           </Select>
 
-          {(filterPattern || filterMuscle) && (
+          {/* No Description Filter */}
+          {exercisesWithoutDescription > 0 && (
+            <Button
+              variant={filterNoDescription ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterNoDescription(!filterNoDescription)}
+              className="gap-1.5"
+            >
+              <Filter className="w-3 h-3" />
+              Ohne Beschreibung ({exercisesWithoutDescription})
+            </Button>
+          )}
+
+          {(filterPattern || filterMuscle || filterNoDescription) && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setFilterPattern(null); setFilterMuscle(null); }}
+              onClick={() => { 
+                setFilterPattern(null); 
+                setFilterMuscle(null); 
+                setFilterNoDescription(false);
+              }}
               className="text-muted-foreground"
             >
               <X className="w-3 h-3 mr-1" /> Filter zurücksetzen
