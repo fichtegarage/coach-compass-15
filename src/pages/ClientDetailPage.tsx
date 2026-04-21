@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import {
-  ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp,
+  ArrowLeft, User, Pin, Plus, CalendarDays, Package, TrendingUp, Activity,
   StickyNote, AlertTriangle, Flame, Loader2, Edit, FileText, Check, Circle, Trash2, Camera,
   Key, Copy, RefreshCw, CalendarCheck, Download, Lock
 } from 'lucide-react';
@@ -722,13 +722,16 @@ const ClientDetailPage: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
-          <Button size="sm" className="gap-2" onClick={() => setBookDialogOpen(true)}>
-            <Plus className="w-4 h-4" /> Session buchen
-          </Button>
-          <Link to={`/clients/${id}/edit`}>
-            <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Bearbeiten</Button>
-          </Link>
-        </div>
+  <Button size="sm" className="gap-2" onClick={() => setBookDialogOpen(true)}>
+    <Plus className="w-4 h-4" /> Session buchen
+  </Button>
+  <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate(`/clients/${id}/assessment`)}>
+    <Activity className="w-4 h-4" /> Assessment
+  </Button>
+  <Link to={`/clients/${id}/edit`}>
+    <Button variant="outline" size="sm" className="gap-2"><Edit className="w-4 h-4" /> Bearbeiten</Button>
+  </Link>
+</div>
       </div>
 
       {/* Pinned Note */}
