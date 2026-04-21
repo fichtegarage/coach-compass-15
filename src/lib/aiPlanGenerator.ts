@@ -18,8 +18,10 @@ interface ClientData {
   date_of_birth?: string | null;
   fitness_goal?: string | null;
   fitness_goal_text?: string | null;
-  training_experience?: string | null;
-  health_notes?: string | null;
+  pinned_note?: string | null;      // ✅ NEU
+  general_notes?: string | null;    // ✅ NEU
+  health_notes?: string | null;     // ✅ NEU
+  notes_internal?: string | null;   // ✅ NEU
 }
 
 interface ConversationData {
@@ -171,10 +173,19 @@ export async function loadClientDataForPrompt(
   progression: Map<string, { sessionCount: number; unlocked: boolean }>;
 }> {
   const { data: clientData } = await supabase
-    .from('clients')
-    .select('full_name, date_of_birth, fitness_goal, fitness_goal_text, training_experience, health_notes')
-    .eq('id', clientId)
-    .single();
+  .from('clients')
+  .select(`
+    full_name, 
+    date_of_birth, 
+    fitness_goal, 
+    fitness_goal_text,
+    pinned_note,
+    general_notes,
+    health_notes,
+    notes_internal
+  `)
+  .eq('id', clientId)
+  .single();
 
   const { data: convData } = await supabase
     .from('onboarding_conversations')
@@ -363,12 +374,19 @@ ${config.focus ? `- Fokus: ${config.focus}` : ''}
     if (conversation.personality_type)    context += `- Typ: ${personalityDescriptions[conversation.personality_type] || ''}\n`;
   }
 
-  if (health) {
-    const issues = [health.musculoskeletal, health.sports_injuries, health.current_pain].filter(Boolean);
-    if (issues.length > 0) {
-      context += `\n## ⚠️ Einschränkungen (unbedingt beachten)\n${issues.join(' | ')}\n`;
-    }
+  // Health Records aus Anamnese
+if (health) {
+  const issues = [health.musculoskeletal, health.sports_injuries, health.current_pain].filter(Boolean);
+  if (issues.length > 0) {
+    context += `\n## Einschränkungen (Anamnese)\n${issues.join(', ')}\n`;
   }
+}
+  // Health Notes vom Coach (wichtiger - aktuelle Infos!)
+if (client.health_notes) {
+  context += `\n## ⚠️ GESUNDHEITSHINWEISE VOM COACH (KRITISCH - UNBEDINGT BEACHTEN!)\n${client.health_notes}\n`;
+  context += `\nWICHTIG: Diese Informationen MÜSSEN bei der Übungsauswahl berücksichtigt werden!\n`;
+  context += `Vermeide kontraindizierte Übungen und biete geeignete Alternativen an.\n`;
+}
 
   if (assessment?.focus_points) {
     context += `\n## Bewegungsqualität\nFokus: ${assessment.focus_points}\n`;
