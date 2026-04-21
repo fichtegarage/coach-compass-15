@@ -4,7 +4,7 @@
  * Globale Übungsdatenbank für Coaches.
  * - Übungen durchsuchen und filtern
  * - Neue Übungen hinzufügen
- * - Übungsdetails mit Coaching-Cues anzeigen
+ * - Übungsdetails bearbeiten und löschen
  */
 
 import React, { useState, useEffect } from 'react';
@@ -17,10 +17,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Loader2, Search, Plus, Dumbbell, ChevronDown, ChevronUp,
-  Target, Zap, Info, X, Filter
+  Target, Zap, Info, X, Filter, Edit2, Trash2
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -36,7 +37,6 @@ interface Exercise {
   id: string;
   name: string;
   name_de: string;
-  description?: string;
   description_de?: string;
   muscle_groups: string[];
   movement_pattern: string;
@@ -105,8 +105,9 @@ const difficultyLabels = ['', 'Anfänger', 'Leicht-Fortgeschritten', 'Fortgeschr
 const ExerciseCard: React.FC<{
   exercise: Exercise;
   equipment: Map<string, Equipment>;
-  onEdit?: () => void;
-}> = ({ exercise, equipment, onEdit }) => {
+  onEdit: () => void;
+  onDelete: () => void;
+}> = ({ exercise, equipment, onEdit, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
 
   const requiredEquipmentNames = exercise.required_equipment
@@ -176,6 +177,34 @@ const ExerciseCard: React.FC<{
 
       {expanded && (
         <div className="px-4 pb-4 pt-2 border-t border-border space-y-3">
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="gap-1.5"
+            >
+              <Edit2 className="w-3 h-3" />
+              Bearbeiten
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="gap-1.5 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="w-3 h-3" />
+              Löschen
+            </Button>
+          </div>
+
           {/* Description */}
           {exercise.description_de && (
             <div>
@@ -254,6 +283,284 @@ const ExerciseCard: React.FC<{
   );
 };
 
+// ── EditExerciseDialog ───────────────────────────────────────────────────────
+
+interface EditExerciseDialogProps {
+  open: boolean;
+  exercise: Exercise | null;
+  onClose: () => void;
+  onSaved: () => void;
+  equipment: Equipment[];
+}
+
+const EditExerciseDialog: React.FC<EditExerciseDialogProps> = ({ open, exercise, onClose, onSaved, equipment }) => {
+  const [name, setName] = useState('');
+  const [nameDe, setNameDe] = useState('');
+  const [descriptionDe, setDescriptionDe] = useState('');
+  const [muscleGroups, setMuscleGroups] = useState<string[]>([]);
+  const [movementPattern, setMovementPattern] = useState('');
+  const [exerciseType, setExerciseType] = useState('compound');
+  const [difficulty, setDifficulty] = useState(3);
+  const [coachingCues, setCoachingCues] = useState('');
+  const [context, setContext] = useState<string[]>(['gym']);
+  const [requiredEquipment, setRequiredEquipment] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (exercise) {
+      setName(exercise.name);
+      setNameDe(exercise.name_de);
+      setDescriptionDe(exercise.description_de || '');
+      setMuscleGroups(exercise.muscle_groups);
+      setMovementPattern(exercise.movement_pattern);
+      setExerciseType(exercise.exercise_type);
+      setDifficulty(exercise.difficulty);
+      setCoachingCues(exercise.coaching_cues.join('\n'));
+      setContext(exercise.context);
+      setRequiredEquipment(exercise.required_equipment);
+    }
+  }, [exercise]);
+
+  const handleSave = async () => {
+    if (!exercise || !name.trim() || !nameDe.trim() || muscleGroups.length === 0 || !movementPattern) {
+      toast.error('Bitte fülle alle Pflichtfelder aus');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const cuesArray = coachingCues
+        .split('\n')
+        .map(c => c.trim())
+        .filter(c => c.length > 0);
+
+      const { error } = await supabase
+        .from('exercises')
+        .update({
+          name: name.trim(),
+          name_de: nameDe.trim(),
+          description_de: descriptionDe.trim() || null,
+          muscle_groups: muscleGroups,
+          movement_pattern: movementPattern,
+          exercise_type: exerciseType,
+          difficulty,
+          coaching_cues: cuesArray,
+          context,
+          required_equipment: requiredEquipment,
+        })
+        .eq('id', exercise.id);
+
+      if (error) throw error;
+
+      toast.success(`"${nameDe}" aktualisiert`);
+      onSaved();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      toast.error('Fehler beim Speichern');
+    }
+    setSaving(false);
+  };
+
+  const toggleMuscleGroup = (mg: string) => {
+    setMuscleGroups(prev => 
+      prev.includes(mg) ? prev.filter(m => m !== mg) : [...prev, mg]
+    );
+  };
+
+  const toggleContext = (ctx: string) => {
+    setContext(prev =>
+      prev.includes(ctx) ? prev.filter(c => c !== ctx) : [...prev, ctx]
+    );
+  };
+
+  const toggleEquipment = (eqId: string) => {
+    setRequiredEquipment(prev =>
+      prev.includes(eqId) ? prev.filter(e => e !== eqId) : [...prev, eqId]
+    );
+  };
+
+  if (!exercise) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display flex items-center gap-2">
+            <Edit2 className="w-5 h-5" />
+            Übung bearbeiten
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Names */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Name (Deutsch) *</Label>
+              <Input
+                value={nameDe}
+                onChange={e => setNameDe(e.target.value)}
+                placeholder="z.B. Bankdrücken"
+              />
+            </div>
+            <div>
+              <Label>Name (Englisch) *</Label>
+              <Input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="z.B. Bench Press"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <Label>Beschreibung (Deutsch)</Label>
+            <Textarea
+              value={descriptionDe}
+              onChange={e => setDescriptionDe(e.target.value)}
+              placeholder="Kurze Beschreibung der Übung..."
+              rows={3}
+            />
+          </div>
+
+          {/* Movement Pattern & Type */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Bewegungsmuster *</Label>
+              <Select value={movementPattern} onValueChange={setMovementPattern}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Auswählen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(movementPatternLabels).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Übungstyp</Label>
+              <Select value={exerciseType} onValueChange={setExerciseType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(exerciseTypeLabels).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Difficulty */}
+          <div>
+            <Label>Schwierigkeit: {difficultyLabels[difficulty]}</Label>
+            <div className="flex gap-2 mt-2">
+              {[1, 2, 3, 4, 5].map(level => (
+                <button
+                  key={level}
+                  onClick={() => setDifficulty(level)}
+                  className={`w-8 h-8 rounded-lg border transition-colors ${
+                    level <= difficulty
+                      ? 'bg-primary border-primary text-white'
+                      : 'bg-muted border-border text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Muscle Groups */}
+          <div>
+            <Label>Muskelgruppen * (mind. 1 auswählen)</Label>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {Object.entries(muscleGroupLabels).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => toggleMuscleGroup(key)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    muscleGroups.includes(key)
+                      ? 'bg-primary text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Context */}
+          <div>
+            <Label>Kontext</Label>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {Object.entries(contextLabels).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => toggleContext(key)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    context.includes(key)
+                      ? 'bg-primary text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Required Equipment */}
+          <div>
+            <Label>Benötigtes Equipment</Label>
+            <div className="flex flex-wrap gap-1.5 mt-2 max-h-32 overflow-y-auto">
+              {equipment.map(eq => (
+                <button
+                  key={eq.id}
+                  onClick={() => toggleEquipment(eq.id)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    requiredEquipment.includes(eq.id)
+                      ? 'bg-primary text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {eq.name_de}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Coaching Cues */}
+          <div>
+            <Label>Coaching Cues (eine pro Zeile)</Label>
+            <Textarea
+              value={coachingCues}
+              onChange={e => setCoachingCues(e.target.value)}
+              placeholder="Schulterblätter zusammen&#10;Kontrollierte Bewegung&#10;Volle Bewegungsamplitude"
+              rows={4}
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" onClick={onClose} className="flex-1">
+              Abbrechen
+            </Button>
+            <Button onClick={handleSave} disabled={saving} className="flex-1 gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Änderungen speichern
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 // ── AddExerciseDialog ────────────────────────────────────────────────────────
 
 interface AddExerciseDialogProps {
@@ -266,7 +573,6 @@ interface AddExerciseDialogProps {
 const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, onAdded, equipment }) => {
   const [name, setName] = useState('');
   const [nameDe, setNameDe] = useState('');
-  const [description, setDescription] = useState('');
   const [descriptionDe, setDescriptionDe] = useState('');
   const [muscleGroups, setMuscleGroups] = useState<string[]>([]);
   const [movementPattern, setMovementPattern] = useState('');
@@ -306,7 +612,6 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
       const { error } = await supabase.from('exercises').insert({
         name: name.trim(),
         name_de: nameDe.trim(),
-        description: description.trim() || null,
         description_de: descriptionDe.trim() || null,
         exercise_slug: slug,
         muscle_groups: muscleGroups,
@@ -327,7 +632,6 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
       // Reset
       setName('');
       setNameDe('');
-      setDescription('');
       setDescriptionDe('');
       setMuscleGroups([]);
       setMovementPattern('');
@@ -392,26 +696,15 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
             </div>
           </div>
 
-          {/* Descriptions */}
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Beschreibung (Deutsch)</Label>
-              <Textarea
-                value={descriptionDe}
-                onChange={e => setDescriptionDe(e.target.value)}
-                placeholder="Kurze Beschreibung der Übung..."
-                rows={3}
-              />
-            </div>
-            <div>
-              <Label>Beschreibung (Englisch)</Label>
-              <Textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Short exercise description..."
-                rows={3}
-              />
-            </div>
+          {/* Description */}
+          <div>
+            <Label>Beschreibung (Deutsch)</Label>
+            <Textarea
+              value={descriptionDe}
+              onChange={e => setDescriptionDe(e.target.value)}
+              placeholder="Kurze Beschreibung der Übung..."
+              rows={3}
+            />
           </div>
 
           {/* Movement Pattern & Type */}
@@ -563,6 +856,11 @@ const ExerciseLibrary: React.FC = () => {
   const [filterMuscle, setFilterMuscle] = useState<string | null>(null);
   const [filterNoDescription, setFilterNoDescription] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [exerciseToDelete, setExerciseToDelete] = useState<Exercise | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // ── Load Data ──────────────────────────────────────────────────────────────
 
@@ -593,6 +891,31 @@ const ExerciseLibrary: React.FC = () => {
   useEffect(() => {
     loadExercises();
   }, []);
+
+  // ── Delete Handler ─────────────────────────────────────────────────────────
+
+  const handleDelete = async () => {
+    if (!exerciseToDelete) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('exercises')
+        .delete()
+        .eq('id', exerciseToDelete.id);
+
+      if (error) throw error;
+
+      toast.success(`"${exerciseToDelete.name_de}" gelöscht`);
+      loadExercises();
+      setDeleteDialogOpen(false);
+      setExerciseToDelete(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Fehler beim Löschen');
+    }
+    setDeleting(false);
+  };
 
   // ── Filter ─────────────────────────────────────────────────────────────────
 
@@ -713,7 +1036,19 @@ const ExerciseLibrary: React.FC = () => {
       {/* Exercise List */}
       <div className="space-y-2">
         {filteredExercises.map(ex => (
-          <ExerciseCard key={ex.id} exercise={ex} equipment={equipmentMap} />
+          <ExerciseCard
+            key={ex.id}
+            exercise={ex}
+            equipment={equipmentMap}
+            onEdit={() => {
+              setSelectedExercise(ex);
+              setEditDialogOpen(true);
+            }}
+            onDelete={() => {
+              setExerciseToDelete(ex);
+              setDeleteDialogOpen(true);
+            }}
+          />
         ))}
       </div>
 
@@ -731,6 +1066,44 @@ const ExerciseLibrary: React.FC = () => {
         onAdded={loadExercises}
         equipment={equipment}
       />
+
+      {/* Edit Dialog */}
+      <EditExerciseDialog
+        open={editDialogOpen}
+        exercise={selectedExercise}
+        onClose={() => {
+          setEditDialogOpen(false);
+          setSelectedExercise(null);
+        }}
+        onSaved={loadExercises}
+        equipment={equipment}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Übung löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bist du sicher, dass du "{exerciseToDelete?.name_de}" löschen möchtest? 
+              Diese Aktion kann nicht rückgängig gemacht werden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setExerciseToDelete(null)}>
+              Abbrechen
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
