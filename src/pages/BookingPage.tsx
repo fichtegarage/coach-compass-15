@@ -267,8 +267,9 @@ const BookingPage: React.FC = () => {
       const allPkgs = [...myPkgs, ...(partnerPkgs || [])];
 
       for (const pkg of allPkgs) {
-        const { count } = await supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('package_id', pkg.id).in('status', ['Completed', 'No-Show']);
-        const used = count || 0;
+        const { data: sessionsData } = await supabase.from('sessions').select('id, package_id, second_client_package_id')
+  .or(`package_id.eq.${pkg.id},second_client_package_id.eq.${pkg.id}`).in('status', ['Completed', 'No-Show']);
+        const used = sessionsData?.length || 0;
         if (used < pkg.sessions_included) {
           const isDuo = pkg.is_duo || false;
           if (isDuo) {
