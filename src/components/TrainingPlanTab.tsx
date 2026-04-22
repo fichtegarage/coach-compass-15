@@ -900,11 +900,6 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
           ? `Duo: ${clientName} & ${allClients.find(c => c.id === duoPartnerId)?.full_name}` 
           : null,
       }).select().single();
-        weeks_total: parsed.weeks_total, sessions_per_week: parsed.sessions_per_week,
-        total_cycles: parsed.total_cycles || 1,
-        progression_notes: parsed.progression_notes || null, coaching_notes: parsed.coaching_notes || null,
-        nutrition_notes: parsed.nutrition_notes || null, source: 'ai_generated', is_active: true,
-      }).select().single();
       if (planError || !planData) throw planError;
       for (const workout of parsed.workouts) {
         const { data: workoutData, error: workoutError } = await supabase.from('plan_workouts').insert({
