@@ -636,7 +636,7 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImported, 
       const allExerciseNames = parsed.workouts.flatMap(w => w.exercises.map(e => e.name));
       const matchResults = await matchAndAddExercises(allExerciseNames);
       const stats = getMatchingStats(matchResults);
-      await supabase.from('training_plans').update({ is_active: false }).eq('client_id', clientId).eq('trainer_id', trainerId).eq('is_active', true);
+      await supabase.from('training_plans').update({ is_active: false }).or(`client_id.eq.${clientId},second_client_id.eq.${clientId}`).eq('trainer_id', trainerId).eq('is_active', true);
       const { data: planData, error: planError } = await supabase.from('training_plans').insert({
         client_id: clientId, trainer_id: trainerId, name: parsed.name, goal: parsed.goal || null,
         weeks_total: parsed.weeks_total, sessions_per_week: parsed.sessions_per_week,
@@ -808,7 +808,7 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
       const allExerciseNames = parsed.workouts.flatMap(w => w.exercises.map(e => e.name));
       const matchResults = await matchAndAddExercises(allExerciseNames);
       const stats = getMatchingStats(matchResults);
-      await supabase.from('training_plans').update({ is_active: false }).eq('client_id', clientId).eq('trainer_id', trainerId).eq('is_active', true);
+      await supabase.from('training_plans').update({ is_active: false }).or(`client_id.eq.${clientId},second_client_id.eq.${clientId}`).eq('trainer_id', trainerId).eq('is_active', true);
       const { data: planData, error: planError } = await supabase.from('training_plans').insert({
         client_id: clientId, trainer_id: trainerId, name: parsed.name, goal: parsed.goal || null,
         weeks_total: parsed.weeks_total, sessions_per_week: parsed.sessions_per_week,
@@ -973,7 +973,7 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
     setLoading(true);
     const { data: exerciseCatalog } = await supabase.from('exercises').select('id, name_de').order('name_de');
     setCatalogExercises(exerciseCatalog || []);
-    const { data: plansData } = await supabase.from('training_plans').select('*').eq('client_id', clientId).eq('trainer_id', user.id).order('created_at', { ascending: false });
+    const { data: plansData } = await supabase.from('training_plans').select('*').or(`client_id.eq.${clientId},second_client_id.eq.${clientId}`).eq('trainer_id', user.id).order('created_at', { ascending: false });
     if (!plansData) { setLoading(false); return; }
     setPlans(plansData);
     const active = plansData.find(p => p.is_active) || null;
@@ -1027,7 +1027,7 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
   };
 
   const handleActivate = async (planId: string) => {
-    await supabase.from('training_plans').update({ is_active: false }).eq('client_id', clientId);
+    await supabase.from('training_plans').update({ is_active: false }).or(`client_id.eq.${clientId},second_client_id.eq.${clientId}`);
     await supabase.from('training_plans').update({ is_active: true }).eq('id', planId);
     toast.success('Plan aktiviert'); setSelectedWeek(null); loadPlans();
   };
