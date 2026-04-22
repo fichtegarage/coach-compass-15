@@ -765,6 +765,10 @@ interface AIBuilderDialogProps {
 
 const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImported, clientId, clientName, trainerId }) => {
   const [step, setStep] = useState<'config' | 'generating' | 'preview'>('config');
+  // Duo-Plan States
+  const [isDuoPlan, setIsDuoPlan] = useState(false);
+  const [duoPartnerId, setDuoPartnerId] = useState<string | null>(null);
+  const [allClients, setAllClients] = useState<Array<{ id: string; full_name: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [weeks, setWeeks] = useState(4);
@@ -774,6 +778,23 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
   const [generatedMarkdown, setGeneratedMarkdown] = useState('');
   const [parsed, setParsed] = useState<ParsedPlan | null>(null);
   const [validation, setValidation] = useState<ReturnType<typeof validateParsedPlan> | null>(null);
+  // Lade alle Clients für Duo-Partner Auswahl
+  useEffect(() => {
+    if (!open || !user) return;
+    
+    const loadClients = async () => {
+      const { data } = await supabase
+        .from('clients')
+        .select('id, full_name')
+        .eq('user_id', user.id)
+        .eq('status', 'Active')
+        .order('full_name');
+      
+      setAllClients(data || []);
+    };
+    
+    loadClients();
+  }, [open, user]);
 
   const handleGenerate = async () => {
     setLoading(true); setStep('generating');
@@ -895,9 +916,63 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
                 </div>
                 <Switch checked={includeDeload} onCheckedChange={setIncludeDeload} />
               </div>
+              {/* DUO-PLAN OPTION */}
+              <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-sm flex items-center gap-2">
+                      🤝 Duo-Plan
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Gemeinsamer Plan für zwei Partner
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={isDuoPlan} 
+                    onCheckedChange={(checked) => {
+                      setIsDuoPlan(checked);
+                      if (!checked) setDuoPartnerId(null);
+                    }} 
+                  />
+                </div>
+
+                {isDuoPlan && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Partner wählen</Label>
+                    <Select 
+                      value={duoPartnerId || ''} 
+                      onValueChange={setDuoPartnerId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Partner auswählen..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allClients
+                          .filter(c => c.id !== clientId)
+                          .map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.full_name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    {duoPartnerId && (
+                      <p className="text-xs text-muted-foreground">
+                        ✓ Plan wird für {clientName} und{' '}
+                        {allClients.find(c => c.id === duoPartnerId)?.full_name} erstellt
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            <Button onClick={handleGenerate} disabled={loading} className="w-full gap-2">
-              <Wand2 className="w-4 h-4" />Plan generieren
+            <Button 
+              onClick={handleGenerate} 
+              disabled={loading || (isDuoPlan && !duoPartnerId)} 
+              className="w-full gap-2"
+            >
+              <Wand2 className="w-4 h-4" />
+              {isDuoPlan ? 'Duo-Plan generieren' : 'Plan generieren'}
             </Button>
           </div>
         )}
