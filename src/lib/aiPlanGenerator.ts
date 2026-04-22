@@ -86,6 +86,8 @@ export interface PlanConfig {
   sessionsPerWeek: number;
   includeDeload: boolean;
   focus?: string;
+  isDuoPlan?: boolean;
+  duoPartnerId?: string;
   /** Mesozyklusphase – beeinflusst Übungsauswahl */
   phase?: MesocyclePhase;
   /** Cardio-Übungen einschließen */
@@ -348,7 +350,8 @@ function buildExerciseLibrarySection(
 
 export function generateSystemPrompt(
   data: Awaited<ReturnType<typeof loadClientDataForPrompt>>,
-  config: PlanConfig
+  config: PlanConfig,
+  partnerData?: Awaited<ReturnType<typeof loadClientDataForPrompt>> | null
 ): string {
   const { client, conversation, health, assessment, equipment, filteredExercises } = data;
   if (!client) return '';
@@ -357,6 +360,100 @@ export function generateSystemPrompt(
   const phase        = config.phase || 'accumulation';
   const phaseLabel   = PHASE_LABELS[phase] || phase;
 
+  // DUO-PLAN: Spezieller Prompt für gemeinsames Training
+  if (config.isDuoPlan && partnerData?.client) {
+    const partner = partnerData.client;
+    const partnerGymEquipment = partnerData.equipment
+      .filter(e => e.location === 'gym' || e.location === 'both')
+      .map(e => e.name_de);
+    
+    let duoContext = `Du bist ein erfahrener Personal Trainer. Erstelle einen **${config.weeks}-Wochen-GEMEINSAMEN-Trainingsplan** für DUO-TRAINING.
+
+## 🤝 WICHTIG: DUO-PLAN PRINZIPIEN
+
+Dieser Plan wird von BEIDEN Partnern **gleichzeitig in gemeinsamen Sessions** genutzt. Der Plan muss:
+
+1. **SWEET SPOT finden:** Übungen die für BEIDE Partner optimal sind
+2. **GEMEINSAME Ziele** priorisieren (wo sich die Ziele überschneiden)
+3. **PARTNER-EXERCISES einbauen:** 2-3 Übungen pro Workout die Partner-Interaktion erfordern
+4. **INDIVIDUELLE INTENSITÄT:** Gleiche Übungen, aber unterschiedliche Gewichte/Reps je nach Level möglich
+
+## Partner 1: ${client.full_name}
+- Alter: ${calculateAge(client.date_of_birth)}
+- Ziel: ${client.fitness_goal_text || client.fitness_goal || 'Allgemeine Fitness'}
+`;
+
+    if (data.conversation) {
+      if (data.conversation.previous_experience) duoContext += `- Erfahrung: ${data.conversation.previous_experience}\n`;
+      if (data.conversation.stress_level) duoContext += `- Stresslevel: ${data.conversation.stress_level}\n`;
+    }
+
+    duoContext += `\n## Partner 2: ${partner.full_name}
+- Alter: ${calculateAge(partner.date_of_birth)}
+- Ziel: ${partner.fitness_goal_text || partner.fitness_goal || 'Allgemeine Fitness'}
+`;
+
+    if (partnerData.conversation) {
+      if (partnerData.conversation.previous_experience) duoContext += `- Erfahrung: ${partnerData.conversation.previous_experience}\n`;
+      if (partnerData.conversation.stress_level) duoContext += `- Stresslevel: ${partnerData.conversation.stress_level}\n`;
+    }
+
+    duoContext += `\n## GEMEINSAME SESSIONS
+- Trainingstage/Woche: ${config.sessionsPerWeek}
+${config.focus ? `- Fokus: ${config.focus}\n` : ''}`;
+
+    // Gesundheitliche Einschränkungen BEIDER Partner
+    const allHealthIssues = [
+      ...(data.health ? [data.health.musculoskeletal, data.health.sports_injuries, data.health.current_pain].filter(Boolean) : []),
+      ...(partnerData.health ? [partnerData.health.musculoskeletal, partnerData.health.sports_injuries, partnerData.health.current_pain].filter(Boolean) : [])
+    ];
+    if (allHealthIssues.length > 0) {
+      duoContext += `\n## ⚠️ EINSCHRÄNKUNGEN BEACHTEN (beide Partner)!\n${allHealthIssues.join(', ')}\n`;
+    }
+
+    // Equipment: Schnittmenge oder Union je nach Verfügbarkeit
+    const commonEquipment = data.equipment
+      .filter(e => e.location === 'gym' || e.location === 'both')
+      .map(e => e.name_de)
+      .filter(eq => partnerGymEquipment.includes(eq));
+    
+    if (commonEquipment.length > 0) {
+      duoContext += `\n## Equipment (beide verfügbar): ${commonEquipment.slice(0, 15).join(', ')}\n`;
+    }
+
+    // Partner-Exercises aus Katalog
+    if (data.exercises.length > 0) {
+      const partnerExercises = data.exercises.filter(name => 
+        name.toLowerCase().includes('partner')
+      );
+      if (partnerExercises.length > 0) {
+        duoContext += `\n## 🤝 PARTNER-EXERCISES VERFÜGBAR:\n${partnerExercises.join(', ')}\n`;
+      }
+      duoContext += `\n## WEITERE ÜBUNGEN:\n${data.exercises.filter(e => !e.toLowerCase().includes('partner')).slice(0, 30).join(', ')}\n`;
+    }
+
+    duoContext += `\n## 🎯 DUO-PLAN STRATEGIE
+
+**SWEET SPOT identifizieren:**
+- Wo überschneiden sich die Ziele? (z.B. beide wollen Kraft aufbauen)
+- Welches Niveau haben beide? (Anfänger vs. Fortgeschritten → Anpassungen nötig)
+- Welche Übungen kann JEDER ausführen?
+
+**PARTNER-EXERCISES integrieren:**
+- ASSISTED: Einer hilft (z.B. Partner-Assisted Pull-ups, Nordic Curls)
+- COOPERATIVE: Zusammen (z.B. Medicine Ball Pass, Partner Plank)
+- COMPETITIVE: Gegeneinander (z.B. Battle Rope Race, Resistance Sprint)
+- ALTERNATING: Abwechselnd (z.B. Alternating Burpees)
+
+**INDIVIDUELLE ANPASSUNGEN:**
+- Gleiche Übung, unterschiedliche Gewichte (in Hinweis-Spalte notieren)
+- Alternative Progressionen anbieten wenn Level zu unterschiedlich
+`;
+
+    return duoContext;
+  }
+
+  // SOLO-PLAN (bisheriger Code)
   let context = `Du bist ein erfahrener Personal Trainer. Erstelle einen **${config.weeks}-Wochen-Trainingsplan** für ${client.full_name}.
 ${client.pinned_note ? `
  
@@ -412,29 +509,30 @@ if (client.health_notes) {
 
 // ─── User-Prompt ──────────────────────────────────────────────────────────────
 
-export function generateUserPrompt(clientName: string, config: PlanConfig): string {
-  return `Erstelle jetzt den Trainingsplan.
+export function generateUserPrompt(clientName: string, config: PlanConfig, partnerName?: string): string {
+  if (config.isDuoPlan && partnerName) {
+    return `Erstelle jetzt den GEMEINSAMEN Trainingsplan für ${clientName} und ${partnerName}. 
 
-**WICHTIG – Exaktes Format für den Import:**
+**WICHTIG - Exaktes Format für den Import:**
 
-# Trainingsplan: ${clientName}
+# Trainingsplan: Duo ${clientName} & ${partnerName}
 
-## Ziel: [Hauptziel]
+## Ziel: [Gemeinsames Hauptziel]
 ## Trainingstage pro Woche: ${config.sessionsPerWeek}
 ## Wochen: ${config.weeks}
 
 ---
 
-## Woche 1: [Label z.B. "Aufbau Basis"]
+## Woche 1: [Label]
 
-### Tag 1: [Name der Einheit, z.B. "Unterkörper Push"]
+### Tag 1: [Name der Einheit]
 | Übung | Sätze | Wdh. | Pause | Hinweis |
 |-------|-------|------|-------|---------|
-| [Übungsname exakt aus Bibliothek] | [3-4] | [8-12] | [60s] | [optional] |
+| [Übung] | [3-4] | [8-12] | [60-120s] | [Bei unterschiedlichem Level: "Client A: 20kg, Client B: 15kg"] |
+| 🤝 [PARTNER-EXERCISE] | [3] | [10] | [90s] | [Art: assisted/cooperative/competitive] |
 
 ### Tag 2: [Name]
 | Übung | Sätze | Wdh. | Pause | Hinweis |
-|-------|-------|------|-------|---------|
 ...
 
 ---
@@ -445,32 +543,72 @@ ${config.includeDeload ? `
 ---
 
 ## Woche ${config.weeks}: Deload
-(50–60% Intensität, Volumen halbieren, gleiche Übungen wie Woche 1)
+(50-60% Intensität für BEIDE, weniger Sätze)
 ` : ''}
 ---
 
 ## Progressionslogik
-[Wie wird gesteigert? z.B. "+2,5 kg sobald alle Sätze sauber"]
+[Wie steigern? Individuelle Anpassungen je nach Level möglich]
 
 ## Coaching-Hinweise
-[Worauf besonders achten?]
+[Worauf bei DUO-TRAINING achten? Synchronisation? Motivation?]
 
-**REGELN – ZWINGEND EINHALTEN:**
-1. Nur Übungen aus der Bibliothek oben verwenden – exakter Name!
-2. JEDE Einheit (### Tag X) MUSS eine Tabelle mit mindestens 3 Übungen haben
-3. Keine leeren Einheiten
-4. Tabellenformat mit | immer einhalten
-5. Pausenangaben immer mit "s" (z.B. 90s)
-6. ${config.sessionsPerWeek <= 4 ? 'PFLICHT: Jede Einheit ist ein GANZKÖRPERTRAINING mit Übungen für Beine, Rücken/Bizeps, Brust/Trizeps und Core. KEIN reiner Oberkörper- oder Unterkörpertag!' : 'Split-Struktur möglich: z.B. Push/Pull/Legs, Upper/Lower oder Muskelgruppen-Split'}
-7. Bei zeitbasierten Übungen (⏱) statt Wdh. die Sekunden eintragen (z.B. "30s")`;
-}
+**DUO-PLAN REGELN:**
+1. JEDE Einheit muss 2-3 PARTNER-EXERCISES enthalten (mit 🤝 markieren)
+2. Partner-Exercises rotieren zwischen assisted, cooperative, competitive, alternating
+3. Bei Übungen mit großem Level-Unterschied: Gewichte in Hinweis-Spalte anpassen
+4. Sweet Spot: Übungen die BEIDE optimal fordern
+5. KEINE leeren Einheiten!
+6. Pausenangaben immer mit "s" (z.B. 90s)`;
+  }
 
-// ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
+  // SOLO-PLAN (bisheriger Code)
+  return `Erstelle jetzt den Trainingsplan. 
 
-function calculateAge(dob: string | null | undefined): string {
-  if (!dob) return 'unbekannt';
-  const years = Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
-  return `${years} Jahre`;
+**WICHTIG - Exaktes Format für den Import:**
+
+# Trainingsplan: ${clientName}
+
+## Ziel: [Hauptziel]
+## Trainingstage pro Woche: ${config.sessionsPerWeek}
+## Wochen: ${config.weeks}
+
+---
+
+## Woche 1: [Label]
+
+### Tag 1: [Name der Einheit]
+| Übung | Sätze | Wdh. | Pause | Hinweis |
+|-------|-------|------|-------|---------|
+| [Übung] | [3-4] | [8-12] | [60-120s] | [optional] |
+
+### Tag 2: [Name]
+| Übung | Sätze | Wdh. | Pause | Hinweis |
+...
+
+---
+
+## Woche 2: [Label]
+...
+${config.includeDeload ? `
+---
+
+## Woche ${config.weeks}: Deload
+(50-60% Intensität, weniger Sätze)
+` : ''}
+---
+
+## Progressionslogik
+[Wie steigern?]
+
+## Coaching-Hinweise
+[Worauf achten?]
+
+**REGELN:**
+1. JEDE Einheit (### Tag X) MUSS eine Übungstabelle mit mindestens 3 Übungen haben
+2. Keine leeren Einheiten!
+3. Nutze das exakte Tabellenformat mit | Trennern
+4. Pausenangaben immer mit "s" (z.B. 90s)`;
 }
 
 // ─── Exporte für KIWorkoutBuilderModal ───────────────────────────────────────
