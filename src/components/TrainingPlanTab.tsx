@@ -307,32 +307,83 @@ const WarmupCooldownSection: React.FC<{
     : 'text-blue-700 bg-blue-50 border-blue-200/50';
 
   const handleGenerate = async () => {
-    setGenerating(true);
-    const pattern = detectPattern(mainExercises);
-    const defaults = isWarmup ? WARMUP_BY_PATTERN[pattern] : COOLDOWN_BY_PATTERN[pattern];
-
-    // Bestehende löschen
-    if (exercises.length > 0) {
-      await supabase.from('plan_exercises').delete().in('id', exercises.map(e => e.id));
+    setLoading(true);
+    setStep('generating');
+    
+    try {
+      const config: PlanConfig = { 
+        weeks, 
+        sessionsPerWeek, 
+        includeDeload, 
+        focus: focus || undefined,
+        isDuoPlan,
+        duoPartnerId: duoPartnerId || undefined,
+      };
+      
+      const data = await loadClientDataForPrompt(clientId);
+      
+      if (!data.client) {
+        toast.error('Kundendaten nicht gefunden');
+        setStep('config');
+        setLoading(false);
+        return;
+      }
+      
+      // Bei Duo-Plan: Partner-Daten auch laden
+      let partnerData = null;
+      let partnerName = '';
+      if (isDuoPlan && duoPartnerId) {
+        partnerData = await loadClientDataForPrompt(duoPartnerId);
+        partnerName = partnerData.client?.full_name || 'Partner';
+      }
+      
+      const systemPrompt = generateSystemPrompt(data, config, partnerData);
+      const userPrompt = generateUserPrompt(clientName, config, partnerName);
+      
+      // Claude API aufrufen
+      const response = await fetch('/api/claude-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'user', content: systemPrompt + '\n\n' + userPrompt }
+          ],
+          max_tokens: 8000,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('API-Fehler');
+      }
+      
+      const result = await response.json();
+      const markdown = result.content?.[0]?.text || '';
+      
+      if (!markdown) {
+        throw new Error('Keine Antwort von Claude');
+      }
+      
+      setGeneratedMarkdown(markdown);
+      
+      // Plan parsen
+      const parsedPlan = parsePlan(markdown);
+      if (!parsedPlan || parsedPlan.workouts.length === 0) {
+        toast.error('Plan konnte nicht geparst werden. Versuche es erneut.');
+        setStep('config');
+        setLoading(false);
+        return;
+      }
+      
+      setParsed(parsedPlan);
+      setValidation(validateParsedPlan(parsedPlan));
+      setStep('preview');
+    } catch (err) {
+      console.error('KI-Plan Fehler:', err);
+      toast.error('Fehler bei der Plan-Generierung');
+      setStep('config');
     }
-
-    // Neue einfügen
-    const maxOrder = mainExercises.reduce((m, e) => Math.max(m, e.order_in_workout), 0);
-    const inserts = defaults.map((ex, i) => ({
-      workout_id: workoutId,
-      name: ex.name,
-      sets: 1,
-      reps_target: ex.reps,
-      rest_seconds: null,
-      notes: isWarmup ? 'Aktivierung' : 'Dehnung',
-      order_in_workout: isWarmup ? -(defaults.length - i) : maxOrder + i + 1,
-      exercise_slot: slot,
-    }));
-
-    await supabase.from('plan_exercises').insert(inserts);
-    toast.success(`${label} generiert (${pattern}-Muster)`);
-    setGenerating(false);
-    onRefresh();
+    
+    setLoading(false);
   };
 
   const handleAdd = async () => {
@@ -831,7 +882,24 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
       const stats = getMatchingStats(matchResults);
       await supabase.from('training_plans').update({ is_active: false }).or(`client_id.eq.${clientId},second_client_id.eq.${clientId}`).eq('trainer_id', trainerId).eq('is_active', true);
       const { data: planData, error: planError } = await supabase.from('training_plans').insert({
-        client_id: clientId, trainer_id: trainerId, name: parsed.name, goal: parsed.goal || null,
+        client_id: clientId, 
+        trainer_id: trainerId, 
+        name: parsed.name, 
+        goal: parsed.goal || null,
+        weeks_total: parsed.weeks_total, 
+        sessions_per_week: parsed.sessions_per_week,
+        total_cycles: parsed.total_cycles || 1,
+        progression_notes: parsed.progression_notes || null, 
+        coaching_notes: parsed.coaching_notes || null,
+        nutrition_notes: parsed.nutrition_notes || null, 
+        source: isDuoPlan ? 'ai_generated_duo' : 'ai_generated', 
+        is_active: true,
+        is_duo_plan: isDuoPlan,
+        duo_partner_id: isDuoPlan ? duoPartnerId : null,
+        duo_plan_name: isDuoPlan && duoPartnerId 
+          ? `Duo: ${clientName} & ${allClients.find(c => c.id === duoPartnerId)?.full_name}` 
+          : null,
+      }).select().single();
         weeks_total: parsed.weeks_total, sessions_per_week: parsed.sessions_per_week,
         total_cycles: parsed.total_cycles || 1,
         progression_notes: parsed.progression_notes || null, coaching_notes: parsed.coaching_notes || null,
@@ -863,7 +931,71 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
           if (exError) throw exError;
         }
       }
-      let message = `Plan "${parsed.name}" erstellt!`;
+  // Bei Duo-Plan: Gespiegelten Plan für Partner erstellen
+      if (isDuoPlan && duoPartnerId && planData) {
+        const partnerName = allClients.find(c => c.id === duoPartnerId)?.full_name || 'Partner';
+        
+        const { data: partnerPlanData, error: partnerPlanError } = await supabase.from('training_plans').insert({
+          client_id: duoPartnerId,
+          trainer_id: trainerId,
+          name: parsed.name,
+          goal: parsed.goal || null,
+          weeks_total: parsed.weeks_total,
+          sessions_per_week: parsed.sessions_per_week,
+          total_cycles: parsed.total_cycles || 1,
+          progression_notes: parsed.progression_notes || null,
+          coaching_notes: parsed.coaching_notes || null,
+          nutrition_notes: parsed.nutrition_notes || null,
+          source: 'ai_generated_duo',
+          is_active: true,
+          is_duo_plan: true,
+          duo_partner_id: clientId,
+          duo_plan_name: `Duo: ${partnerName} & ${clientName}`,
+        }).select().single();
+        
+        if (partnerPlanError || !partnerPlanData) {
+          console.error('Partner-Plan Fehler:', partnerPlanError);
+        } else {
+          // Workouts für Partner kopieren
+          for (const workout of parsed.workouts) {
+            const { data: partnerWorkoutData, error: partnerWorkoutError } = await supabase.from('plan_workouts').insert({
+              plan_id: partnerPlanData.id,
+              week_number: workout.week_number,
+              week_label: workout.week_label,
+              day_label: workout.day_label,
+              notes: workout.notes || null,
+              order_in_week: workout.order_in_week,
+              session_order: workout.session_order,
+              phase_type: workout.phase_type,
+              cycle_number: workout.cycle_number,
+            }).select().single();
+            
+            if (partnerWorkoutError || !partnerWorkoutData) continue;
+            
+            if (workout.exercises.length > 0) {
+              await supabase.from('plan_exercises').insert(
+                workout.exercises.map(ex => {
+                  const match = matchResults.get(ex.name);
+                  return {
+                    workout_id: partnerWorkoutData.id,
+                    name: ex.name,
+                    sets: ex.sets,
+                    reps_target: ex.reps_target || null,
+                    weight_target: ex.weight_target || null,
+                    rest_seconds: ex.rest_seconds,
+                    notes: ex.notes || null,
+                    order_in_workout: ex.order_in_workout,
+                    exercise_id: match?.exerciseId || null,
+                  };
+                })
+              );
+            }
+          }
+        }
+      }
+      let message = isDuoPlan 
+        ? `Duo-Plan "${parsed.name}" für beide Partner erstellt!` 
+        : `Plan "${parsed.name}" erstellt!`;
       if (stats.added > 0) message += ` ${stats.added} neue Übung${stats.added > 1 ? 'en' : ''} hinzugefügt.`;
       toast.success(message);
       onImported(); handleClose();
@@ -871,7 +1003,15 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
     setSaving(false);
   };
 
-  const handleClose = () => { setStep('config'); setGeneratedMarkdown(''); setParsed(null); setValidation(null); onClose(); };
+  const handleClose = () => {
+    setStep('config');
+    setGeneratedMarkdown('');
+    setParsed(null);
+    setValidation(null);
+    setIsDuoPlan(false);
+    setDuoPartnerId(null);
+    onClose();
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
