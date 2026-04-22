@@ -179,7 +179,10 @@ const SessionsPage: React.FC = () => {
     if (!packageId) return null;
     const pkg = packages.find(p => p.id === packageId);
     if (!pkg) return null;
-    const used = sessions.filter(s => s.package_id === packageId && ['Completed', 'No-Show'].includes(s.status)).length;
+    const used = sessions.filter(s => 
+  (s.package_id === packageId || s.second_client_package_id === packageId) && 
+  ['Completed', 'No-Show'].includes(s.status)
+).length;
     return { used, total: pkg.sessions_included };
   };
 
@@ -218,19 +221,31 @@ const SessionsPage: React.FC = () => {
     const slotOk = await checkAndHandleSlot(sessionDateISO);
     if (!slotOk) return;
     const isDuo = form.session_type === 'Duo Training';
-    const { error } = await supabase.from('sessions').insert({
-      client_id: form.client_id,
-      second_client_id: isDuo && form.second_client_id ? form.second_client_id : null,
-      user_id: user.id,
-      session_date: new Date(form.session_date).toISOString(),
-      duration_minutes: Number(form.duration_minutes),
-      session_type: sessionTypeToDb[form.session_type] || form.session_type,
-      status: form.status,
-      notes: form.notes || null,
-      late_cancellation: form.late_cancellation,
-      location: form.location,
-      package_id: form.package_id || null,
-    });
+let secondClientPackageId = null;
+if (isDuo && form.second_client_id) {
+  const { data: partnerPkg } = await supabase
+    .from('packages')
+    .select('id')
+    .eq('client_id', form.second_client_id)
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  secondClientPackageId = partnerPkg?.id || null;
+}
+const { error } = await supabase.from('sessions').insert({
+  client_id: form.client_id,
+  second_client_id: isDuo && form.second_client_id ? form.second_client_id : null,
+  user_id: user.id,
+  session_date: new Date(form.session_date).toISOString(),
+  duration_minutes: Number(form.duration_minutes),
+  session_type: sessionTypeToDb[form.session_type] || form.session_type,
+  status: form.status,
+  notes: form.notes || null,
+  late_cancellation: form.late_cancellation,
+  location: form.location,
+  package_id: form.package_id || null,
+  second_client_package_id: secondClientPackageId,
+});
     if (error) { toast.error('Fehler: ' + error.message); return; }
     setDialogOpen(false);
     toast.success('Einheit erfasst');
