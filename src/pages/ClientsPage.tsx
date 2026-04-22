@@ -108,7 +108,7 @@ const ClientsPage: React.FC = () => {
     const [clientsRes, packagesRes, sessionsRes, checkinsRes, metricsRes, completionsRes] = await Promise.all([
       supabase.from('clients').select('*').order('full_name'),
       supabase.from('packages').select('*').order('start_date', { ascending: false }),
-      supabase.from('sessions').select('client_id, id').eq('status', 'Completed').neq('session_type', 'Check-In Call'),
+      supabase.from('sessions').select('client_id, second_client_id, package_id, second_client_package_id, id').in('status', ['Completed', 'No-Show']).neq('session_type', 'Check-In Call'),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').eq('session_type', 'Check-In Call'),
       supabase.from('body_metrics').select('client_id, id'),
       supabase.from('package_feature_completions').select('package_id, feature_key'),
@@ -122,11 +122,20 @@ const ClientsPage: React.FC = () => {
     });
     setPackages(pkgMap);
 
-    const sMap: Record<string, number> = {};
-    (sessionsRes.data || []).forEach((s: any) => {
-      sMap[s.client_id] = (sMap[s.client_id] || 0) + 1;
-    });
-    setSessionCounts(sMap);
+    const sMap: Record<string, Record<string, number>> = {};
+(sessionsRes.data || []).forEach((s: any) => {
+  // Hauptkunde
+  if (s.package_id) {
+    if (!sMap[s.client_id]) sMap[s.client_id] = {};
+    sMap[s.client_id][s.package_id] = (sMap[s.client_id][s.package_id] || 0) + 1;
+  }
+  // Partner bei Duo-Training
+  if (s.second_client_id && s.second_client_package_id) {
+    if (!sMap[s.second_client_id]) sMap[s.second_client_id] = {};
+    sMap[s.second_client_id][s.second_client_package_id] = (sMap[s.second_client_id][s.second_client_package_id] || 0) + 1;
+  }
+});
+setSessionCounts(sMap);
 
     const cMap: Record<string, number> = {};
     (checkinsRes.data || []).forEach((s: any) => {
@@ -226,7 +235,7 @@ const ClientsPage: React.FC = () => {
   const renderClientCard = (client: Client) => {
     const pkg = packages[client.id];
     const isExpanded = expandedClient === client.id;
-    const usedSessions = sessionCounts[client.id] || 0;
+    const usedSessions = pkg ? (sessionCounts[client.id]?.[pkg.id] || 0) : 0;
     const usedCheckins = checkinCounts[client.id] || 0;
     const hasMetrics = (metricCounts[client.id] || 0) > 0;
     const features = pkg ? (packageFeaturesMap[pkg.package_name] || []) : [];
