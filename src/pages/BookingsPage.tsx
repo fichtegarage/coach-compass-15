@@ -429,25 +429,36 @@ const BookingsPage: React.FC = () => {
       // Slot immer als nicht buchbar markieren wenn bestätigt (1:1 PT)
       await supabase.from('availability_slots').update({ is_bookable: false }).eq('id', respondDialog.slot_id);
       if (respondDialog.availability_slots) {
-        const slotTypeMap: Record<string, string> = {
-          'in-person': 'In-Person Training',
-          'online': 'Online Training',
-          'call': 'Phone Call',
-        };
-        const start = new Date(respondDialog.availability_slots.start_time);
-        const end = new Date(respondDialog.availability_slots.end_time);
-        const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
-        await supabase.from('sessions').insert({
-          client_id: respondDialog.client_id,
-          user_id: user!.id,
-          session_date: new Date(respondDialog.availability_slots.start_time).toISOString(),
-          duration_minutes: durationMinutes,
-          session_type: slotTypeMap[respondDialog.availability_slots.slot_type] || 'In-Person Training',
-          status: 'Scheduled',
-          notes: respondDialog.client_message || null,
-          location: 'Gym',
-        });
-      }
+  const slotTypeMap: Record<string, string> = {
+    'in-person': 'In-Person Training',
+    'online': 'Online Training',
+    'call': 'Phone Call',
+  };
+  const start = new Date(respondDialog.availability_slots.start_time);
+  const end = new Date(respondDialog.availability_slots.end_time);
+  const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
+  
+  // Package für Hauptkunde finden
+  const { data: clientPkg } = await supabase
+    .from('packages')
+    .select('id')
+    .eq('client_id', respondDialog.client_id)
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  await supabase.from('sessions').insert({
+    client_id: respondDialog.client_id,
+    user_id: user!.id,
+    session_date: new Date(respondDialog.availability_slots.start_time).toISOString(),
+    duration_minutes: durationMinutes,
+    session_type: slotTypeMap[respondDialog.availability_slots.slot_type] || 'In-Person Training',
+    status: 'Scheduled',
+    notes: respondDialog.client_message || null,
+    location: 'Gym',
+    package_id: clientPkg?.id || null,
+  });
+}
     }
 
     const clientEmail = respondDialog.clients?.email;
