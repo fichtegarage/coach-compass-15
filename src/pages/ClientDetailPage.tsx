@@ -310,8 +310,7 @@ const ClientDetailPage: React.FC = () => {
     const [cRes, pRes, sRes, mRes, bRes, qlRes, fcRes, clientsRes] = await Promise.all([
       supabase.from('clients').select('*').eq('id', id).single(),
       supabase.from('packages').select('*').eq('client_id', id).order('start_date', { ascending: false }),
-      supabase.from('sessions').select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)').eq('client_id', id).order('session_date', { ascending: false }),
-      supabase.from('body_metrics').select('*').eq('client_id', id).order('measured_at'),
+      supabase.from('sessions').select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)').or(`client_id.eq.${id},second_client_id.eq.${id}`).order('session_date', { ascending: false }),      supabase.from('body_metrics').select('*').eq('client_id', id).order('measured_at'),
       supabase.from('fitness_benchmarks').select('*').eq('client_id', id).order('measured_at', { ascending: false }),
       supabase.from('quick_logs').select('*').eq('client_id', id).order('created_at', { ascending: false }),
       supabase.from('package_feature_completions').select('package_id, feature_key'),
@@ -492,7 +491,24 @@ const ClientDetailPage: React.FC = () => {
       await supabase.from('sessions').update(payload).eq('id', editingSessionId);
       toast.success('Einheit aktualisiert');
     } else {
-      await supabase.from('sessions').insert({ ...payload, client_id: id, user_id: user.id });
+      const isDuo = sessionForm.session_type === 'Duo Training';
+let secondClientPackageId = null;
+if (isDuo && sessionForm.second_client_id) {
+  const { data: partnerPkg } = await supabase
+    .from('packages')
+    .select('id')
+    .eq('client_id', sessionForm.second_client_id)
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  secondClientPackageId = partnerPkg?.id || null;
+}
+await supabase.from('sessions').insert({ 
+  ...payload, 
+  client_id: id, 
+  user_id: user.id,
+  second_client_package_id: secondClientPackageId 
+});
       toast.success('Einheit gespeichert');
     }
     setSessionDialogOpen(false);
@@ -668,7 +684,10 @@ const ClientDetailPage: React.FC = () => {
   });
 
   const getSessionsUsed = (pkgId: string) =>
-    sessions.filter(s => s.package_id === pkgId && ['Completed', 'No-Show'].includes(s.status)).length;
+  sessions.filter(s => 
+    (s.package_id === pkgId || s.second_client_package_id === pkgId) && 
+    ['Completed', 'No-Show'].includes(s.status)
+  ).length;
 
   const totalSessions = sessions.filter(s => s.status === 'Completed').length;
   const noShows = sessions.filter(s => s.status === 'No-Show').length;
