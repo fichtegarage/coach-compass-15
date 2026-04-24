@@ -1,17 +1,15 @@
-// src/lib/uploadProgressPhoto.ts
 import { supabase } from '@/integrations/supabase/client';
 
 export async function uploadProgressPhoto(
   clientId: string,
-  file: File,
-  uploadedBy: 'coach' | 'client' = 'coach'
+  file: File
 ): Promise<{ url: string; error?: string }> {
   try {
-    // 1. Generate filename (matches existing structure: client/{client_id}/{timestamp}.ext)
+    // 1. Generate unique filename
     const fileExt = file.name.split('.').pop();
-    const fileName = `client/${clientId}/${Date.now()}.${fileExt}`;
+    const fileName = `${clientId}/${Date.now()}.${fileExt}`;
     
-    // 2. Upload to existing bucket: progress-photos
+    // 2. Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('progress-photos')
       .upload(fileName, file, {
@@ -33,8 +31,7 @@ export async function uploadProgressPhoto(
         client_id: clientId,
         photo_url: publicUrl,
         taken_at: new Date().toISOString().split('T')[0],
-        uploaded_by: uploadedBy,
-        note: uploadedBy === 'coach' ? 'Assessment-Foto' : null
+        uploaded_by: 'coach'
       });
 
     if (dbError) throw dbError;
