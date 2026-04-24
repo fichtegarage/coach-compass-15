@@ -11,6 +11,27 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+// ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
+
+/**
+ * Berechnet das Alter aus dem Geburtsdatum
+ */
+function calculateAge(dateOfBirth: string | null | undefined): string {
+  if (!dateOfBirth) return 'unbekannt';
+  
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age.toString();
+}
+
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface ClientData {
@@ -190,7 +211,7 @@ export async function loadClientDataForPrompt(
   .single();
 
   const { data: convData } = await supabase
-    .from('onboarding_conversations')
+    .from('client_conversations')
     .select('*')
     .eq('client_id', clientId)
     .order('conversation_date', { ascending: false })
@@ -198,30 +219,45 @@ export async function loadClientDataForPrompt(
     .maybeSingle();
 
   const { data: healthData } = await supabase
-    .from('health_records')
+    .from('client_health_records')
     .select('*')
     .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
+    .order('recorded_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   const { data: assessmentData } = await supabase
-    .from('assessments')
+    .from('assessment_results')
     .select('*')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
+  // Equipment Query vereinfachen - separate Abfragen
   const { data: equipmentData } = await supabase
     .from('client_equipment')
-    .select('equipment_id, location, equipment_catalog(name_de)')
+    .select('equipment_id, location')
     .eq('client_id', clientId);
 
-  const equipment: EquipmentItem[] = (equipmentData || []).map((e: any) => ({
-    name_de: e.equipment_catalog?.name_de || 'Unbekannt',
-    location: e.location,
-  }));
+  const equipment: EquipmentItem[] = [];
+  
+  if (equipmentData && equipmentData.length > 0) {
+    const equipmentIds = equipmentData.map((e: any) => e.equipment_id);
+    const { data: catalogData } = await supabase
+      .from('equipment_catalog')
+      .select('id, name_de')
+      .in('id', equipmentIds);
+    
+    const catalogMap = new Map(
+      (catalogData || []).map((c: any) => [c.id, c.name_de])
+    );
+    
+    equipmentData.forEach((e: any) => {
+      const name_de = catalogMap.get(e.equipment_id) || 'Unbekannt';
+      equipment.push({ name_de, location: e.location });
+    });
+  }
 
   // Übungen mit allen Metadaten
   const { data: exerciseData } = await supabase
@@ -256,7 +292,7 @@ export async function loadClientDataForPrompt(
   // Filter aufbauen
   const goalTags   = goalToTags(clientData?.fitness_goal_text || clientData?.fitness_goal);
   const maxDiff    = experienceToMaxDifficulty(
-    clientData?.training_experience || convData?.previous_experience
+    (clientData as any)?.training_experience || convData?.previous_experience
   );
   const contraList = extractContraindications(
     [clientData?.health_notes, healthData?.musculoskeletal, healthData?.current_pain, healthData?.sports_injuries]
