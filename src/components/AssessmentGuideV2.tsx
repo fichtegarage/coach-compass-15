@@ -927,22 +927,56 @@ function MiniWorkoutStage({ clientId }: { clientId: string }) {
   }, []);
 
   async function loadWorkoutFromPlan() {
-    setLoading(true);
-    
-    try {
-      // Get active plan's next workout
-      const { data: plan } = await supabase
-        .from('training_plans')
-        .select('id, next_plan_workout_id')
-        .eq('client_id', clientId)
-        .eq('is_active', true)
-        .single();
+  setLoading(true);
+  
+  try {
+    // Get active plan (check both client_id and duo_partner_id)
+    const { data: plans } = await supabase
+      .from('training_plans')
+      .select('id, next_plan_workout_id')
+      .or(`client_id.eq.${clientId},duo_partner_id.eq.${clientId}`)
+      .eq('is_active', true)
+      .limit(1);
 
-      if (!plan?.next_plan_workout_id) {
-        setExercises([]);
-        setLoading(false);
-        return;
-      }
+    const plan = plans?.[0];
+    if (!plan) {
+      setExercises([]);
+      setLoading(false);
+      return;
+    }
+
+    // If no next_plan_workout_id is set, get the first workout
+    let workoutId = plan.next_plan_workout_id;
+    
+    if (!workoutId) {
+      const { data: firstWorkout } = await supabase
+        .from('plan_workouts')
+        .select('id')
+        .eq('plan_id', plan.id)
+        .order('week_number')
+        .order('order_in_week')
+        .limit(1)
+        .single();
+      
+      workoutId = firstWorkout?.id;
+    }
+
+    if (!workoutId) {
+      setExercises([]);
+      setLoading(false);
+      return;
+    }
+
+    // Get workout exercises (only main exercises, limit to 5)
+    const { data: workoutExercises } = await supabase
+      .from('plan_exercises')
+      .select('*')
+      .eq('workout_id', workoutId)
+      .or('exercise_slot.eq.main,exercise_slot.is.null')
+      .order('order_in_workout')
+      .limit(5);
+
+    setExercises(workoutExercises || []);
 
       // Get workout exercises
       const { data: workoutExercises } = await supabase
