@@ -968,7 +968,7 @@ function MiniWorkoutStage({ clientId }: { clientId: string }) {
     }
 
     // Get workout exercises (only main exercises, limit to 5)
-    const { data: workoutExercises } = await supabase
+    const { data: exercises } = await supabase
       .from('plan_exercises')
       .select('*')
       .eq('workout_id', workoutId)
@@ -976,24 +976,13 @@ function MiniWorkoutStage({ clientId }: { clientId: string }) {
       .order('order_in_workout')
       .limit(5);
 
-    setExercises(workoutExercises || []);
-
-      // Get workout exercises
-      const { data: workoutExercises } = await supabase
-        .from('plan_exercises')
-        .select('*')
-        .eq('workout_id', plan.next_plan_workout_id)
-        .eq('exercise_slot', 'main')
-        .order('order_in_workout')
-        .limit(5);
-
-      setExercises(workoutExercises || []);
-    } catch (error) {
-      console.error('Load Workout Error:', error);
-    }
-    
-    setLoading(false);
+    setExercises(exercises || []);
+  } catch (error) {
+    console.error('Load Workout Error:', error);
   }
+  
+  setLoading(false);
+}
 
   if (loading) {
     return (
