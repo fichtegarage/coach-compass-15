@@ -181,16 +181,12 @@ export default function AssessmentGuideV2({
         setStageData(existingSession.stage_data || {});
         
         // Restore state from stage_data
-if (existingSession.stage_data?.measurements) {
-  setMeasurements(existingSession.stage_data.measurements);
-}
-// FIX: Validate arrays before restoring
-if (Array.isArray(existingSession.movement_scores) && existingSession.movement_scores.length > 0) {
-  setMovementScores(existingSession.movement_scores);
-}
-if (Array.isArray(existingSession.fms_scores) && existingSession.fms_scores.length > 0) {
-  setFmsScores(existingSession.fms_scores);
-}
+        if (existingSession.stage_data?.measurements) {
+          setMeasurements(existingSession.stage_data.measurements);
+        }
+        if (existingSession.movement_scores) {
+          setMovementScores(existingSession.movement_scores);
+        }
         if (existingSession.fms_scores) {
           setFmsScores(existingSession.fms_scores);
         }
@@ -231,40 +227,39 @@ if (Array.isArray(existingSession.fms_scores) && existingSession.fms_scores.leng
   // ── Save Progress ────────────────────────────────────────────────────────────
 
   async function saveProgress(newStage?: Stage) {
-  if (!sessionId) return;
-  
-  setSaving(true);
-  
-  const updates: any = {
-    current_stage: newStage || currentStage,
-    stage_data: {
-      ...stageData,
-      measurements: measurements,
-      includeMeasurements,
-      includeFMS
-    },
-    // FIX: Ensure arrays, not objects
-    movement_scores: Array.isArray(movementScores) ? movementScores : [],
-    fms_scores: Array.isArray(fmsScores) && includeFMS ? fmsScores : [],
-    checkout_answers: checkoutAnswers || {},
-    coach_notes: coachNotes || '',
-    strengths: Array.isArray(strengths) ? strengths : [],
-    focus_areas: Array.isArray(focusAreas) ? focusAreas : [],
-    updated_at: new Date().toISOString()
-  };
+    if (!sessionId) return;
+    
+    setSaving(true);
+    
+    const updates: any = {
+      current_stage: newStage || currentStage,
+      stage_data: {
+        ...stageData,
+        measurements: measurements,
+        includeMeasurements,
+        includeFMS
+      },
+      movement_scores: movementScores,
+      fms_scores: includeFMS ? fmsScores : [],
+      checkout_answers: checkoutAnswers,
+      coach_notes: coachNotes,
+      strengths: strengths,
+      focus_areas: focusAreas,
+      updated_at: new Date().toISOString()
+    };
 
-  const { error } = await supabase
-    .from('assessment_sessions')
-    .update(updates)
-    .eq('id', sessionId);
+    const { error } = await supabase
+      .from('assessment_sessions')
+      .update(updates)
+      .eq('id', sessionId);
 
-  if (error) {
-    console.error('Save Error:', error);
-    toast.error('Fehler beim Speichern');
+    if (error) {
+      console.error('Save Error:', error);
+      toast.error('Fehler beim Speichern');
+    }
+    
+    setSaving(false);
   }
-  
-  setSaving(false);
-}
 
   // ── Stage Navigation ─────────────────────────────────────────────────────────
 
@@ -726,42 +721,10 @@ function BodyMeasurementsStage({
           <p className="text-sm text-muted-foreground mb-3">
             Fortschrittsfoto wird in separater Funktion hochgeladen
           </p>
-          <div className="space-y-2">
-  <input
-    type="file"
-    accept="image/*"
-    capture="environment"
-    id="photo-upload"
-    className="hidden"
-    onChange={async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      
-      toast.loading('Foto wird hochgeladen...');
-      const { uploadProgressPhoto } = await import('@/lib/uploadProgressPhoto');
-      const { url, error } = await uploadProgressPhoto(clientId, file);
-      
-      if (error) {
-        toast.error('Upload fehlgeschlagen');
-      } else {
-        toast.success('Foto hochgeladen!');
-        setMeasurements({ ...measurements, photo_url: url });
-      }
-    }}
-  />
-  <Button
-    variant="outline"
-    size="sm"
-    className="gap-2"
-    onClick={() => document.getElementById('photo-upload')?.click()}
-  >
-    <Camera className="w-4 h-4" />
-    {measurements.photo_url ? 'Foto ändern' : 'Foto aufnehmen'}
-  </Button>
-  {measurements.photo_url && (
-    <p className="text-xs text-green-600">✓ Foto hochgeladen</p>
-  )}
-</div>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Camera className="w-4 h-4" />
+            Foto aufnehmen
+          </Button>
         </CardContent>
       </Card>
 
@@ -959,62 +922,62 @@ function MiniWorkoutStage({ clientId }: { clientId: string }) {
   }, []);
 
   async function loadWorkoutFromPlan() {
-  setLoading(true);
-  
-  try {
-    // Get active plan (check both client_id and duo_partner_id)
-    const { data: plans } = await supabase
-      .from('training_plans')
-      .select('id, next_plan_workout_id')
-      .or(`client_id.eq.${clientId},duo_partner_id.eq.${clientId}`)
-      .eq('is_active', true)
-      .limit(1);
-
-    const plan = plans?.[0];
-    if (!plan) {
-      setExercises([]);
-      setLoading(false);
-      return;
-    }
-
-    // If no next_plan_workout_id is set, get the first workout
-    let workoutId = plan.next_plan_workout_id;
+    setLoading(true);
     
-    if (!workoutId) {
-      const { data: firstWorkout } = await supabase
-        .from('plan_workouts')
-        .select('id')
-        .eq('plan_id', plan.id)
-        .order('week_number')
-        .order('order_in_week')
-        .limit(1)
-        .single();
+    try {
+      // Get active plan (check both client_id and duo_partner_id)
+      const { data: plans } = await supabase
+        .from('training_plans')
+        .select('id, next_plan_workout_id')
+        .or(`client_id.eq.${clientId},duo_partner_id.eq.${clientId}`)
+        .eq('is_active', true)
+        .limit(1);
+
+      const plan = plans?.[0];
+      if (!plan) {
+        setExercises([]);
+        setLoading(false);
+        return;
+      }
+
+      // If no next_plan_workout_id is set, get the first workout
+      let workoutId = plan.next_plan_workout_id;
       
-      workoutId = firstWorkout?.id;
+      if (!workoutId) {
+        const { data: firstWorkout } = await supabase
+          .from('plan_workouts')
+          .select('id')
+          .eq('plan_id', plan.id)
+          .order('week_number')
+          .order('order_in_week')
+          .limit(1)
+          .single();
+        
+        workoutId = firstWorkout?.id;
+      }
+
+      if (!workoutId) {
+        setExercises([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get workout exercises (only main exercises, limit to 5)
+      const { data: exercises } = await supabase
+        .from('plan_exercises')
+        .select('*')
+        .eq('workout_id', workoutId)
+        .or('exercise_slot.eq.main,exercise_slot.is.null')
+        .order('order_in_workout')
+        .limit(5);
+
+      setExercises(exercises || []);
+    } catch (error) {
+      console.error('Load Workout Error:', error);
     }
-
-    if (!workoutId) {
-      setExercises([]);
-      setLoading(false);
-      return;
-    }
-
-    // Get workout exercises (only main exercises, limit to 5)
-    const { data: exercises } = await supabase
-      .from('plan_exercises')
-      .select('*')
-      .eq('workout_id', workoutId)
-      .or('exercise_slot.eq.main,exercise_slot.is.null')
-      .order('order_in_workout')
-      .limit(5);
-
-    setExercises(exercises || []);
-  } catch (error) {
-    console.error('Load Workout Error:', error);
+    
+    setLoading(false);
   }
-  
-  setLoading(false);
-}
 
   if (loading) {
     return (
