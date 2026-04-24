@@ -831,13 +831,13 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
   const [validation, setValidation] = useState<ReturnType<typeof validateParsedPlan> | null>(null);
   // Lade alle Clients für Duo-Partner Auswahl
   useEffect(() => {
-    if (!open || !user) return;
+    if (!open) return;
     
     const loadClients = async () => {
       const { data } = await supabase
         .from('clients')
         .select('id, full_name')
-        .eq('user_id', user.id)
+        .eq('user_id', trainerId)
         .eq('status', 'Active')
         .order('full_name');
       
@@ -845,7 +845,7 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
     };
     
     loadClients();
-  }, [open, user]);
+  }, [open, trainerId]);
 
   const handleGenerate = async () => {
     setLoading(true); setStep('generating');
