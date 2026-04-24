@@ -726,10 +726,42 @@ function BodyMeasurementsStage({
           <p className="text-sm text-muted-foreground mb-3">
             Fortschrittsfoto wird in separater Funktion hochgeladen
           </p>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Camera className="w-4 h-4" />
-            Foto aufnehmen
-          </Button>
+          <div className="space-y-2">
+  <input
+    type="file"
+    accept="image/*"
+    capture="environment"
+    id="photo-upload"
+    className="hidden"
+    onChange={async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      toast.loading('Foto wird hochgeladen...');
+      const { uploadProgressPhoto } = await import('@/lib/uploadProgressPhoto');
+      const { url, error } = await uploadProgressPhoto(clientId, file);
+      
+      if (error) {
+        toast.error('Upload fehlgeschlagen');
+      } else {
+        toast.success('Foto hochgeladen!');
+        setMeasurements({ ...measurements, photo_url: url });
+      }
+    }}
+  />
+  <Button
+    variant="outline"
+    size="sm"
+    className="gap-2"
+    onClick={() => document.getElementById('photo-upload')?.click()}
+  >
+    <Camera className="w-4 h-4" />
+    {measurements.photo_url ? 'Foto ändern' : 'Foto aufnehmen'}
+  </Button>
+  {measurements.photo_url && (
+    <p className="text-xs text-green-600">✓ Foto hochgeladen</p>
+  )}
+</div>
         </CardContent>
       </Card>
 
