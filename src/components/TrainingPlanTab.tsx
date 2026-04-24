@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { parsePlan, validateParsedPlan, type ParsedPlan } from '@/lib/planParser';
 import { matchAndAddExercises, getMatchingStats } from '@/lib/exerciseMatching';
 import { loadClientDataForPrompt, generateSystemPrompt, generateUserPrompt, type PlanConfig } from '@/lib/aiPlanGenerator';
-import AssessmentGuide from '@/components/AssessmentGuide';
+import AssessmentGuideV2 from '@/components/AssessmentGuideV2';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
 
 // ── Warm-Up / Cool-Down Defaults ──────────────────────────────────────────────
@@ -1252,7 +1252,10 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
   return (
     <>
       {activeAssessment && (
-        <AssessmentGuide
+  <AssessmentGuideV2
+    clientId={clientId}
+    clientName={clientName}
+    trainerId={user!.id}
           workoutId={activeAssessment.id}
           clientId={clientId}
           clientName={clientName}
