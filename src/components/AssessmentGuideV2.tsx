@@ -181,12 +181,16 @@ export default function AssessmentGuideV2({
         setStageData(existingSession.stage_data || {});
         
         // Restore state from stage_data
-        if (existingSession.stage_data?.measurements) {
-          setMeasurements(existingSession.stage_data.measurements);
-        }
-        if (existingSession.movement_scores) {
-          setMovementScores(existingSession.movement_scores);
-        }
+if (existingSession.stage_data?.measurements) {
+  setMeasurements(existingSession.stage_data.measurements);
+}
+// FIX: Validate arrays before restoring
+if (Array.isArray(existingSession.movement_scores) && existingSession.movement_scores.length > 0) {
+  setMovementScores(existingSession.movement_scores);
+}
+if (Array.isArray(existingSession.fms_scores) && existingSession.fms_scores.length > 0) {
+  setFmsScores(existingSession.fms_scores);
+}
         if (existingSession.fms_scores) {
           setFmsScores(existingSession.fms_scores);
         }
@@ -227,39 +231,40 @@ export default function AssessmentGuideV2({
   // ── Save Progress ────────────────────────────────────────────────────────────
 
   async function saveProgress(newStage?: Stage) {
-    if (!sessionId) return;
-    
-    setSaving(true);
-    
-    const updates: any = {
-      current_stage: newStage || currentStage,
-      stage_data: {
-        ...stageData,
-        measurements: measurements,
-        includeMeasurements,
-        includeFMS
-      },
-      movement_scores: movementScores,
-      fms_scores: includeFMS ? fmsScores : [],
-      checkout_answers: checkoutAnswers,
-      coach_notes: coachNotes,
-      strengths: strengths,
-      focus_areas: focusAreas,
-      updated_at: new Date().toISOString()
-    };
+  if (!sessionId) return;
+  
+  setSaving(true);
+  
+  const updates: any = {
+    current_stage: newStage || currentStage,
+    stage_data: {
+      ...stageData,
+      measurements: measurements,
+      includeMeasurements,
+      includeFMS
+    },
+    // FIX: Ensure arrays, not objects
+    movement_scores: Array.isArray(movementScores) ? movementScores : [],
+    fms_scores: Array.isArray(fmsScores) && includeFMS ? fmsScores : [],
+    checkout_answers: checkoutAnswers || {},
+    coach_notes: coachNotes || '',
+    strengths: Array.isArray(strengths) ? strengths : [],
+    focus_areas: Array.isArray(focusAreas) ? focusAreas : [],
+    updated_at: new Date().toISOString()
+  };
 
-    const { error } = await supabase
-      .from('assessment_sessions')
-      .update(updates)
-      .eq('id', sessionId);
+  const { error } = await supabase
+    .from('assessment_sessions')
+    .update(updates)
+    .eq('id', sessionId);
 
-    if (error) {
-      console.error('Save Error:', error);
-      toast.error('Fehler beim Speichern');
-    }
-    
-    setSaving(false);
+  if (error) {
+    console.error('Save Error:', error);
+    toast.error('Fehler beim Speichern');
   }
+  
+  setSaving(false);
+}
 
   // ── Stage Navigation ─────────────────────────────────────────────────────────
 
