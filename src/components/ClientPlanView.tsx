@@ -338,8 +338,8 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       // Plan inkl. next_plan_workout_id
       const { data: planData } = await supabase
         .from('training_plans')
-.select(...)
-.or(`client_id.eq.${clientId},duo_partner_id.eq.${clientId}`)
+        .select(...)
+        .or(`client_id.eq.${clientId},duo_partner_id.eq.${clientId}`)
         .eq('is_active', true)
         .maybeSingle();
 
