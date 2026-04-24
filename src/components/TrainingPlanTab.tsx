@@ -1253,15 +1253,12 @@ const TrainingPlanTab: React.FC<TrainingPlanTabProps> = ({ clientId, clientName 
     <>
       {activeAssessment && (
   <AssessmentGuideV2
-    clientId={clientId}
-    clientName={clientName}
-    trainerId={user!.id}
-          workoutId={activeAssessment.id}
-          clientId={clientId}
-          clientName={clientName}
-          onClose={() => setActiveAssessment(null)}
-          onComplete={() => { setActiveAssessment(null); loadPlans(); }}
-        />
+  clientId={clientId}
+  clientName={clientName}
+  trainerId={user!.id}
+  onClose={() => setActiveAssessment(null)}
+  onComplete={() => { setActiveAssessment(null); loadPlans(); }}
+/>
       )}
 
       <div className="space-y-5">
