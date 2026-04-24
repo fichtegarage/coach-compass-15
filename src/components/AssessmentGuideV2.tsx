@@ -726,42 +726,10 @@ function BodyMeasurementsStage({
           <p className="text-sm text-muted-foreground mb-3">
             Fortschrittsfoto wird in separater Funktion hochgeladen
           </p>
-          <div className="space-y-2">
-  <input
-    type="file"
-    accept="image/*"
-    capture="environment"
-    id="photo-upload"
-    className="hidden"
-    onChange={async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      
-      toast.loading('Foto wird hochgeladen...');
-      const { uploadProgressPhoto } = await import('@/lib/uploadProgressPhoto');
-      const { url, error } = await uploadProgressPhoto(clientId, file);
-      
-      if (error) {
-        toast.error('Upload fehlgeschlagen');
-      } else {
-        toast.success('Foto hochgeladen!');
-        setMeasurements({ ...measurements, photo_url: url });
-      }
-    }}
-  />
-  <Button
-    variant="outline"
-    size="sm"
-    className="gap-2"
-    onClick={() => document.getElementById('photo-upload')?.click()}
-  >
-    <Camera className="w-4 h-4" />
-    {measurements.photo_url ? 'Foto ändern' : 'Foto aufnehmen'}
-  </Button>
-  {measurements.photo_url && (
-    <p className="text-xs text-green-600">✓ Foto hochgeladen</p>
-  )}
-</div>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Camera className="w-4 h-4" />
+            Foto aufnehmen
+          </Button>
         </CardContent>
       </Card>
 
@@ -959,56 +927,22 @@ function MiniWorkoutStage({ clientId }: { clientId: string }) {
   }, []);
 
   async function loadWorkoutFromPlan() {
-  setLoading(true);
-  
-  try {
-    // Get active plan (check both client_id and duo_partner_id)
-    const { data: plans } = await supabase
-      .from('training_plans')
-      .select('id, next_plan_workout_id')
-      .or(`client_id.eq.${clientId},duo_partner_id.eq.${clientId}`)
-      .eq('is_active', true)
-      .limit(1);
-
-    const plan = plans?.[0];
-    if (!plan) {
-      setExercises([]);
-      setLoading(false);
-      return;
-    }
-
-    // If no next_plan_workout_id is set, get the first workout
-    let workoutId = plan.next_plan_workout_id;
+    setLoading(true);
     
-    if (!workoutId) {
-      const { data: firstWorkout } = await supabase
-        .from('plan_workouts')
-        .select('id')
-        .eq('plan_id', plan.id)
-        .order('week_number')
-        .order('order_in_week')
-        .limit(1)
+    try {
+      // Get active plan's next workout
+      const { data: plan } = await supabase
+        .from('training_plans')
+        .select('id, next_plan_workout_id')
+        .eq('client_id', clientId)
+        .eq('is_active', true)
         .single();
-      
-      workoutId = firstWorkout?.id;
-    }
 
-    if (!workoutId) {
-      setExercises([]);
-      setLoading(false);
-      return;
-    }
-
-    // Get workout exercises (only main exercises, limit to 5)
-    const { data: workoutExercises } = await supabase
-      .from('plan_exercises')
-      .select('*')
-      .eq('workout_id', workoutId)
-      .or('exercise_slot.eq.main,exercise_slot.is.null')
-      .order('order_in_workout')
-      .limit(5);
-
-    setExercises(workoutExercises || []);
+      if (!plan?.next_plan_workout_id) {
+        setExercises([]);
+        setLoading(false);
+        return;
+      }
 
       // Get workout exercises
       const { data: workoutExercises } = await supabase
