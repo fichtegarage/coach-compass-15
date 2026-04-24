@@ -336,12 +336,15 @@ const ClientPlanView: React.FC<ClientPlanViewProps> = ({ clientId }) => {
       setLoading(true);
 
       // Plan inkl. next_plan_workout_id
-      const { data: planData } = await supabase
-        .from('training_plans')
-        .select('id, name, goal, weeks_total, sessions_per_week, total_cycles, progression_notes, next_plan_workout_id')
-        .or(`client_id.eq.${clientId},duo_partner_id.eq.${clientId}`)
-        .eq('is_active', true)
-        .maybeSingle();
+      const { data: plans } = await supabase
+  .from('training_plans')
+  .select('id, name, goal, weeks_total, sessions_per_week, total_cycles, progression_notes, next_plan_workout_id')
+  .or(`client_id.eq.${clientId},duo_partner_id.eq.${clientId}`)
+  .eq('is_active', true)
+  .order('created_at', { ascending: false })
+  .limit(1);  // ✅ Nimmt den neuesten Plan
+
+const planData = plans?.[0];  // ✅ Holt erstes Element
 
       if (planData) {
         const { data: workoutsData } = await supabase
