@@ -667,12 +667,14 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
       {/* ── KI-BRIEFING ── */}
       {activeTab === 'briefing' && (
         <ClaudeBriefing
-          clientName={clientName}
-          workoutLogs={workoutLogs}
-          personalRecords={personalRecords}
-          conversation={conversation}
-          recentCheckins={checkins.slice(0, 4)}
-        />
+  clientId={clientId}              // ← NEU
+  clientName={client.full_name}
+  workoutLogs={workoutLogs}
+  personalRecords={personalRecords}
+  conversation={conversation}
+  recentCheckins={recentCheckins}
+  pinnedNote={client?.pinned_note} // ← NEU
+/>
       )}
     </div>
   );
