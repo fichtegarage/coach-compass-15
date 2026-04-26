@@ -307,11 +307,10 @@ const ClientDetailPage: React.FC = () => {
 
   const loadAll = useCallback(async () => {
     if (!id || !user) return;
-    const [cRes, pRes, sRes, mRes, bRes, qlRes, fcRes, clientsRes] = await Promise.all([
+    const [cRes, pRes, sRes, qlRes, fcRes, clientsRes] = await Promise.all([
       supabase.from('clients').select('*').eq('id', id).single(),
       supabase.from('packages').select('*').eq('client_id', id).order('start_date', { ascending: false }),
-      supabase.from('sessions').select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)').or(`client_id.eq.${id},second_client_id.eq.${id}`).order('session_date', { ascending: false }),      supabase.from('body_metrics').select('*').eq('client_id', id).order('measured_at'),
-      supabase.from('fitness_benchmarks').select('*').eq('client_id', id).order('measured_at', { ascending: false }),
+      supabase.from('sessions').select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)').or(`client_id.eq.${id},second_client_id.eq.${id}`).order('session_date', { ascending: false }),
       supabase.from('quick_logs').select('*').eq('client_id', id).order('created_at', { ascending: false }),
       supabase.from('package_feature_completions').select('package_id, feature_key'),
       // ← NEU: alle aktiven Kunden für Duo-Partner-Auswahl laden
@@ -336,8 +335,7 @@ const ClientDetailPage: React.FC = () => {
       // Tabelle existiert noch nicht
     }
 
-    const coachMetrics = (mRes.data || []).map((m: any) => ({ ...m, source: 'coach' }));
-    const allMetrics = [...coachMetrics, ...clientMetricsData].sort(
+    const allMetrics = [...clientMetricsData].sort(
       (a, b) => new Date(a.measured_at).getTime() - new Date(b.measured_at).getTime()
     );
 
@@ -346,7 +344,6 @@ const ClientDetailPage: React.FC = () => {
     setPackages(pRes.data || []);
     setSessions(sRes.data || []);
     setMetrics(allMetrics);
-    setBenchmarks(bRes.data || []);
     setQuickLogs(qlRes.data || []);
     // ← NEU
     setAllClients((clientsRes.data || []).filter((c: any) => c.id !== id));
