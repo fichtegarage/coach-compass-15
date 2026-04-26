@@ -8,7 +8,6 @@ import type {
   Client,
   ClientConversation,
   ClientHealthRecord,
-  ClientBodyData,
   NewClientForm,
   ConversationForm,
   HealthRecordForm,
@@ -217,41 +216,49 @@ export async function updateHealthRecord(
 export async function createBodyData(
   clientId: string,
   data: BodyDataForm
-): Promise<ClientBodyData> {
+): Promise<any> {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) throw new Error('Nicht eingeloggt');
 
-  const { data: bodyData, error } = await supabase
-    .from('client_body_data')
+  const { data: metricData, error } = await supabase
+    .from('client_metrics')
     .insert({
-      ...data,
       client_id: clientId,
       user_id: user.user.id,
+      recorded_by: 'coach',
+      recorded_at: data.measured_at || new Date().toISOString(),
+      weight_kg: data.weight_kg ? Number(data.weight_kg) : null,
+      body_fat_percent: data.body_fat_pct ? Number(data.body_fat_pct) : null,
+      waist_cm: data.waist_cm ? Number(data.waist_cm) : null,
+      hip_cm: data.hip_cm ? Number(data.hip_cm) : null,
+      chest_cm: data.chest_cm ? Number(data.chest_cm) : null,
     })
     .select()
     .single();
 
   if (error) throw error;
-  return bodyData;
+  return metricData;
 }
 
-export async function getBodyDataHistory(clientId: string): Promise<ClientBodyData[]> {
+export async function getBodyDataHistory(clientId: string): Promise<any[]> {
   const { data, error } = await supabase
-    .from('client_body_data')
+    .from('client_metrics')
     .select('*')
     .eq('client_id', clientId)
-    .order('measured_at', { ascending: false });
+    .eq('recorded_by', 'coach')
+    .order('recorded_at', { ascending: false });
 
   if (error) throw error;
   return data || [];
 }
 
-export async function getLatestBodyData(clientId: string): Promise<ClientBodyData | null> {
+export async function getLatestBodyData(clientId: string): Promise<any | null> {
   const { data, error } = await supabase
-    .from('client_body_data')
+    .from('client_metrics')
     .select('*')
     .eq('client_id', clientId)
-    .order('measured_at', { ascending: false })
+    .eq('recorded_by', 'coach')
+    .order('recorded_at', { ascending: false })
     .limit(1)
     .single();
 
