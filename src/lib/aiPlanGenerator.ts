@@ -227,7 +227,7 @@ export async function loadClientDataForPrompt(
     .maybeSingle();
 
   const { data: assessmentData } = await supabase
-    .from('assessment_results')
+    .from('assessment_sessions')
     .select('*')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
