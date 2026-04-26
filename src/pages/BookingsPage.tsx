@@ -158,9 +158,10 @@ const BookingsPage: React.FC = () => {
         .lte('start_time', monthEnd.toISOString())
         .order('start_time'),
       supabase
-        .from('booking_requests')
-        .select('*, clients(full_name, email, profile_photo_url), availability_slots(start_time, end_time, slot_type, trainer_id, max_bookings)')
-        .order('requested_at', { ascending: false }),
+  .from('booking_requests')
+  .select('*, clients(full_name, email, profile_photo_url), availability_slots!inner(start_time, end_time, slot_type, trainer_id, max_bookings)')
+  .eq('availability_slots.trainer_id', user.id)
+  .order('requested_at', { ascending: false }),
       supabase
         .from('sessions')
         .select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)')
