@@ -91,7 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const windowEnd   = new Date(now.getTime() + 3 * 60 * 60 * 1000);
 
   const sessionsRes = await fetch(
-    `${supabaseUrl}/rest/v1/sessions?select=id,session_date,duration_minutes,session_type,client_id,reminder_sent,clients(full_name,email)&status=eq.Scheduled&reminder_sent=eq.false&session_date=gte.${windowStart.toISOString()}&session_date=lte.${windowEnd.toISOString()}`,
+    `${supabaseUrl}/rest/v1/sessions?select=id,session_date,duration_minutes,session_type,client_id,reminder_sent,clients!sessions_client_id_fkey(full_name,email)&status=eq.Scheduled&reminder_sent=eq.false&session_date=gte.${windowStart.toISOString()}&session_date=lte.${windowEnd.toISOString()}`,
     {
       headers: {
         apikey: supabaseKey,
