@@ -159,7 +159,7 @@ const BookingsPage: React.FC = () => {
         .order('start_time'),
       supabase
   .from('booking_requests')
-  .select('*, clients(full_name, email, profile_photo_url), availability_slots(start_time, end_time, slot_type, trainer_id, max_bookings)')
+  .select('*, clients!booking_requests_client_id_fkey(full_name, email, profile_photo_url), availability_slots(start_time, end_time, slot_type, trainer_id, max_bookings)')
   .eq('trainer_id', user.id)
   .order('requested_at', { ascending: false }),
       supabase
