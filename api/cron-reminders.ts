@@ -123,7 +123,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let sent = 0;
 
   for (const session of sessions) {
-    const client = session.clients;
+    // Supabase liefert die Embedded Resource je nach FK mal als Objekt, mal als Array
+    const client = Array.isArray(session.clients) ? session.clients[0] : session.clients;
     if (!client?.email) continue;
 
     const startDate = new Date(session.session_date);
@@ -133,8 +134,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timeZone: 'Europe/Berlin',
     });
     const typeLabel = sessionTypeLabels[session.session_type] || session.session_type;
-    
-    const firstName = (booking.customer_name || '').split(' ')[0] || 'Kunde';
+
+    const firstName = (client.full_name || '').split(' ')[0] || 'Kunde';
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
