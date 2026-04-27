@@ -172,23 +172,20 @@ const BookingPage: React.FC = () => {
     setCodeLoading(true);
     setCodeError('');
     const { data, error } = await supabase
-      .from('clients')
-      .select('id, full_name, email')
-      .eq('booking_code', code)
-      .eq('booking_code_active', true)
-      .maybeSingle();
-    if (error || !data || !data.id) {
+      .rpc('get_client_by_code', { p_code: code });
+    const client = Array.isArray(data) ? data[0] : data;
+    if (error || !client || !client.id) {
       setCodeError('Dieser Code ist ungültig oder wurde deaktiviert.');
       setCodeLoading(false);
       return;
     }
     const storage = rememberMe ? localStorage : sessionStorage;
-    storage.setItem('booking_client_id', data.id);
-    storage.setItem('booking_client_name', data.full_name);
-    storage.setItem('booking_client_email', data.email || '');
-    setClientId(data.id);
-    setClientName(data.full_name);
-    setClientEmail(data.email || null);
+    storage.setItem('booking_client_id', client.id);
+    storage.setItem('booking_client_name', client.full_name);
+    storage.setItem('booking_client_email', client.email || '');
+    setClientId(client.id);
+    setClientName(client.full_name);
+    setClientEmail(client.email || null);
     setCodeLoading(false);
   };
 
