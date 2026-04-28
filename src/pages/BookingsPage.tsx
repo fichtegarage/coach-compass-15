@@ -29,15 +29,16 @@ import { buildEmail } from '@/lib/emailTemplate';
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-    await fetch('/api/send-email', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ to, subject, html }),
-    });
+    const { data: { session } } = await supabase.auth.getSession();
+const response = await fetch('/api/send-email', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+  },
+  body: JSON.stringify({ to, subject, html }),
+});
+
   } catch (e) {
     console.error('E-Mail konnte nicht gesendet werden', e);
   }
