@@ -1,73 +1,120 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+// api/send-email.ts
+// Gehärteter E-Mail-Endpoint mit:
+// - Origin-Check (nur Aufrufe von buchung.jakob-neumann.net)
+// - Trainer-JWT (volle Empfänger-Freiheit) ODER
+// - Recipient-Whitelist (Trainer-Mail oder existierende clients.email)
+
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
 
-const OWNER_EMAIL = 'jakob.neumann@posteo.de';
-const ALLOWED_ORIGIN = 'https://buchung.jakob-neumann.net';
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+ $ /;
-const MAX_HTML_LENGTH = 100_000; // 100 KB
-const MAX_SUBJECT_LENGTH = 200;
+const ALLOWED_ORIGIN_HOST = 'buchung.jakob-neumann.net';
+const TRAINER_EMAIL = 'jakob.neumann@posteo.de';
 
-// Simple in-memory rate limit (pro Lambda-Instanz; reicht als Schutzschicht)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 Min
-const RATE_LIMIT_MAX = 5;
+const resend = new Resend(process.env.RESEND_API_KEY!);
 
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || entry.resetAt < now) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
+
+function originAllowed(req: any): boolean {
+  const origin = req.headers.origin || '';
+  const referer = req.headers.referer || '';
+  try {
+    if (origin) {
+      const u = new URL(origin);
+      if (u.hostname === ALLOWED_ORIGIN_HOST) return true;
+    }
+    if (referer) {
+      const u = new URL(referer);
+      if (u.hostname === ALLOWED_ORIGIN_HOST) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+async function isAuthenticatedTrainer(req: any): Promise<boolean> {
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return false;
+  const token = auth.slice(7);
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data?.user) return false;
+    // Optional: weitere Trainer-Rolle-Prüfung (falls nur du als Trainer existierst, reicht das hier)
     return true;
+  } catch {
+    return false;
   }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count++;
-  return true;
 }
 
-function getClientIp(req: VercelRequest): string {
-  return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
+async function recipientAllowed(to: string): Promise<boolean> {
+  if (!to) return false;
+  const normalized = to.trim().toLowerCase();
+  if (normalized === TRAINER_EMAIL.toLowerCase()) return true;
+
+  const { data, error } = await supabaseAdmin
+    .from('clients')
+    .select('id')
+    .ilike('email', normalized)
+    .limit(1);
+
+  if (error) {
+    console.warn('[send-email] clients lookup failed:', error.message);
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return res.status(405).end();
-
-  const { to, subject, html } = req.body ?? {};
-  if (!to || !subject || !html) return res.status(400).json({ error: 'Missing fields' });
-  if (typeof to !== 'string' || typeof subject !== 'string' || typeof html !== 'string') {
-    return res.status(400).json({ error: 'Invalid field types' });
-  }
-  if (!EMAIL_REGEX.test(to)) {
-    return res.status(400).json({ error: 'Invalid email format' });
-  }
-  if (subject.length > MAX_SUBJECT_LENGTH) {
-    return res.status(400).json({ error: 'Subject too long' });
-  }
-  if (html.length > MAX_HTML_LENGTH) {
-    return res.status(400).json({ error: 'HTML payload too large' });
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const ip = getClientIp(req);
-  const authHeader = req.headers.authorization;
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY!;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  // 1) Origin-Check
+  if (!originAllowed(req)) {
+    console.warn('[send-email] BLOCKED bad origin', {
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      ip: req.headers['x-forwarded-for'],
+    });
+    return res.status(403).json({ error: 'Forbidden (origin)' });
+  }
 
-  // ─── Pfad A: Authentifizierter Trainer ──────────────────────────────────
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) {
-      console.warn(`[send-email] 401 invalid token from ip= $ {ip} to=${to}`);
-      return res.status(401).json({ error: 'Invalid or expired token' });
+  const { to, subject, html, from } = req.body || {};
+
+  if (!to || !subject || !html) {
+    return res.status(400).json({ error: 'Missing fields: to, subject, html' });
+  }
+
+  // 2) Auth: Trainer-JWT (frei) ODER Whitelist
+  const trainerOk = await isAuthenticatedTrainer(req);
+
+  if (!trainerOk) {
+    const ok = await recipientAllowed(to);
+    if (!ok) {
+      console.warn('[send-email] BLOCKED unauthorized recipient', {
+        to,
+        ip: req.headers['x-forwarded-for'],
+        ua: req.headers['user-agent'],
+      });
+      return res.status(403).json({ error: 'Forbidden (recipient)' });
     }
-    // Trainer darf an beliebige Empfänger senden → durchwinken
-  } else {
-    // ─── Pfad B: Public-Booking-Modus ─────────────────────────────────────
-    const origin = req.headers.origin || req.headers.referer || '';
-    if (!origin.startsWith(ALLOWED_ORIGIN)) {
-      console.warn(`[send-email] 403 origin-mismatch ip=${ip} origin="${origin}" to=${to}`);
-      return res.status(403).json({ error: 'Forbidden origin' });
-    }
+  }
 
-    if (!
+  // === RESEND === (ggf. an deinen aktuellen Resend-Code anpassen)
+  try {
+    const result = await resend.emails.send({
+      from: from || 'Jakob Neumann <hallo@jakob-neumann.net>',
+      to,
+      subject,
+      html,
+    });
+    return res.status(200).json({ ok: true, id: (result as any)?.data?.id });
+  } catch (err: any) {
+    console.error('[send-email] resend error:', err?.message || err);
+    return res.status(500).json({ error: 'Send failed' });
+  }
+}
