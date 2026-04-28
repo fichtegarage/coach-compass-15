@@ -1,8 +1,8 @@
 // api/send-email.ts
-// Gehärteter E-Mail-Endpoint mit:
-// - Origin-Check (nur Aufrufe von buchung.jakob-neumann.net)
-// - Trainer-JWT (volle Empfänger-Freiheit) ODER
-// - Recipient-Whitelist (Trainer-Mail oder existierende clients.email)
+// Gesichert gegen offenes E-Mail-Relay:
+//   1. Origin-Check: nur Aufrufe von buchung.jakob-neumann.net
+//   2. Trainer-JWT (Authorization: Bearer ...): freie Empfänger erlaubt
+//   3. Kein JWT: Empfänger muss jakob.neumann@posteo.de oder in clients.email sein
 
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
@@ -13,14 +13,15 @@ const TRAINER_EMAIL = 'jakob.neumann@posteo.de';
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
 const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } }
 );
 
+// Prüft ob Origin oder Referer von unserer Domain kommt
 function originAllowed(req: any): boolean {
-  const origin = req.headers.origin || '';
-  const referer = req.headers.referer || '';
+  const origin: string = req.headers['origin'] || '';
+  const referer: string = req.headers['referer'] || '';
   try {
     if (origin) {
       const u = new URL(origin);
@@ -36,20 +37,21 @@ function originAllowed(req: any): boolean {
   return false;
 }
 
+// Prüft ob ein gültiger Supabase-JWT im Authorization-Header steckt
 async function isAuthenticatedTrainer(req: any): Promise<boolean> {
-  const auth = req.headers.authorization || '';
+  const auth: string = req.headers['authorization'] || '';
   if (!auth.startsWith('Bearer ')) return false;
   const token = auth.slice(7);
   try {
     const { data, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !data?.user) return false;
-    // Optional: weitere Trainer-Rolle-Prüfung (falls nur du als Trainer existierst, reicht das hier)
     return true;
   } catch {
     return false;
   }
 }
 
+// Prüft ob Empfänger-Adresse in clients.email vorkommt (oder Trainer-Mail ist)
 async function recipientAllowed(to: string): Promise<boolean> {
   if (!to) return false;
   const normalized = to.trim().toLowerCase();
@@ -62,7 +64,7 @@ async function recipientAllowed(to: string): Promise<boolean> {
     .limit(1);
 
   if (error) {
-    console.warn('[send-email] clients lookup failed:', error.message);
+    console.warn('[send-email] DB-Lookup fehlgeschlagen:', error.message);
     return false;
   }
   return Array.isArray(data) && data.length > 0;
@@ -75,10 +77,11 @@ export default async function handler(req: any, res: any) {
 
   // 1) Origin-Check
   if (!originAllowed(req)) {
-    console.warn('[send-email] BLOCKED bad origin', {
-      origin: req.headers.origin,
-      referer: req.headers.referer,
+    console.warn('[send-email] BLOCKED — unerlaubter Origin', {
+      origin: req.headers['origin'],
+      referer: req.headers['referer'],
       ip: req.headers['x-forwarded-for'],
+      ua: req.headers['user-agent'],
     });
     return res.status(403).json({ error: 'Forbidden (origin)' });
   }
@@ -86,16 +89,16 @@ export default async function handler(req: any, res: any) {
   const { to, subject, html, from } = req.body || {};
 
   if (!to || !subject || !html) {
-    return res.status(400).json({ error: 'Missing fields: to, subject, html' });
+    return res.status(400).json({ error: 'Fehlende Felder: to, subject, html' });
   }
 
-  // 2) Auth: Trainer-JWT (frei) ODER Whitelist
-  const trainerOk = await isAuthenticatedTrainer(req);
+  // 2) Trainer-JWT vorhanden → volle Freiheit. Sonst: Whitelist prüfen.
+  const trainerAuthenticated = await isAuthenticatedTrainer(req);
 
-  if (!trainerOk) {
-    const ok = await recipientAllowed(to);
-    if (!ok) {
-      console.warn('[send-email] BLOCKED unauthorized recipient', {
+  if (!trainerAuthenticated) {
+    const allowed = await recipientAllowed(to);
+    if (!allowed) {
+      console.warn('[send-email] BLOCKED — Empfänger nicht in Whitelist', {
         to,
         ip: req.headers['x-forwarded-for'],
         ua: req.headers['user-agent'],
@@ -104,7 +107,7 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  // === RESEND === (ggf. an deinen aktuellen Resend-Code anpassen)
+  // 3) Mail absenden
   try {
     const result = await resend.emails.send({
       from: from || 'Jakob Neumann <hallo@jakob-neumann.net>',
@@ -114,7 +117,7 @@ export default async function handler(req: any, res: any) {
     });
     return res.status(200).json({ ok: true, id: (result as any)?.data?.id });
   } catch (err: any) {
-    console.error('[send-email] resend error:', err?.message || err);
-    return res.status(500).json({ error: 'Send failed' });
+    console.error('[send-email] Resend-Fehler:', err?.message || err);
+    return res.status(500).json({ error: 'Versand fehlgeschlagen' });
   }
 }
