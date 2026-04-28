@@ -30,10 +30,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // NEU: Token-basierte Auth statt user_id
-  const token = req.query.token as string;
-  if (!token) {
-    return res.status(401).send('Missing token');
+  const userId = req.query.user_id as string;
+  if (!userId) {
+    return res.status(400).send('Missing user_id');
   }
 
   const supabase = createClient(
@@ -41,20 +40,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Token → user_id auflösen
-  const { data: calToken, error: tokenError } = await supabase
-    .from('calendar_tokens')
-    .select('user_id')
-    .eq('token', token)
-    .single();
-
-  if (tokenError || !calToken) {
-    return res.status(401).send('Invalid token');
-  }
-
-  const userId = calToken.user_id;
-
-  // Ab hier alles unverändert
   const { data: sessions, error } = await supabase
     .from('sessions')
     .select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)')
