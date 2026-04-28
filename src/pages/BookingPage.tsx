@@ -15,16 +15,13 @@ import ClientMetricsWidget from '@/components/ClientMetricsWidget';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
 import CycleTracker from '@/components/CycleTracker';
 
-const { data: { session } } = await supabase.auth.getSession();
-const response = await fetch('/api/send-email', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
-  },
-  body: JSON.stringify({ to, subject, html }),
-});
-
+const sendEmail = async (to: string, subject: string, html: string) => {
+  try {
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html }),
+    });
   } catch (e) {
     console.error('E-Mail konnte nicht gesendet werden', e);
   }
