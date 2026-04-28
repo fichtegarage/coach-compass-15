@@ -336,7 +336,7 @@ const BookingPage: React.FC = () => {
     if (!selectedSlot || !clientId) return;
     if (myBookingSlotIds.has(selectedSlot.id)) { toast.error('Du hast für diesen Slot bereits eine Anfrage gestellt.'); setSelectedSlot(null); return; }
     setSubmitting(true);
-    const { error } = await supabase.from('booking_requests').insert({ slot_id: selectedSlot.id, client_id: clientId, status: 'pending', client_message: bookingMessage || null });
+    const { error } = await supabase.from('booking_requests').insert({ slot_id: selectedSlot.id, client_id: clientId, trainer_id: selectedSlot.trainer_id, status: 'pending', client_message: bookingMessage || null });
     if (error) { toast.error('Buchungsanfrage konnte nicht gesendet werden.'); setSubmitting(false); return; }
     const slotDate = format(new Date(selectedSlot.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
     toast.success('Deine Anfrage wurde gesendet!');
