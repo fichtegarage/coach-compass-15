@@ -1,43 +1,58 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { client_id, secret } = req.query;
+export default async function handler(req: Request) {
+  const url = new URL(req.url);
+  const clientId = url.searchParams.get("client_id");
+  const token = url.searchParams.get("token");
 
-  // Einfache Absicherung über CRON_SECRET
-  if (!client_id || secret !== process.env.CRON_SECRET) {
-    return res.status(400).send(`
-      <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
-        <p>❌ Ungültiger Abmeldelink.</p>
-      </body></html>
-    `);
+  if (!clientId || !token) {
+    return new Response("Missing parameters", { status: 400 });
   }
 
-  const { error } = await supabase
-    .from('clients')
+  // Token und client_id gemeinsam prüfen — kein Treffer = kein Update
+  const { data: client, error: fetchError } = await supabase
+    .from("clients")
+    .select("id, email_weekly_summary")
+    .eq("id", clientId)
+    .eq("unsubscribe_token", token)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error("Unsubscribe fetch error:", fetchError);
+    return new Response("Interner Fehler", { status: 500 });
+  }
+
+  if (!client) {
+    // Kein Match → Token falsch, client_id falsch oder beides
+    return new Response("Ungültiger Abmelde-Link.", { status: 403 });
+  }
+
+  if (!client.email_weekly_summary) {
+    // Bereits abgemeldet — idempotent, kein Fehler
+    return new Response(
+      "Du bist bereits abgemeldet und erhältst keine wöchentlichen Zusammenfassungen.",
+      { status: 200 }
+    );
+  }
+
+  const { error: updateError } = await supabase
+    .from("clients")
     .update({ email_weekly_summary: false })
-    .eq('id', client_id);
+    .eq("id", clientId)
+    .eq("unsubscribe_token", token); // doppelte Absicherung im UPDATE
 
-  if (error) {
-    return res.status(500).send(`
-      <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
-        <p>❌ Abmeldung fehlgeschlagen. Bitte kontaktiere Jakob direkt.</p>
-      </body></html>
-    `);
+  if (updateError) {
+    console.error("Unsubscribe update error:", updateError);
+    return new Response("Fehler beim Abmelden.", { status: 500 });
   }
 
-  return res.status(200).send(`
-    <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
-      <h2>✅ Erfolgreich abgemeldet</h2>
-      <p>Du erhältst keine wöchentlichen Zusammenfassungen mehr.</p>
-      <p style="margin-top:24px;">
-        <a href="https://buchung.jakob-neumann.net" style="color:#10b981;">Zurück zur App</a>
-      </p>
-    </body></html>
-  `);
+  return new Response(
+    "Du wurdest erfolgreich abgemeldet. Du erhältst keine wöchentlichen Zusammenfassungen mehr.",
+    { status: 200 }
+  );
 }
