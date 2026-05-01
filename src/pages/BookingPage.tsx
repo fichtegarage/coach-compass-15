@@ -186,15 +186,14 @@ const BookingPage: React.FC = () => {
     storage.setItem('booking_client_id', client.id);
     storage.setItem('booking_client_name', client.full_name);
     storage.setItem('booking_client_email', client.email || '');
-    setClientId(data.id);
-    setClientName(data.full_name);
-    setClientEmail(data.email || null);
+    setClientId(client.id);
+    setClientName(client.full_name);
+    setClientEmail(client.email || null);
     setCodeLoading(false);
     const newToken = crypto.randomUUID();
     storage.setItem('booking_client_token', newToken);
     setClientToken(newToken);
-    supabase.from('client_sessions').insert({ token: newToken, client_id: data.id });
-  };
+    supabase.from('client_sessions').insert({ token: newToken, client_id: client.id });
 const handleLogout = () => {
     ['booking_client_id', 'booking_client_name', 'booking_client_email', 'booking_client_token'].forEach(k => {
       localStorage.removeItem(k);
