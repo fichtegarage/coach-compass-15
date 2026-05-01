@@ -82,10 +82,9 @@ const ClientProgressPhotos: React.FC<Props> = ({ clientId }) => {
       setUploading(false);
       return;
     }
-    const { data: urlData } = supabase.storage.from('progress-photos').getPublicUrl(path);
     await supabase.from('progress_photos').insert({
-      client_id: clientId,
-      photo_url: urlData.publicUrl,
+  client_id: clientId,
+  photo_url: path,
       taken_at: uploadDate,
       note: uploadNote || null,
       uploaded_by: 'client',
