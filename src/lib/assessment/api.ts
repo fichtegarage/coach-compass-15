@@ -250,10 +250,9 @@ export async function uploadAssessmentPhoto(
 
   if (uploadError) throw uploadError;
 
-  // 2. Hole Public URL
-  const { data: urlData } = supabase.storage
-    .from('progress-photos')
-    .getPublicUrl(fileName);
+      // KEIN getPublicUrl mehr — Pfad in DB speichern, signed URL beim Lesen.
+    const publicUrl = fileName;
+
 
   // 3. Speichere Foto-Eintrag
   const { data, error } = await supabase
