@@ -78,7 +78,10 @@ const ClientFormPage: React.FC = () => {
     const filePath = `${user.id}/${id || 'new'}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('client-photos').upload(filePath, file, { upsert: true });
     if (error) { toast.error('Foto konnte nicht hochgeladen werden'); setUploadingPhoto(false); return; }
-    await supabase.from('clients').update({ profile_photo_url: filePath }).eq('id', id);
+    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
+    setProfilePhotoUrl(urlData.publicUrl);
+    if (isEdit && id) {
+      await supabase.from('clients').update({ profile_photo_url: urlData.publicUrl }).eq('id', id);
       toast.success('Profilbild aktualisiert');
     }
     setUploadingPhoto(false);
