@@ -7,14 +7,12 @@ const supabase = createClient(
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Cron-Job-Authentifizierung
   const secret = req.headers["x-cron-secret"];
   if (secret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    // Alle Clients mit aktivierter Weekly Summary
     const { data: clients, error: clientsError } = await supabase
       .from("clients")
       .select("id, full_name, email")
@@ -30,15 +28,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ sent: [], note: "No clients with weekly summary enabled" });
     }
 
-    // Zeitraum: letzte 7 Tage
     const since = new Date();
     since.setDate(since.getDate() - 7);
     const sinceISO = since.toISOString();
 
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "https://buchung.jakob-neumann.net";
+
     const results: Array<{ client: string; status: number }> = [];
 
     for (const client of clients) {
-      // Sessions des Clients in den letzten 7 Tagen
       const { data: sessions, error: sessionsError } = await supabase
         .from("sessions")
         .select("session_date, session_type, notes")
@@ -53,7 +53,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const count = sessions?.length ?? 0;
 
-      // HTML-Mail bauen
       const sessionsList =
         count === 0
           ? "<p>In dieser Woche wurden keine Trainingseinheiten geloggt.</p>"
@@ -75,24 +74,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <p>Weiter so! 💪</p>
       `;
 
-      // Mail an /api/send-email
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "https://buchung.jakob-neumann.net";
-
       const mailRes = await fetch(`${baseUrl}/api/send-email`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Origin": "https://buchung.jakob-neumann.net"
-  },
-  body: JSON.stringify({
-    to: client.email,
-    subject: "Deine Wochenzusammenfassung 💪",
-    html,
-  }),
-});
-
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-cron-secret": process.env.CRON_SECRET!,
+        },
+        body: JSON.stringify({
+          to: client.email!,
+          subject: "Deine Wochenzusammenfassung 💪",
+          html,
+        }),
+      });
 
       results.push({ client: client.email!, status: mailRes.status });
     }
