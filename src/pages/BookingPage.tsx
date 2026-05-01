@@ -133,6 +133,9 @@ const BookingPage: React.FC = () => {
     const email = localStorage.getItem('booking_client_email') || sessionStorage.getItem('booking_client_email') || null;
     return email === 'undefined' ? null : email;
   });
+  const [clientToken, setClientToken] = useState<string | null>(() => 
+    localStorage.getItem('booking_client_token') || sessionStorage.getItem('booking_client_token') || null
+  );
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -183,20 +186,25 @@ const BookingPage: React.FC = () => {
     storage.setItem('booking_client_id', client.id);
     storage.setItem('booking_client_name', client.full_name);
     storage.setItem('booking_client_email', client.email || '');
-    setClientId(client.id);
-    setClientName(client.full_name);
-    setClientEmail(client.email || null);
+    setClientId(data.id);
+    setClientName(data.full_name);
+    setClientEmail(data.email || null);
+    const { data: tokenData } = await supabase.rpc('create_client_session', { p_client_id: data.id });
+    if (tokenData) {
+      storage.setItem('booking_client_token', tokenData);
+      setClientToken(tokenData);
+    }
     setCodeLoading(false);
   };
-
-  const handleLogout = () => {
-    ['booking_client_id', 'booking_client_name', 'booking_client_email'].forEach(k => {
+const handleLogout = () => {
+    ['booking_client_id', 'booking_client_name', 'booking_client_email', 'booking_client_token'].forEach(k => {
       localStorage.removeItem(k);
       sessionStorage.removeItem(k);
     });
     setClientId(null);
     setClientName('');
     setClientEmail(null);
+    setClientToken(null);
     setPackageInfo(null);
     setProfilePhotoUrl(null);
   };
@@ -336,7 +344,12 @@ const BookingPage: React.FC = () => {
     if (!selectedSlot || !clientId) return;
     if (myBookingSlotIds.has(selectedSlot.id)) { toast.error('Du hast für diesen Slot bereits eine Anfrage gestellt.'); setSelectedSlot(null); return; }
     setSubmitting(true);
-    const { error } = await supabase.from('booking_requests').insert({ slot_id: selectedSlot.id, client_id: clientId, trainer_id: selectedSlot.trainer_id, status: 'pending', client_message: bookingMessage || null });
+const { error } = await supabase.rpc('rpc_insert_booking_request', {
+      p_token: clientToken,
+      p_slot_id: selectedSlot.id,
+      p_client_id: clientId,
+      p_message: bookingMessage || null,
+    });
     if (error) { toast.error('Buchungsanfrage konnte nicht gesendet werden.'); setSubmitting(false); return; }
     const slotDate = format(new Date(selectedSlot.start_time), "EEEE, d. MMMM · HH:mm", { locale: de });
     toast.success('Deine Anfrage wurde gesendet!');
@@ -358,7 +371,7 @@ const BookingPage: React.FC = () => {
     if (slotStartTime && differenceInHours(new Date(slotStartTime), new Date()) < 24) {
       toast.error('Absagen innerhalb von 24 Stunden sind nicht möglich. Bitte kontaktiere Jakob direkt.'); return;
     }
-    await supabase.from('booking_requests').update({ status: 'cancelled' }).eq('id', requestId);
+    await supabase.rpc('rpc_cancel_booking_request', { p_token: clientToken, p_request_id: requestId });
     toast.success('Buchungsanfrage storniert.'); loadData();
   };
 
