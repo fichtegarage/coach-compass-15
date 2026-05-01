@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ─── Pfad A: Authentifizierter Trainer ──────────────────────────────────
   } else if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) return res.status(401).json({ error: 'Invalid or expired token' });
 
