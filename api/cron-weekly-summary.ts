@@ -84,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    "x-cron-secret": process.env.CRON_SECRET ?? "",   // ← NEU
+    "Origin": "https://buchung.jakob-neumann.net"
   },
   body: JSON.stringify({
     to: client.email,
