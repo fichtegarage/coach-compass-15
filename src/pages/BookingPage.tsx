@@ -370,7 +370,7 @@ const { error } = await supabase.rpc('rpc_insert_booking_request', {
     if (slotStartTime && differenceInHours(new Date(slotStartTime), new Date()) < 24) {
       toast.error('Absagen innerhalb von 24 Stunden sind nicht möglich. Bitte kontaktiere Jakob direkt.'); return;
     }
-    await supabase.rpc('rpc_cancel_booking_request', { p_token: clientToken, p_request_id: requestId });
+    await supabase.rpc('rpc_cancel_booking_request', { p_client_id: clientId, p_request_id: requestId });
     toast.success('Buchungsanfrage storniert.'); loadData();
   };
 
