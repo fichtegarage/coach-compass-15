@@ -300,8 +300,7 @@ const ClientDetailPage: React.FC = () => {
     const filePath = `${user.id}/${id}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('client-photos').upload(filePath, file, { upsert: true });
     if (error) { toast.error('Upload fehlgeschlagen'); return; }
-    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
-    await supabase.from('clients').update({ profile_photo_url: urlData.publicUrl }).eq('id', id);
+        await supabase.from('clients').update({ profile_photo_url: filePath }).eq('id', id);
     toast.success('Profilbild aktualisiert');
     loadAll();
   };
