@@ -442,7 +442,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
         // Paket-Laufzeit prüfen
         const { data: clientData } = await supabase
           .from('clients')
-          .select('packages(end_date)')
+        .select('full_name, user_id, packages(end_date)')
           .eq('id', clientId)
           .maybeSingle();
 
@@ -455,9 +455,13 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
           : true;
 
         if (hasTimeLeft) {
-          await supabase.from('client_notifications').insert({
+          await supabase.from('coach_alerts').insert({
+            trainer_id: clientData?.user_id,
             client_id: clientId,
-            message: `⚠️ Plan-Ende naht: ${clientId} erreicht die letzte Woche des Trainingsplans. Bitte neuen Plan vorbereiten.`,
+            alert_type: 'plan_end',
+            priority: 'high',
+            title: 'Plan-Ende naht',
+            message: `⚠️ ${clientData?.full_name ?? 'Unbekannte Kundin'} erreicht die letzte Woche des Trainingsplans. Bitte neuen Plan vorbereiten.`,
           });
           await supabase.from('plan_end_alerts').insert({
             client_id: clientId,
