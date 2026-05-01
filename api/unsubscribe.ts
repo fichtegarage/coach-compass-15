@@ -14,10 +14,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
 
   const { data, error } = await supabase
-    .from("newsletter_subscriptions")
-    .select("unsubscribe_token")
-    .eq("client_id", client_id)
-    .single();
+    .from("clients")
+    .select("id, unsubscribe_token")
+    .eq("id", client_id)
+    .maybeSingle();
 
   if (error || !data) {
     return res.status(404).send("Nicht gefunden");
@@ -28,9 +28,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { error: updateError } = await supabase
-    .from("newsletter_subscriptions")
-    .update({ subscribed: false })
-    .eq("client_id", client_id);
+    .from("clients")
+    .update({ email_weekly_summary: false })
+    .eq("id", client_id);
 
   if (updateError) {
     return res.status(500).send("Datenbankfehler");
@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).send(`
     <html><body style="font-family:sans-serif;text-align:center;padding:50px">
       <h1>✅ Erfolgreich abgemeldet</h1>
-      <p>Du wirst keine Newsletter mehr erhalten.</p>
+      <p>Du wirst keine wöchentlichen Zusammenfassungen mehr erhalten.</p>
     </body></html>
   `);
 }
