@@ -81,14 +81,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : "https://buchung.jakob-neumann.net";
 
       const mailRes = await fetch(`${baseUrl}/api/send-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: client.email,
-          subject: "Deine Wochenzusammenfassung 💪",
-          html,
-        }),
-      });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-cron-secret": process.env.CRON_SECRET ?? "",   // ← NEU
+  },
+  body: JSON.stringify({
+    to: client.email,
+    subject: "Deine Wochenzusammenfassung 💪",
+    html,
+  }),
+});
+
 
       results.push({ client: client.email!, status: mailRes.status });
     }
