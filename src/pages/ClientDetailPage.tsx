@@ -607,11 +607,11 @@ await supabase.from('sessions').insert({
 
   const saveMetric = async () => {
     if (!user || !id) return;
-    await supabase.from('body_metrics').insert({
-      client_id: id, user_id: user.id,
-      measured_at: metricForm.measured_at,
+    await supabase.from('client_metrics').insert({
+      client_id: id,
+      recorded_at: metricForm.measured_at,
       weight_kg: metricForm.weight_kg ? Number(metricForm.weight_kg) : null,
-      body_fat_pct: metricForm.body_fat_pct ? Number(metricForm.body_fat_pct) : null,
+      body_fat_percent: metricForm.body_fat_pct ? Number(metricForm.body_fat_pct) : null,
       waist_cm: metricForm.waist_cm ? Number(metricForm.waist_cm) : null,
       hip_cm: metricForm.hip_cm ? Number(metricForm.hip_cm) : null,
       chest_cm: metricForm.chest_cm ? Number(metricForm.chest_cm) : null,
