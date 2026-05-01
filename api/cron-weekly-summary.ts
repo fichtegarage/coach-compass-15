@@ -5,8 +5,32 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// HTML-Escape gegen Injection in Mail-Body
+function esc(s: string): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatDate(iso: string): string {
+  // session_date ist timestamptz — als deutsches Datum + Uhrzeit ausgeben
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("de-DE", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  });
+  const time = d.toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${date}, ${time} Uhr`;
+}
+
 export default async function handler(req: Request) {
-  // Cron-Job-Authentifizierung — Secret bleibt hier, kommt aber nie in Mails
+  // Cron-Authentifizierung
   const secret = req.headers.get("x-cron-secret");
   if (secret !== process.env.CRON_SECRET) {
     return new Response("Unauthorized", { status: 401 });
@@ -15,10 +39,9 @@ export default async function handler(req: Request) {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "https://buchung.jakob-neumann.net";
 
-  // Clients laden — jetzt MIT unsubscribe_token
   const { data: clients, error } = await supabase
     .from("clients")
-    .select("id, name, email, trainer_id, unsubscribe_token")
+    .select("id, name, full_name, email, trainer_id, unsubscribe_token")
     .eq("email_weekly_summary", true);
 
   if (error) {
@@ -27,44 +50,74 @@ export default async function handler(req: Request) {
   }
 
   if (!clients || clients.length === 0) {
-    return new Response("No clients to notify", { status: 200 });
+    return new Response(JSON.stringify({ sent: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  // Aktuelle Kalenderwoche (Montag–Sonntag)
+  // Aktuelle Kalenderwoche (Montag 00:00 – Sonntag 23:59)
   const now = new Date();
+  const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay(); // So=7
   const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay() + 1);
+  startOfWeek.setDate(now.getDate() - dayOfWeek + 1);
   startOfWeek.setHours(0, 0, 0, 0);
-
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(startOfWeek.getDate() + 6);
   endOfWeek.setHours(23, 59, 59, 999);
 
-  const results = [];
+  const results: Array<{ client: string; status: number }> = [];
 
   for (const client of clients) {
-    // Termine der Woche laden
-    const { data: bookings } = await supabase
-      .from("bookings")
-      .select("date, time, type, status")
+    const displayName =
+      (client.full_name as string | null) ||
+      (client.name as string | null) ||
+      "";
+    const firstName = displayName.split(" ")[0] || "Kunde";
+
+    // Sessions der Woche aus der korrekten Tabelle
+    const { data: sessions, error: sessErr } = await supabase
+      .from("sessions")
+      .select("session_date, session_type, status")
       .eq("client_id", client.id)
-      .gte("date", startOfWeek.toISOString().split("T")[0])
-      .lte("date", endOfWeek.toISOString().split("T")[0]);
+      .gte("session_date", startOfWeek.toISOString())
+      .lte("session_date", endOfWeek.toISOString())
+      .order("session_date", { ascending: true });
 
-    const bookingList =
-      bookings && bookings.length > 0
-        ? bookings
+    if (sessErr) {
+      console.error(`Error loading sessions for ${client.email}:`, sessErr);
+      results.push({ client: client.email, status: 0 });
+      continue;
+    }
+
+    const listHtml =
+      sessions && sessions.length > 0
+        ? `<ul style="padding-left:18px;margin:8px 0;">${sessions
             .map(
-              (b) =>
-                `• ${b.date} um ${b.time} Uhr — ${b.type} (${b.status})`
+              (s) =>
+                `<li>${esc(formatDate(s.session_date))} — ${esc(
+                  s.session_type || "Training"
+                )} <span style="color:#666;">(${esc(s.status)})</span></li>`
             )
-            .join("\n")
-        : "Keine Termine diese Woche.";
+            .join("")}</ul>`
+        : `<p style="margin:8px 0;color:#666;">Keine Termine diese Woche.</p>`;
 
-    // Unsubscribe-Link mit persönlichem Token — kein CRON_SECRET mehr
-    const unsubscribeUrl = `${baseUrl}/api/unsubscribe?client_id=${client.id}&token=${client.unsubscribe_token}`;
+    const unsubscribeUrl = `${baseUrl}/api/unsubscribe?client_id=${
+      client.id
+    }&token=${encodeURIComponent(client.unsubscribe_token ?? "")}`;
 
-    const emailBody = `Hallo ${client.name},\n\nhier ist deine Wochenzusammenfassung:\n\n${bookingList}\n\nBis bald,\nJakob\n\n---\nUm dich abzumelden: ${unsubscribeUrl}`;
+    const html = `<!DOCTYPE html>
+<html lang="de"><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;max-width:560px;margin:0 auto;padding:16px;line-height:1.5;">
+  <p>Hallo ${esc(firstName)},</p>
+  <p>hier ist deine Wochenzusammenfassung:</p>
+  ${listHtml}
+  <p>Bis bald,<br>Jakob</p>
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+  <p style="font-size:12px;color:#888;">
+    Du möchtest keine Wochenzusammenfassung mehr erhalten?
+    <a href="${unsubscribeUrl}" style="color:#888;">Hier abmelden</a>.
+  </p>
+</body></html>`;
 
     const res = await fetch(`${baseUrl}/api/send-email`, {
       method: "POST",
@@ -75,7 +128,7 @@ export default async function handler(req: Request) {
       body: JSON.stringify({
         to: client.email,
         subject: "Deine Wochenzusammenfassung 💪",
-        body: emailBody,
+        html,
       }),
     });
 
