@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { PhotoImg } from '@/lib/photoUrls';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,14 @@ interface Props {
 }
 
 const ClientProgressPhotos: React.FC<Props> = ({ clientId }) => {
+  // Buchungscode aus URL (z.B. ?code=PT-XYZ oder /book/PT-XYZ) holen
+  const bookingCode = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = params.get('code') || params.get('booking_code');
+    if (fromQuery) return fromQuery;
+    const match = window.location.pathname.match(/PT-[A-Z0-9]+/);
+    return match ? match[0] : '';
+  })();
   const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
