@@ -189,12 +189,11 @@ const BookingPage: React.FC = () => {
     setClientId(data.id);
     setClientName(data.full_name);
     setClientEmail(data.email || null);
-    const { data: tokenData } = await supabase.rpc('create_client_session', { p_client_id: data.id });
-    if (tokenData) {
-      storage.setItem('booking_client_token', tokenData);
-      setClientToken(tokenData);
-    }
     setCodeLoading(false);
+    const newToken = crypto.randomUUID();
+    storage.setItem('booking_client_token', newToken);
+    setClientToken(newToken);
+    supabase.from('client_sessions').insert({ token: newToken, client_id: data.id });
   };
 const handleLogout = () => {
     ['booking_client_id', 'booking_client_name', 'booking_client_email', 'booking_client_token'].forEach(k => {
