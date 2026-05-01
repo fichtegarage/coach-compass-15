@@ -111,7 +111,7 @@ const ClientsPage: React.FC = () => {
       supabase.from('packages').select('*').order('start_date', { ascending: false }),
       supabase.from('sessions').select('client_id, second_client_id, package_id, second_client_package_id, id').in('status', ['Completed', 'No-Show']).neq('session_type', 'Check-In Call'),
       supabase.from('sessions').select('client_id, id').eq('status', 'Completed').eq('session_type', 'Check-In Call'),
-      supabase.from('body_metrics').select('client_id, id'),
+      supabase.from('client_metrics').select('client_id, id'),
       supabase.from('package_feature_completions').select('package_id, feature_key'),
     ]);
 
