@@ -91,7 +91,7 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
     await supabase.from('progress_photos').insert({
       client_id: clientId,
       user_id: user.id,
-      photo_url: urlData.publicUrl,
+      photo_url: path,
       taken_at: uploadDate,
       note: uploadNote || null,
       uploaded_by: 'coach',
