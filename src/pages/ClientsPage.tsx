@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Search, User, ChevronDown, ChevronUp, CalendarDays, Check, Circle } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { PhotoImg } from '@/lib/photoUrls';
 
 interface Client {
   id: string;
@@ -248,7 +249,7 @@ setSessionCounts(sMap);
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
                 {client.profile_photo_url ? (
-                  <img src={client.profile_photo_url} alt="" className="w-full h-full object-cover" />
+                  <PhotoImg src={client.profile_photo_url} bucket="client-photos" alt="" className="w-full h-full object-cover" />
                 ) : (
                   <User className="w-5 h-5 text-primary" />
                 )}
