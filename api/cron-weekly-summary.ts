@@ -1,142 +1,100 @@
 import { createClient } from "@supabase/supabase-js";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// HTML-Escape gegen Injection in Mail-Body
-function esc(s: string): string {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function formatDate(iso: string): string {
-  // session_date ist timestamptz — als deutsches Datum + Uhrzeit ausgeben
-  const d = new Date(iso);
-  const date = d.toLocaleDateString("de-DE", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-  });
-  const time = d.toLocaleTimeString("de-DE", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return `${date}, ${time} Uhr`;
-}
-
-export default async function handler(req: Request) {
-  // Cron-Authentifizierung
-  const secret = req.headers.get("x-cron-secret");
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Cron-Job-Authentifizierung
+  const secret = req.headers["x-cron-secret"];
   if (secret !== process.env.CRON_SECRET) {
-    return new Response("Unauthorized", { status: 401 });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://buchung.jakob-neumann.net";
+  try {
+    // Alle Clients mit aktivierter Weekly Summary
+    const { data: clients, error: clientsError } = await supabase
+      .from("clients")
+      .select("id, full_name, email")
+      .eq("email_weekly_summary", true)
+      .not("email", "is", null)
+      .neq("email", "");
 
-  const { data: clients, error } = await supabase
-    .from("clients")
-    .select("id, name, full_name, email, trainer_id, unsubscribe_token")
-    .eq("email_weekly_summary", true);
-
-  if (error) {
-    console.error("Error loading clients:", error);
-    return new Response("Error loading clients", { status: 500 });
-  }
-
-  if (!clients || clients.length === 0) {
-    return new Response(JSON.stringify({ sent: [] }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  // Aktuelle Kalenderwoche (Montag 00:00 – Sonntag 23:59)
-  const now = new Date();
-  const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay(); // So=7
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - dayOfWeek + 1);
-  startOfWeek.setHours(0, 0, 0, 0);
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-  endOfWeek.setHours(23, 59, 59, 999);
-
-  const results: Array<{ client: string; status: number }> = [];
-
-  for (const client of clients) {
-    const displayName =
-      (client.full_name as string | null) ||
-      (client.name as string | null) ||
-      "";
-    const firstName = displayName.split(" ")[0] || "Kunde";
-
-    // Sessions der Woche aus der korrekten Tabelle
-    const { data: sessions, error: sessErr } = await supabase
-      .from("sessions")
-      .select("session_date, session_type, status")
-      .eq("client_id", client.id)
-      .gte("session_date", startOfWeek.toISOString())
-      .lte("session_date", endOfWeek.toISOString())
-      .order("session_date", { ascending: true });
-
-    if (sessErr) {
-      console.error(`Error loading sessions for ${client.email}:`, sessErr);
-      results.push({ client: client.email, status: 0 });
-      continue;
+    if (clientsError) {
+      return res.status(500).json({ error: "DB error (clients)", detail: clientsError.message });
     }
 
-    const listHtml =
-      sessions && sessions.length > 0
-        ? `<ul style="padding-left:18px;margin:8px 0;">${sessions
-            .map(
-              (s) =>
-                `<li>${esc(formatDate(s.session_date))} — ${esc(
-                  s.session_type || "Training"
-                )} <span style="color:#666;">(${esc(s.status)})</span></li>`
-            )
-            .join("")}</ul>`
-        : `<p style="margin:8px 0;color:#666;">Keine Termine diese Woche.</p>`;
+    if (!clients || clients.length === 0) {
+      return res.status(200).json({ sent: [], note: "No clients with weekly summary enabled" });
+    }
 
-    const unsubscribeUrl = `${baseUrl}/api/unsubscribe?client_id=${
-      client.id
-    }&token=${encodeURIComponent(client.unsubscribe_token ?? "")}`;
+    // Zeitraum: letzte 7 Tage
+    const since = new Date();
+    since.setDate(since.getDate() - 7);
+    const sinceISO = since.toISOString();
 
-    const html = `<!DOCTYPE html>
-<html lang="de"><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;max-width:560px;margin:0 auto;padding:16px;line-height:1.5;">
-  <p>Hallo ${esc(firstName)},</p>
-  <p>hier ist deine Wochenzusammenfassung:</p>
-  ${listHtml}
-  <p>Bis bald,<br>Jakob</p>
-  <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-  <p style="font-size:12px;color:#888;">
-    Du möchtest keine Wochenzusammenfassung mehr erhalten?
-    <a href="${unsubscribeUrl}" style="color:#888;">Hier abmelden</a>.
-  </p>
-</body></html>`;
+    const results: Array<{ client: string; status: number }> = [];
 
-    const res = await fetch(`${baseUrl}/api/send-email`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-cron-secret": process.env.CRON_SECRET!,
-      },
-      body: JSON.stringify({
-        to: client.email,
-        subject: "Deine Wochenzusammenfassung 💪",
-        html,
-      }),
-    });
+    for (const client of clients) {
+      // Sessions des Clients in den letzten 7 Tagen
+      const { data: sessions, error: sessionsError } = await supabase
+        .from("sessions")
+        .select("session_date, session_type, notes")
+        .eq("client_id", client.id)
+        .gte("session_date", sinceISO)
+        .order("session_date", { ascending: true });
 
-    results.push({ client: client.email, status: res.status });
+      if (sessionsError) {
+        results.push({ client: client.email!, status: 500 });
+        continue;
+      }
+
+      const count = sessions?.length ?? 0;
+
+      // HTML-Mail bauen
+      const sessionsList =
+        count === 0
+          ? "<p>In dieser Woche wurden keine Trainingseinheiten geloggt.</p>"
+          : "<ul>" +
+            sessions!
+              .map((s) => {
+                const date = new Date(s.session_date).toLocaleDateString("de-DE");
+                const type = s.session_type ?? "Training";
+                return `<li><strong>${date}</strong> – ${type}</li>`;
+              })
+              .join("") +
+            "</ul>";
+
+      const html = `
+        <h2>Hallo ${client.full_name ?? ""}!</h2>
+        <p>Hier ist deine Wochenzusammenfassung:</p>
+        <p><strong>${count}</strong> Trainingseinheit(en) in den letzten 7 Tagen.</p>
+        ${sessionsList}
+        <p>Weiter so! 💪</p>
+      `;
+
+      // Mail an /api/send-email
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "https://buchung.jakob-neumann.net";
+
+      const mailRes = await fetch(`${baseUrl}/api/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: client.email,
+          subject: "Deine Wochenzusammenfassung 💪",
+          html,
+        }),
+      });
+
+      results.push({ client: client.email!, status: mailRes.status });
+    }
+
+    return res.status(200).json({ sent: results });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Handler crashed", detail: err?.message ?? String(err) });
   }
-
-  return new Response(JSON.stringify({ sent: results }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
 }
