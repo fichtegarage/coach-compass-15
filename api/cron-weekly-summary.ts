@@ -70,7 +70,7 @@ export default async function handler(req: Request) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+        "x-cron-secret": process.env.CRON_SECRET!,
       },
       body: JSON.stringify({
         to: client.email,
