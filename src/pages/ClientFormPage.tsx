@@ -81,7 +81,7 @@ const ClientFormPage: React.FC = () => {
     const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
     setProfilePhotoUrl(urlData.publicUrl);
     if (isEdit && id) {
-      await supabase.from('clients').update({ profile_photo_url: urlData.publicUrl }).eq('id', id);
+          await supabase.from('clients').update({ profile_photo_url: filePath }).eq('id', id);
       toast.success('Profilbild aktualisiert');
     }
     setUploadingPhoto(false);
