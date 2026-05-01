@@ -10,6 +10,8 @@ import { Camera, Plus, Columns2, Check, ChevronLeft, ChevronRight, ChevronDown, 
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { PhotoImg } from '@/lib/photoUrls';
+
 
 interface ProgressPhoto {
   id: string;
@@ -273,7 +275,7 @@ const ClientProgressPhotos: React.FC<Props> = ({ clientId }) => {
                 </DialogTitle>
               </DialogHeader>
               <div className="w-full rounded-xl overflow-hidden bg-slate-700">
-                <img src={lightboxPhoto.photo_url} alt="" className="w-full h-auto max-h-[70vh] object-contain" />
+                <PhotoImg src={lightboxPhoto.photo_url} bucket="progress-photos" alt="" className="w-full h-auto max-h-[70vh] object-contain" />
               </div>
             </>
           )}
@@ -290,7 +292,7 @@ const ClientProgressPhotos: React.FC<Props> = ({ clientId }) => {
             {comparePhotos.map(p => (
               <div key={p.id} className="shrink-0 flex flex-col items-center" style={{ minWidth: '200px', flex: 1 }}>
                 <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-slate-700 border border-slate-600">
-                  <img src={p.photo_url} alt="" className="w-full h-full object-cover" />
+                  <PhotoImg src={p.photo_url} bucket="progress-photos" alt="" className="w-full h-full object-cover" />
                 </div>
                 <p className="text-sm font-medium mt-2 text-white">{format(new Date(p.taken_at), 'd. MMM yyyy', { locale: de })}</p>
                 {p.note && <p className="text-xs text-slate-400">{p.note}</p>}
