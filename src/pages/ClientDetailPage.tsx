@@ -2,6 +2,7 @@ import { getLatestConversation, getHealthRecord } from '@/lib/onboarding-api';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { PhotoImg } from '@/lib/photoUrls';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -745,8 +746,14 @@ await supabase.from('sessions').insert({
           className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer relative group"
           onClick={() => profilePhotoRef.current?.click()}
         >
-          {client.profile_photo_url ? (
-            <img src={client.profile_photo_url} alt="" className="w-full h-full object-cover" />
+                    {client.profile_photo_url ? (
+            <PhotoImg
+              src={client.profile_photo_url}
+              bucket="client-photos"
+              alt=""
+              className="w-full h-full object-cover"
+              fallback={<User className="w-8 h-8 text-primary" />}
+            />
           ) : (
             <User className="w-8 h-8 text-primary" />
           )}
