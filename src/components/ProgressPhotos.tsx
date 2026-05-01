@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { PhotoImg } from '@/lib/photoUrls';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -338,11 +339,13 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
                 </DialogTitle>
               </DialogHeader>
               <div className="w-full rounded-xl overflow-hidden bg-muted">
-                <img
+                                <PhotoImg
                   src={lightboxPhoto.photo_url}
+                  bucket="progress-photos"
                   alt="Fortschrittsfoto"
                   className="w-full h-auto max-h-[70vh] object-contain"
                 />
+
               </div>
               <Button
                 variant="destructive"
@@ -367,7 +370,8 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
             {comparePhotos.map(p => (
               <div key={p.id} className="shrink-0 flex flex-col items-center" style={{ minWidth: '200px', flex: 1 }}>
                 <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-muted border border-border">
-                  <img src={p.photo_url} alt="" className="w-full h-full object-cover" />
+                                    <PhotoImg src={p.photo_url} bucket="progress-photos" alt="" className="w-full h-full object-cover" />
+
                 </div>
                 <p className="text-sm font-medium mt-2">
                   {format(new Date(p.taken_at), 'd. MMM yyyy', { locale: de })}
