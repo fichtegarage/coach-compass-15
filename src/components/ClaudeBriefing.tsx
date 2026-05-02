@@ -291,31 +291,25 @@ const ClaudeBriefing: React.FC<ClaudeBriefingProps> = ({
     );
 
     try {
-            // Supabase-Session holen, um JWT als Bearer-Token mitzuschicken.
-      // Der /api/claude-proxy-Endpoint verlangt seit dem Security-Fix Auth.
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
+      // Session einmalig holen
+const { data: sessionData } = await supabase.auth.getSession();
+const accessToken = sessionData?.session?.access_token;
 
-      if (!accessToken) {
-        throw new Error('Nicht eingeloggt — bitte erneut anmelden.');
-      }
+if (!accessToken) {
+  throw new Error('Nicht eingeloggt — bitte erneut anmelden.');
+}
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || '';
-
-      const response = await fetch('/api/claude-proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          max_tokens: 1500,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
+const response = await fetch('/api/claude-proxy', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${accessToken}`, // ← nur einmal, eine Variable
+  },
+  body: JSON.stringify({
+    max_tokens: 1500,
+    messages: [{ role: 'user', content: prompt }],
+  }),
+});
 
 
       const data = await response.json();
