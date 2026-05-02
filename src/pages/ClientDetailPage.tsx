@@ -1618,10 +1618,10 @@ await supabase.from('sessions').insert({
   </CardHeader>
   <CardContent>
     <Textarea
-      defaultValue={client.notes_internal || ''}
+      defaultValue={client.general_notes || ''}
       onBlur={async (e) => {
-        await supabase.from('clients').update({ notes_internal: e.target.value }).eq('id', id);
-        toast.success('Interne Notizen gespeichert');
+        await supabase.from('clients').update({ general_notes: e.target.value }).eq('id', id);
+        toast.success('Notizen gespeichert');
       }}
       rows={4}
       placeholder="Vertrauliche Notizen (nur für dich sichtbar)..."
