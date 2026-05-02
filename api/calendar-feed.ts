@@ -32,27 +32,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // NEU: Token-basierte Auth statt user_id
   const token = req.query.token as string;
-  if (!token) {
+  const legacyUserId = req.query.user_id as string;
+  if (!token && !legacyUserId) {
     return res.status(401).send('Missing token');
   }
-
   const supabase = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-
-  // Token → user_id auflösen
-  const { data: calToken, error: tokenError } = await supabase
-    .from('calendar_tokens')
-    .select('user_id')
-    .eq('token', token)
-    .single();
-
-  if (tokenError || !calToken) {
-    return res.status(401).send('Invalid token');
+  let userId: string;
+  if (legacyUserId) {
+    // Legacy-Format: ?user_id=<uuid>
+    userId = legacyUserId;
+  } else {
+    // Neues Format: ?token=<hash>
+    const { data: calToken, error: tokenError } = await supabase
+      .from('calendar_tokens')
+      .select('user_id')
+      .eq('token', token)
+      .single();
+    if (tokenError || !calToken) {
+      return res.status(401).send('Invalid token');
+    }
+    userId = calToken.user_id;
   }
-
-  const userId = calToken.user_id;
 
   // Ab hier alles unverändert
   const { data: sessions, error } = await supabase
