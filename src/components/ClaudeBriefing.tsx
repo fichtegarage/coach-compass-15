@@ -300,21 +300,17 @@ if (!accessToken) {
   throw new Error('Nicht eingeloggt — bitte erneut anmelden.');
 }
 
-const { data: sessionData } = await supabase.auth.getSession();
-const token = sessionData?.session?.access_token || accessToken;
-
 const response = await fetch('/api/claude-proxy', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`, // ✅ nur eine Variable, korrekte Ebene
-  },                                     // ✅ headers korrekt geschlossen
-  body: JSON.stringify({                 // ✅ body auf richtiger Ebene
+    'Authorization': `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
     max_tokens: 1500,
     messages: [{ role: 'user', content: prompt }],
   }),
-});                                      // ✅ fetch korrekt geschlossen
-
+});
 
 
       const data = await response.json();
