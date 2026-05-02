@@ -42,7 +42,7 @@ interface ClientData {
   pinned_note?: string | null;      // ✅ NEU
   general_notes?: string | null;    // ✅ NEU
   health_notes?: string | null;     // ✅ NEU
-  notes_internal?: string | null;   // ✅ NEU
+ 
 }
 
 interface ConversationData {
@@ -205,7 +205,7 @@ export async function loadClientDataForPrompt(
     pinned_note,
     general_notes,
     health_notes,
-    notes_internal
+    
   `)
   .eq('id', clientId)
   .single();
