@@ -378,12 +378,7 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
     setWorkoutLogs(normalised);
 
     // PRs
-    const { data: prsData } = await supabase
-      .from('personal_records')
-      .select('exercise_name, weight_kg, reps, achieved_at')
-      .eq('client_id', clientId)
-      .order('exercise_name');
-    setPersonalRecords(prsData || []);
+    setPersonalRecords([]);
 
     // Erstgespräch
     const { data: convData } = await supabase
