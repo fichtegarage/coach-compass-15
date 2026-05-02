@@ -6,7 +6,7 @@
  * und zeigt die strukturierte Antwort inline an.
  */
 import React, { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Loader2, Sparkles, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
