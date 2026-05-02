@@ -406,12 +406,7 @@ const planData = plans?.[0];  // ✅ Holt erstes Element
       setWorkoutLogs(normalisedLogs);
 
       // PRs
-      const { data: prsData } = await supabase
-        .from('personal_records')
-        .select('exercise_name, weight_kg, reps, achieved_at')
-        .eq('client_id', clientId)
-        .order('exercise_name');
-      setPrs(prsData || []);
+     setPrs([]);
 
       setLoading(false);
     };
