@@ -48,9 +48,6 @@ export interface Client {
   preffered_location: string | null;
   contract_signed: boolean | null;
   contract_signed_date: string | null;
-  reffereal_source: string | null;
-  instagram_handle: string | null;
-  notes_internal: string | null;
   created_at: string;
   
   // ✅ NEU - Adresse
@@ -160,7 +157,6 @@ export interface NewClientForm {
   phone?: string;
   date_of_birth?: string;
   occupation?: string;
-  instagram_handle?: string;
   
   // ✅ NEU - Adresse
   street_address?: string;
