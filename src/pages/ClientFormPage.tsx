@@ -38,8 +38,9 @@ const ClientFormPage: React.FC = () => {
     fitness_goal: '',
     fitness_goal_text: '',
     starting_date: new Date().toISOString().split('T')[0],
-    status: 'Active',
-    acquisition_source: '',
+    status: 'Active', acquisition_source: '',
+    street_address: '', postal_code: '', city: '',
+    gender: '',
   });
 
   useEffect(() => {
@@ -61,6 +62,10 @@ const ClientFormPage: React.FC = () => {
           starting_date: data.starting_date || '',
           status: data.status || 'Active',
           acquisition_source: data.acquisition_source || '',
+          street_address: data.street_address || '',
+          postal_code: data.postal_code || '',
+          city: data.city || '',
+          gender: data.gender || '',
         });
         setProfilePhotoUrl(data.profile_photo_url || null);
       }
@@ -200,6 +205,26 @@ const ClientFormPage: React.FC = () => {
               <div className="space-y-2">
                 <Label>Telefon (mit Vorwahl)</Label>
                 <Input value={form.phone} onChange={e => update('phone', e.target.value)} placeholder="+49..." />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base font-display">Adresse</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Straße und Hausnummer</Label>
+              <Input value={form.street_address} onChange={e => update('street_address', e.target.value)} placeholder="z.B. Musterstraße 12" />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>PLZ</Label>
+                <Input value={form.postal_code} onChange={e => update('postal_code', e.target.value)} placeholder="z.B. 86150" />
+              </div>
+              <div className="space-y-2">
+                <Label>Stadt</Label>
+                <Input value={form.city} onChange={e => update('city', e.target.value)} placeholder="z.B. Augsburg" />
               </div>
             </div>
           </CardContent>
