@@ -416,12 +416,13 @@ const ClientDetailPage: React.FC = () => {
   };
 
   const savePinnedNote = async () => {
-    await supabase.from('clients').update({ pinned_note: pinnedText }).eq('id', id);
+    const { error } = await supabase.from('clients').update({ pinned_note: pinnedText }).eq('id', id);
+    if (error) { toast.error('Fehler beim Speichern der Notiz'); return; }
     setEditingPinned(false);
     loadAll();
     toast.success('Notiz aktualisiert');
   };
-
+  
   const openEditSession = (s: any) => {
     setEditingSessionId(s.id);
     setSessionForm({
