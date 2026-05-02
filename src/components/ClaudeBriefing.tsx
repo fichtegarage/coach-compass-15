@@ -301,22 +301,20 @@ if (!accessToken) {
 }
 
 const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || '';
+const token = sessionData?.session?.access_token || accessToken;
 
-      const response = await fetch('/api/claude-proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+const response = await fetch('/api/claude-proxy', {
+  method: 'POST',
+  headers: {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${accessToken}`, // ← nur einmal, eine Variable
-  },
-  body: JSON.stringify({
+    'Authorization': `Bearer ${token}`, // ✅ nur eine Variable, korrekte Ebene
+  },                                     // ✅ headers korrekt geschlossen
+  body: JSON.stringify({                 // ✅ body auf richtiger Ebene
     max_tokens: 1500,
     messages: [{ role: 'user', content: prompt }],
   }),
-});
+});                                      // ✅ fetch korrekt geschlossen
+
 
 
       const data = await response.json();
