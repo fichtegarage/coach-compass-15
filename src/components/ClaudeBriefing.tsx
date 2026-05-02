@@ -5,7 +5,8 @@
  * Sendet Workout-Logs, PRs, Erstgespräch-Daten, Health Records und Metrics an Claude
  * und zeigt die strukturierte Antwort inline an.
  */
-import React, { useState } from 'react';
+import React, { useState } from 'react'; 
+import { supabase } from '@/integrations/supabase/client';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Loader2, Sparkles, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
@@ -299,9 +300,15 @@ if (!accessToken) {
   throw new Error('Nicht eingeloggt — bitte erneut anmelden.');
 }
 
-const response = await fetch('/api/claude-proxy', {
-  method: 'POST',
-  headers: {
+const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || '';
+
+      const response = await fetch('/api/claude-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${accessToken}`, // ← nur einmal, eine Variable
   },
