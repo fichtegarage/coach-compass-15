@@ -974,12 +974,27 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
 
         // Client A
         await supabase.from('clients').update(buildClientUpdate(suffix_a)).eq('id', selectedClientId!);
-        const convA = await createConversation(selectedClientId!, buildConversationData(suffix_a));
+        const convDataA = buildConversationData(suffix_a);
+        if (!convDataA.contact_source && existingClient?.acquisition_source) {
+          convDataA.contact_source = existingClient.acquisition_source;
+        }
+        const convA = await createConversation(selectedClientId!, convDataA);
         await createHealthRecord(selectedClientId!, buildHealthData(suffix_a), convA.id);
 
         // Client B
-        await supabase.from('clients').update(buildClientUpdate(suffix_b)).eq('id', secondClientId);
-        const convB = await createConversation(secondClientId, buildConversationData(suffix_b));
+        await supabase.from('clients').update({
+          occupation: formData.occupation_b,
+          fitness_goal_text: formData.fitness_goal_text_b,
+          status: 'trial',
+        }).eq('id', secondClientId);
+
+        const { data: secondClientData } = await supabase
+          .from('clients').select('acquisition_source').eq('id', secondClientId).single();
+        const convDataB = buildConversationData(suffix_b);
+        if (!convDataB.contact_source && secondClientData?.acquisition_source) {
+          convDataB.contact_source = secondClientData.acquisition_source;
+        }
+        const convB = await createConversation(secondClientId, convDataB);
         await createHealthRecord(secondClientId, buildHealthData(suffix_b), convB.id);
 
         toast({ title: 'Duo-Erstgespräch gespeichert', description: `Daten für ${clientName} & ${secondClientName} wurden gespeichert.` });
@@ -988,7 +1003,11 @@ export default function OnboardingWizard({ clientId: propClientId }: OnboardingW
       } else {
         // ── Solo ──────────────────────────────────────────────────────────
         await supabase.from('clients').update(buildClientUpdate('')).eq('id', selectedClientId!);
-        const conversation = await createConversation(selectedClientId!, buildConversationData(''));
+        const soloConvData = buildConversationData('');
+        if (!soloConvData.contact_source && existingClient?.acquisition_source) {
+          soloConvData.contact_source = existingClient.acquisition_source;
+        }
+        const conversation = await createConversation(selectedClientId!, soloConvData);
         await createHealthRecord(selectedClientId!, buildHealthData(''), conversation.id);
 
         toast({ title: 'Erstgespräch gespeichert', description: `Daten für ${clientName} wurden erfolgreich gespeichert.` });
