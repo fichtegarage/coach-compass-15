@@ -175,14 +175,18 @@ const SessionsPage: React.FC = () => {
     setSelectedSession(null); // Edit-Dialog schließen
   };
 
-  const getSessionCount = (clientId: string, packageId: string | null) => {
-    if (!packageId) return null;
-    const pkg = packages.find(p => p.id === packageId);
+  const getSessionCount = (session: any) => {
+    const sessionDate = session.session_date?.slice(0, 10);
+    const pkg = packages.find(p =>
+      p.client_id === session.client_id &&
+      (!p.start_date || p.start_date <= sessionDate) &&
+      (!p.end_date || p.end_date >= sessionDate)
+    );
     if (!pkg) return null;
-    const used = sessions.filter(s => 
-  (s.package_id === packageId || s.second_client_package_id === packageId) && 
-  ['Completed', 'No-Show'].includes(s.status)
-).length;
+    const used = sessions.filter(s =>
+      (s.package_id === pkg.id || s.second_client_package_id === pkg.id) &&
+      ['Completed', 'No-Show'].includes(s.status)
+    ).length;
     return { used, total: pkg.sessions_included };
   };
 
@@ -569,7 +573,7 @@ const { error } = await supabase.from('sessions').insert({
                       const secondClientName = s.second_client?.full_name?.split(' ')[0];
                       const isDuo = s.session_type === 'Duo Training';
                       const loc = s.location || 'Gym';
-                      const count = getSessionCount(s.client_id, s.package_id);
+                      const count = getSessionCount(s);
                       const isCancelled = s.status.startsWith('Cancelled') || s.status === 'No-Show';
                       const isScheduled = s.status === 'Scheduled';
                       return (
@@ -620,7 +624,7 @@ const { error } = await supabase.from('sessions').insert({
           ) : (
             <div className="space-y-2">
               {[...sessions].reverse().map(s => {
-                const count = getSessionCount(s.client_id, s.package_id);
+                const count = getSessionCount(s);
                 const isDuo = s.session_type === 'Duo Training';
                 const secondName = s.second_client?.full_name;
                 return (
