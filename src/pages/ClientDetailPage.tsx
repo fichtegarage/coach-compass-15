@@ -608,8 +608,9 @@ await supabase.from('sessions').insert({
 
   const saveMetric = async () => {
     if (!user || !id) return;
-    await supabase.from('client_metrics').insert({
+    const { error } = await supabase.from('client_metrics').insert({
       client_id: id,
+      recorded_by: 'coach',
       recorded_at: metricForm.measured_at,
       weight_kg: metricForm.weight_kg ? Number(metricForm.weight_kg) : null,
       body_fat_percent: metricForm.body_fat_pct ? Number(metricForm.body_fat_pct) : null,
@@ -617,6 +618,10 @@ await supabase.from('sessions').insert({
       hip_cm: metricForm.hip_cm ? Number(metricForm.hip_cm) : null,
       chest_cm: metricForm.chest_cm ? Number(metricForm.chest_cm) : null,
     });
+    if (error) {
+         toast.error('Speichern fehlgeschlagen: ' + error.message);
+         return;
+       }
     setMetricDialogOpen(false);
     toast.success('Messwerte gespeichert');
     loadAll();
