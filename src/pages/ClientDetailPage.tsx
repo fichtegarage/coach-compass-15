@@ -1463,7 +1463,7 @@ await supabase.from('sessions').insert({
 
         {/* EQUIPMENT TAB */}
         <TabsContent value="equipment" className="mt-4">
-          <ClientEquipmentTab clientId={id!} clientName={client.first_name + ' ' + (client.last_name || '')} />
+          <ClientEquipmentTab clientId={id!} clientName={client.full_name || 'Unbekannt'} />
         </TabsContent>
 
         {/* ERSTGESPRÄCH TAB */}
