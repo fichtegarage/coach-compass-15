@@ -307,7 +307,7 @@ const ClientDetailPage: React.FC = () => {
 
   const loadAll = useCallback(async () => {
     if (!id || !user) return;
-    const [cRes, pRes, sRes, qlRes, fcRes, clientsRes] = await Promise.all([
+    const [cRes, pRes, sRes, qlRes, fcRes, clientsRes, fbRes] = await Promise.all([
       supabase.from('clients').select('*').eq('id', id).single(),
       supabase.from('packages').select('*').eq('client_id', id).order('start_date', { ascending: false }),
       supabase.from('sessions').select('*, clients!sessions_client_id_fkey(full_name), second_client:clients!sessions_second_client_id_fkey(full_name)').or(`client_id.eq.${id},second_client_id.eq.${id}`).order('session_date', { ascending: false }),
@@ -315,6 +315,7 @@ const ClientDetailPage: React.FC = () => {
       supabase.from('package_feature_completions').select('package_id, feature_key'),
       // ← NEU: alle aktiven Kunden für Duo-Partner-Auswahl laden
       supabase.from('clients').select('id, full_name').eq('status', 'Active').order('full_name'),
+      supabase.from('fitness_benchmarks').select('*').eq('client_id', id).order('measured_at', { ascending: false }),
     ]);
 
     // Auch Kunden-eingetragene Metriken laden (falls Tabelle existiert)
@@ -344,6 +345,7 @@ const ClientDetailPage: React.FC = () => {
     setPackages(pRes.data || []);
     setSessions(sRes.data || []);
     setMetrics(allMetrics);
+    setBenchmarks(fbRes.data || []);
     setQuickLogs(qlRes.data || []);
     // ← NEU
     setAllClients((clientsRes.data || []).filter((c: any) => c.id !== id));
@@ -629,10 +631,14 @@ await supabase.from('sessions').insert({
 
   const saveBenchmark = async () => {
     if (!user || !id) return;
-    await supabase.from('fitness_benchmarks').insert({
+    const { error } = await supabase.from('fitness_benchmarks').insert({
       client_id: id, user_id: user.id,
       label: benchmarkForm.label, value: benchmarkForm.value, measured_at: benchmarkForm.measured_at,
     });
+    if (error) {
+      toast.error('Speichern fehlgeschlagen: ' + error.message);
+      return;
+    }
     setBenchmarkDialogOpen(false);
     toast.success('Benchmark gespeichert');
     loadAll();
