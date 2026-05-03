@@ -349,7 +349,8 @@ export default function AssessmentGuideV2({
               caliper_triceps_mm: safeNumber(measurements.caliper_triceps_mm),
               caliper_suprailiac_mm: safeNumber(measurements.caliper_suprailiac_mm),
               caliper_thigh_mm: safeNumber(measurements.caliper_thigh_mm),
-              recorded_at: new Date().toISOString()
+              recorded_at: new Date().toISOString(),
+              recorded_by: 'assessment'
             })
             .select()
             .single();
