@@ -671,12 +671,18 @@ const { error } = await supabase.rpc('rpc_insert_booking_request', {
               </div>
             )}
             <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Buchungsanfragen</h3>
-              {bookings.length === 0 ? (
-                <p className="text-slate-500 text-sm text-center py-6">Noch keine Anfragen gestellt.</p>
-              ) : (
-                bookings.map(b => (
-                  <div key={b.id} className={`rounded-xl border p-3 space-y-2 ${b.status === 'pending' ? 'bg-amber-500/5 border-amber-500/20' : 'bg-slate-800 border-slate-700'}`}>
+              {(() => {
+                const now = new Date();
+                const isUpcoming = (b: any) => {
+                  if (b.status === 'pending') return true;
+                  if (b.status === 'confirmed' && b.availability_slots?.start_time && new Date(b.availability_slots.start_time) >= now) return true;
+                  return false;
+                };
+                const upcoming = bookings.filter(isUpcoming);
+                const history = bookings.filter((b: any) => !isUpcoming(b));
+
+                const renderCard = (b: any, faded: boolean) => (
+                  <div key={b.id} className={`rounded-xl border p-3 space-y-2 ${faded ? 'opacity-60 ' : ''}${b.status === 'pending' ? 'bg-amber-500/5 border-amber-500/20' : 'bg-slate-800 border-slate-700'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-white">
@@ -691,7 +697,7 @@ const { error } = await supabase.rpc('rpc_insert_booking_request', {
                       </Badge>
                     </div>
                     <div className="flex gap-2">
-                      {b.status === 'confirmed' && b.availability_slots && (
+                      {b.status === 'confirmed' && b.availability_slots && !faded && (
                         <button onClick={() => generateIcs(b)} className="text-xs text-slate-400 hover:text-white transition-colors">📅 Kalender-Eintrag</button>
                       )}
                       {b.status === 'pending' && (
@@ -699,8 +705,34 @@ const { error } = await supabase.rpc('rpc_insert_booking_request', {
                       )}
                     </div>
                   </div>
-                ))
-              )}
+                );
+
+                if (bookings.length === 0) {
+                  return (
+                    <>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Buchungsanfragen</h3>
+                      <p className="text-slate-500 text-sm text-center py-6">Noch keine Anfragen gestellt.</p>
+                    </>
+                  );
+                }
+
+                return (
+                  <>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Offene Anfragen</h3>
+                    {upcoming.length === 0 ? (
+                      <p className="text-slate-500 text-sm text-center py-4">Keine offenen Anfragen</p>
+                    ) : (
+                      upcoming.map(b => renderCard(b, false))
+                    )}
+                    {history.length > 0 && (
+                      <div className="space-y-2 pt-4 mt-4 border-t border-slate-800">
+                        <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Verlauf</h3>
+                        {history.map(b => renderCard(b, true))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
