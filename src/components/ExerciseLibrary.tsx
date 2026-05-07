@@ -17,10 +17,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import ExerciseImportDialog from './ExerciseImportDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Loader2, Search, Plus, Dumbbell, ChevronDown, ChevronUp,
+  Loader2, Search, Plus, Dumbbell, ChevronDown, ChevronUp, Upload,
   Target, Zap, Info, X, Filter, Edit2, Trash2
 } from 'lucide-react';
 
@@ -856,6 +857,7 @@ const ExerciseLibrary: React.FC = () => {
   const [filterMuscle, setFilterMuscle] = useState<string | null>(null);
   const [filterNoDescription, setFilterNoDescription] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -962,6 +964,10 @@ const ExerciseLibrary: React.FC = () => {
           <Plus className="w-4 h-4" />
           Übung hinzufügen
         </Button>
+        <Button onClick={() => setImportDialogOpen(true)} variant="outline" className="gap-2">
+          <Upload className="w-4 h-4" />
+          CSV importieren
+        </Button>
       </div>
 
       {/* Search & Filters */}
@@ -1059,6 +1065,12 @@ const ExerciseLibrary: React.FC = () => {
         </div>
       )}
 
+      {/* Import Dialog */}
+      <ExerciseImportDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImported={loadExercises}
+      />
       {/* Add Dialog */}
       <AddExerciseDialog
         open={addDialogOpen}
