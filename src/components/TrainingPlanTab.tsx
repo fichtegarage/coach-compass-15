@@ -23,6 +23,7 @@ import { matchAndAddExercises, getMatchingStats } from '@/lib/exerciseMatching';
 import { loadClientDataForPrompt, generateSystemPrompt, generateUserPrompt, type PlanConfig } from '@/lib/aiPlanGenerator';
 import AssessmentGuideV2 from '@/components/AssessmentGuideV2';
 import PlanExerciseEditor from '@/components/PlanExerciseEditor';
+import WarmupCooldownBlock from '@/components/WarmupCooldownBlock';
 
 // ── Warm-Up / Cool-Down Defaults ──────────────────────────────────────────────
 
@@ -164,7 +165,7 @@ interface PlanExercise {
   reps_target: string | null; weight_target: string | null;
   rest_seconds: number | null; notes: string | null;
   alternative_name: string | null; order_in_workout: number;
-  exercise_slot?: string | null; // 'warmup' | 'cooldown' | 'main' | null
+  exercise_id?: string | null;
 }
 
 interface TrainingPlanTabProps { clientId: string; clientName: string; }
@@ -307,83 +308,79 @@ const WarmupCooldownSection: React.FC<{
     : 'text-blue-700 bg-blue-50 border-blue-200/50';
 
   const handleGenerate = async () => {
-    setLoading(true);
-    setStep('generating');
-    
+    setGenerating(true);
+
     try {
-      const config: PlanConfig = { 
-        weeks, 
-        sessionsPerWeek, 
-        includeDeload, 
-        focus: focus || undefined,
-        isDuoPlan,
-        duoPartnerId: duoPartnerId || undefined,
-      };
-      
-      const data = await loadClientDataForPrompt(clientId);
-      
-      if (!data.client) {
-        toast.error('Kundendaten nicht gefunden');
-        setStep('config');
-        setLoading(false);
+      // 1. Bestehende Auto-Übungen für diesen Slot löschen
+      const existingIds = exercises.map(e => e.id);
+      if (existingIds.length > 0) {
+        await supabase.from('plan_exercises').delete().in('id', existingIds);
+      }
+
+      // 2. Trainierte Muskeln der Hauptübungen ermitteln
+      const exerciseIds = mainExercises.filter(e => e.exercise_id).map(e => e.exercise_id!);
+      let trainedMuscles: string[] = [];
+      if (exerciseIds.length > 0) {
+        const { data: mainData } = await supabase
+          .from('exercises')
+          .select('muscle_groups, muscle_secondary')
+          .in('id', exerciseIds);
+        if (mainData) {
+          mainData.forEach(ex => {
+            trainedMuscles.push(...(ex.muscle_groups ?? []));
+            trainedMuscles.push(...(ex.muscle_secondary ?? []));
+          });
+        }
+      }
+      trainedMuscles = [...new Set(trainedMuscles)];
+
+      // 3. Passende WU/CD-Übungen aus DB holen
+      const suitableCol = isWarmup ? 'warmup_suitable' : 'cooldown_suitable';
+      const { data: candidates } = await supabase
+        .from('exercises')
+        .select('id, name_de, name, muscle_groups')
+        .eq(suitableCol, true)
+        .limit(20);
+
+      if (!candidates || candidates.length === 0) {
+        toast.error('Keine passenden Übungen in der Bibliothek gefunden.');
+        setGenerating(false);
         return;
       }
-      
-      // Bei Duo-Plan: Partner-Daten auch laden
-      let partnerData = null;
-      let partnerName = '';
-      if (isDuoPlan && duoPartnerId) {
-        partnerData = await loadClientDataForPrompt(duoPartnerId);
-        partnerName = partnerData.client?.full_name || 'Partner';
+
+      // 4. Nach Muskel-Overlap sortieren, top 3–4 auswählen
+      const scored = candidates.map(ex => ({
+        ...ex,
+        score: (ex.muscle_groups ?? []).filter((m: string) => trainedMuscles.includes(m)).length,
+      }));
+      scored.sort((a, b) => b.score - a.score);
+      const selected = scored.slice(0, isWarmup ? 4 : 3);
+
+      // 5. Als plan_exercises einfügen
+      const maxOrder = mainExercises.reduce((m, e) => Math.max(m, e.order_in_workout), 0);
+      const inserts = selected.map((ex, i) => ({
+        workout_id: workoutId,
+        exercise_id: ex.id,
+        name: ex.name_de || ex.name,
+        sets: 1,
+        reps_target: isWarmup ? '10-12' : '30-60s',
+        exercise_slot: slot,
+        order_in_workout: isWarmup ? -(selected.length - i) : maxOrder + 100 + i,
+      }));
+
+      const { error } = await supabase.from('plan_exercises').insert(inserts);
+      if (error) {
+        toast.error('Fehler beim Speichern der Übungen.');
+      } else {
+        toast.success(`${selected.length} ${isWarmup ? 'Warm-Up' : 'Cool-Down'}-Übungen generiert.`);
+        onRefresh();
       }
-      
-      const systemPrompt = generateSystemPrompt(data, config, partnerData);
-      const userPrompt = generateUserPrompt(clientName, config, partnerName);
-      
-      // Claude API aufrufen
-      const response = await fetch('/api/claude-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [
-            { role: 'user', content: systemPrompt + '\n\n' + userPrompt }
-          ],
-          max_tokens: 8000,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('API-Fehler');
-      }
-      
-      const result = await response.json();
-      const markdown = result.content?.[0]?.text || '';
-      
-      if (!markdown) {
-        throw new Error('Keine Antwort von Claude');
-      }
-      
-      setGeneratedMarkdown(markdown);
-      
-      // Plan parsen
-      const parsedPlan = parsePlan(markdown);
-      if (!parsedPlan || parsedPlan.workouts.length === 0) {
-        toast.error('Plan konnte nicht geparst werden. Versuche es erneut.');
-        setStep('config');
-        setLoading(false);
-        return;
-      }
-      
-      setParsed(parsedPlan);
-      setValidation(validateParsedPlan(parsedPlan));
-      setStep('preview');
     } catch (err) {
-      console.error('KI-Plan Fehler:', err);
-      toast.error('Fehler bei der Plan-Generierung');
-      setStep('config');
+      console.error('handleGenerate Fehler:', err);
+      toast.error('Unbekannter Fehler.');
     }
-    
-    setLoading(false);
+
+    setGenerating(false);
   };
 
   const handleAdd = async () => {
