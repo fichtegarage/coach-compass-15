@@ -48,10 +48,12 @@ interface SetEntry {
 }
 
 interface ExerciseLog {
-  exercise: PlanExercise;
-  sets: SetEntry[];
-  previousBest: { weight: number; reps: number } | null;
-}
+     exercise: PlanExercise;
+     sets: SetEntry[];
+     previousBest: { weight: number; reps: number } | null;
+     progressionHint?: string;
+     progressionTone?: 'info' | 'success' | 'warning' | 'neutral';
+   }
 
 interface WorkoutLoggerProps {
   workout: PlanWorkout;
@@ -485,11 +487,11 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
   const [initializing, setInitializing] = useState(true);
   const startTimeRef = useRef<Date>(new Date());
 
-  // ── Init: workout_log anlegen + previousBest laden ────────────────────────
+  // ── Init: workout_log anlegen + Algorithmus-Pre-Fill laden ────────────────
   useEffect(() => {
     const init = async () => {
-      // 1. workout_log erstellen
-      const { data: logData } = await supabase
+      // 1. Neues workout_log anlegen
+      const { data: logData, error: logErr } = await supabase
         .from('workout_logs')
         .insert({
           client_id: clientId,
@@ -500,54 +502,101 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
         .select()
         .single();
 
-      if (!logData) { setInitializing(false); return; }
+      if (logErr || !logData) { setInitializing(false); return; }
       setWorkoutLogId(logData.id);
 
-      // 2. Für jede Übung: letzten besten Satz laden
-      const logs: ExerciseLog[] = await Promise.all(
-        workout.exercises.map(async (ex) => {
-          const { data: prevSets } = await supabase
-            .from('set_logs')
-            .select('weight_kg, reps_done')
-            .eq('exercise_name', ex.name)
-            .in(
-              'workout_log_id',
-              (await supabase
-                .from('workout_logs')
-                .select('id')
-                .eq('client_id', clientId)
-                .neq('id', logData.id)
-              ).data?.map(l => l.id) || []
-            )
-            .order('logged_at', { ascending: false })
-            .limit(1);
+      // 2. phase_type des aktuellen Plan-Workouts laden (für Deload-Erkennung)
+      const { data: planWorkoutMeta } = await supabase
+        .from('plan_workouts')
+        .select('phase_type')
+        .eq('id', workout.id)
+        .maybeSingle();
+      const phaseType = planWorkoutMeta?.phase_type ?? null;
 
-          const prev = prevSets?.[0] ?? null;
+      // 3. Letztes abgeschlossenes workout_log dieser Kundin (für Pause-Berechnung)
+      const { data: prevWorkout } = await supabase
+        .from('workout_logs')
+        .select('id, started_at')
+        .eq('client_id', clientId)
+        .neq('id', logData.id)
+        .not('completed_at', 'is', null)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-          const setsCount = ex.sets || 3;
-          const defaultReps = parseRepsTarget(ex.reps_target);
-          const defaultWeight = prev ? String(prev.weight_kg) : '';
+      const daysSinceLastWorkout = prevWorkout?.started_at
+        ? Math.floor((Date.now() - new Date(prevWorkout.started_at).getTime()) / 86400000)
+        : null;
 
-          return {
-            exercise: ex,
-            previousBest: prev ? { weight: prev.weight_kg, reps: prev.reps_done } : null,
-            sets: Array.from({ length: setsCount }, (_, i) => ({
-              setNumber: i + 1,
-              reps: defaultReps,
-              weight: defaultWeight,
-              logged: false,
-              isPR: false,
-              syncStatus: 'synced' as const,
-            })),
-          };
-        })
-      );
+      // 4. ALLE set_logs aus dem letzten Workout (gefiltert auf relevante Übungen)
+      const exerciseNames = workout.exercises.map(ex => ex.name);
+      let prevSetsByExercise: Record<string, PrevSet[]> = {};
+      if (prevWorkout?.id && exerciseNames.length > 0) {
+        const { data: prevSets } = await supabase
+          .from('set_logs')
+          .select('exercise_name, weight_kg, reps_done, rpe')
+          .eq('workout_log_id', prevWorkout.id)
+          .in('exercise_name', exerciseNames);
+
+        (prevSets ?? []).forEach((s: any) => {
+          const key = s.exercise_name as string;
+          if (!prevSetsByExercise[key]) prevSetsByExercise[key] = [];
+          prevSetsByExercise[key].push({
+            weight_kg: Number(s.weight_kg) || 0,
+            reps_done: Number(s.reps_done) || 0,
+            rpe: s.rpe !== null && s.rpe !== undefined ? Number(s.rpe) : null,
+          });
+        });
+      }
+
+      // 5. Pro Übung: Empfehlung berechnen, ExerciseLog bauen
+      const logs: ExerciseLog[] = workout.exercises.map((ex) => {
+        const prevForEx = prevSetsByExercise[ex.name] ?? [];
+        const recommendation = computeProgression(
+          prevForEx,
+          {
+            reps_target: ex.reps_target,
+            weight_target: (ex as any).weight_target ?? null,
+            sets: ex.sets,
+            name: ex.name,
+          },
+          phaseType,
+          daysSinceLastWorkout,
+        );
+
+        // previousBest weiterhin für „Letztes Mal:"-Anzeige bereitstellen
+        const bestPrev = prevForEx.length > 0
+          ? prevForEx.reduce((best, s) =>
+              (s.weight_kg > best.weight_kg ||
+                (s.weight_kg === best.weight_kg && s.reps_done > best.reps_done))
+                ? s : best, prevForEx[0])
+          : null;
+
+        const setsCount = ex.sets || 3;
+        return {
+          exercise: ex,
+          previousBest: bestPrev
+            ? { weight: bestPrev.weight_kg, reps: bestPrev.reps_done }
+            : null,
+          progressionHint: recommendation.hint,
+          progressionTone: recommendation.hintTone,
+          sets: Array.from({ length: setsCount }, (_, i) => ({
+            setNumber: i + 1,
+            reps: recommendation.recommendedReps,
+            weight: recommendation.recommendedWeight,
+            logged: false,
+            isPR: false,
+            syncStatus: 'synced' as const,
+          })),
+        };
+      });
 
       setExerciseLogs(logs);
       setInitializing(false);
     };
 
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workout, clientId]);
 
   const currentLog = exerciseLogs[currentExerciseIndex];
