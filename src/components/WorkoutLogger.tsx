@@ -44,6 +44,7 @@ interface SetEntry {
   weight: string;
   logged: boolean;
   isPR: boolean;
+  syncStatus: 'synced' | 'pending' | 'error';
 }
 
 interface ExerciseLog {
@@ -81,6 +82,19 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+async function withRetry(
+  fn: () => Promise<{ data: any; error: any }>,
+  maxAttempts = 3
+): Promise<{ data: any; error: any }> {
+  let last: { data: any; error: any } = { data: null, error: new Error('not started') };
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    last = await fn();
+    if (!last.error) return last;
+  }
+  return last;
 }
 
 // ── Rest Timer ────────────────────────────────────────────────────────────────
@@ -135,15 +149,28 @@ const SetRow: React.FC<{
   onLog: (reps: string, weight: string) => void;
   targetReps: string;
   previousWeight: string;
-}> = ({ set, isActive, onLog, targetReps, previousWeight }) => {
+  onRetry?: () => void;
+}> = ({ set, isActive, onLog, targetReps, previousWeight, onRetry }) => {
   const [reps, setReps] = useState(set.reps || targetReps);
   const [weight, setWeight] = useState(set.weight || previousWeight);
 
   if (set.logged) {
+    const isError = set.syncStatus === 'error';
+    const isPending = set.syncStatus === 'pending';
     return (
-      <div className="flex items-center gap-3 py-3 px-4 rounded-xl bg-primary/10 border border-primary/30">
-        <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-          {set.isPR
+      <div className={`flex items-center gap-3 py-3 px-4 rounded-xl border ${
+        isError
+          ? 'bg-red-50 border-red-300'
+          : 'bg-primary/10 border-primary/30'
+      }`}>
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+          isError ? 'bg-red-400' : 'bg-primary'
+        }`}>
+          {isPending
+            ? <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+            : isError
+            ? <span className="text-white text-xs font-bold">!</span>
+            : set.isPR
             ? <Trophy className="w-3.5 h-3.5 text-white" />
             : <Check className="w-3.5 h-3.5 text-white" />}
         </div>
@@ -151,7 +178,15 @@ const SetRow: React.FC<{
         <span className="ml-auto text-sm font-semibold text-slate-700 tabular-nums">
           {set.reps} × {set.weight} kg
         </span>
-        {set.isPR && (
+        {isError && (
+          <button
+            onClick={onRetry}
+            className="text-xs font-medium text-red-600 bg-red-100 px-2 py-0.5 rounded-full border border-red-300 hover:bg-red-200"
+          >
+            ↻ Wiederholen
+          </button>
+        )}
+        {!isError && set.isPR && (
           <span className="text-xs font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
             PR 🏆
           </span>
@@ -312,6 +347,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
               weight: defaultWeight,
               logged: false,
               isPR: false,
+              syncStatus: 'synced' as const,
             })),
           };
         })
@@ -329,58 +365,101 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
 
   const handleLogSet = useCallback(async (reps: string, weight: string) => {
     if (!workoutLogId || !currentLog) return;
-    setSaving(true);
 
-    const setNumber = activeSetIndex + 1;
     const exercise = currentLog.exercise;
+    const loggedAt = new Date().toISOString();
+    const capturedExIdx = currentExerciseIndex;
+    const capturedSetIdx = activeSetIndex;
 
-    // Satz in DB speichern
-    const { data: setData } = await supabase
-      .from('set_logs')
-      .insert({
-        workout_log_id: workoutLogId,
-        plan_exercise_id: exercise.id,
-        exercise_name: exercise.name,
-        set_number: setNumber,
-        reps_done: parseInt(reps),
-        weight_kg: parseFloat(weight),
-        logged_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    const isPR = setData?.is_pr || false;
-
-    // Lokalen State updaten
+    // ── 1. Optimistic Update: Set sofort als pending anzeigen ─────────────────
     setExerciseLogs(prev => {
       const next = [...prev];
-      const sets = [...next[currentExerciseIndex].sets];
-      sets[activeSetIndex] = { ...sets[activeSetIndex], reps, weight, logged: true, isPR };
-      // Nächsten Satz mit gleichen Werten vorausfüllen (Satz-zu-Satz Vorausfüllen)
-      if (activeSetIndex + 1 < sets.length && !sets[activeSetIndex + 1].logged) {
-        sets[activeSetIndex + 1] = { ...sets[activeSetIndex + 1], reps, weight };
+      const sets = [...next[capturedExIdx].sets];
+      sets[capturedSetIdx] = { ...sets[capturedSetIdx], reps, weight, logged: true, isPR: false, syncStatus: 'pending' };
+      if (capturedSetIdx + 1 < sets.length && !sets[capturedSetIdx + 1].logged) {
+        sets[capturedSetIdx + 1] = { ...sets[capturedSetIdx + 1], reps, weight };
       }
-      next[currentExerciseIndex] = { ...next[currentExerciseIndex], sets };
+      next[capturedExIdx] = { ...next[capturedExIdx], sets };
       return next;
     });
 
-    setSaving(false);
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // SUPERSET REST-TIMER LOGIK
-    // ══════════════════════════════════════════════════════════════════════════
-    const isLastSet = activeSetIndex === currentLog.sets.length - 1;
-    
+    // ── 2. Rest-Timer sofort (nicht auf DB warten) ────────────────────────────
+    const isLastSet = capturedSetIdx === currentLog.sets.length - 1;
     if (!isLastSet) {
-      // Nicht letzter Satz → normaler Ablauf
-      const restTime = exercise.rest_seconds || 90;
-      setRestSeconds(restTime);
+      setRestSeconds(exercise.rest_seconds || 90);
       setShowRestTimer(true);
-    } else {
-      // Letzter Satz der Übung → kein Timer (Pause nur zwischen Sätzen, nicht danach)
     }
-    // ══════════════════════════════════════════════════════════════════════════
-  }, [workoutLogId, currentLog, activeSetIndex, currentExerciseIndex, exerciseLogs]);
+
+    // ── 3. DB-Sync im Hintergrund mit Retry ───────────────────────────────────
+    const { data: setData, error } = await withRetry(() =>
+      supabase
+        .from('set_logs')
+        .insert({
+          workout_log_id: workoutLogId,
+          plan_exercise_id: exercise.id,
+          exercise_name: exercise.name,
+          set_number: capturedSetIdx + 1,
+          reps_done: parseInt(reps),
+          weight_kg: parseFloat(weight),
+          logged_at: loggedAt,
+        })
+        .select()
+        .single()
+    );
+
+    const isPR = setData?.is_pr || false;
+    const newStatus: SetEntry['syncStatus'] = error ? 'error' : 'synced';
+
+    setExerciseLogs(prev => {
+      const next = [...prev];
+      const sets = [...next[capturedExIdx].sets];
+      sets[capturedSetIdx] = { ...sets[capturedSetIdx], isPR, syncStatus: newStatus };
+      next[capturedExIdx] = { ...next[capturedExIdx], sets };
+      return next;
+    });
+  }, [workoutLogId, currentLog, activeSetIndex, currentExerciseIndex]);
+
+  const handleRetrySync = useCallback(async (exIdx: number, setIdx: number) => {
+    if (!workoutLogId) return;
+    const log = exerciseLogs[exIdx];
+    const set = log?.sets[setIdx];
+    if (!set) return;
+
+    setExerciseLogs(prev => {
+      const next = [...prev];
+      const sets = [...next[exIdx].sets];
+      sets[setIdx] = { ...sets[setIdx], syncStatus: 'pending' };
+      next[exIdx] = { ...next[exIdx], sets };
+      return next;
+    });
+
+    const { data: setData, error } = await withRetry(() =>
+      supabase
+        .from('set_logs')
+        .insert({
+          workout_log_id: workoutLogId,
+          plan_exercise_id: log.exercise.id,
+          exercise_name: log.exercise.name,
+          set_number: set.setNumber,
+          reps_done: parseInt(set.reps),
+          weight_kg: parseFloat(set.weight),
+          logged_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+    );
+
+    const isPR = setData?.is_pr || false;
+    const newStatus: SetEntry['syncStatus'] = error ? 'error' : 'synced';
+
+    setExerciseLogs(prev => {
+      const next = [...prev];
+      const sets = [...next[exIdx].sets];
+      sets[setIdx] = { ...sets[setIdx], isPR, syncStatus: newStatus };
+      next[exIdx] = { ...next[exIdx], sets };
+      return next;
+    });
+  }, [workoutLogId, exerciseLogs]);
 
   const handleFinish = async () => {
     if (!workoutLogId) return;
@@ -647,6 +726,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                     targetReps={parseRepsTarget(currentLog.exercise.reps_target)}
                     previousWeight={currentLog.previousBest ? String(currentLog.previousBest.weight) : ''}
                     onLog={(reps, weight) => handleLogSet(reps, weight)}
+                    onRetry={() => handleRetrySync(currentExerciseIndex, si)}
                   />
                 ))}
               </div>
