@@ -160,24 +160,38 @@ export default function WarmupCooldownBlock({ type, mainExercises, workoutId }: 
   return (
     <div className={`rounded-xl border ${color} overflow-hidden`}>
       {/* Header */}
-      <button
-        onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between px-4 py-3"
-      >
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-4 py-3">
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="flex items-center gap-2 flex-1 text-left"
+        >
           <span>{emoji}</span>
           <span className="font-medium text-sm">{label}</span>
           <span className={`text-xs px-2 py-0.5 rounded-full ${tagColor}`}>
             {suggested.length} Übungen
           </span>
+        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); loadSuggestions(); }}
+            className={`text-xs px-2 py-0.5 rounded-lg border flex items-center gap-1 transition-colors ${
+              isWarmup
+                ? 'border-orange-600/50 text-orange-300 hover:bg-orange-900/30'
+                : 'border-blue-600/50 text-blue-300 hover:bg-blue-900/30'
+            }`}
+          >
+            ✦ Auto
+          </button>
+          <button onClick={() => setCollapsed(c => !c)}>
+            <svg
+              className={`w-4 h-4 opacity-60 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
         </div>
-        <svg
-          className={`w-4 h-4 opacity-60 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      </div>
 
       {/* Exercise list */}
       {!collapsed && (
