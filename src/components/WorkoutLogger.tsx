@@ -85,6 +85,18 @@ function formatDuration(seconds: number): string {
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+// ── Hint-Anzeige Farb-Mapping ─────────────────────────────────────────────────
+function hintToneClasses(tone: 'info' | 'success' | 'warning' | 'neutral' | undefined): string {
+  switch (tone) {
+    case 'success': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'warning': return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'info':    return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'neutral':
+    default:        return 'bg-slate-50 text-slate-600 border-slate-200';
+  }
+}
+
 // ── Equipment-Inkremente & Algorithmus ────────────────────────────────────────
 // Reale Gewichts-Schritte je nach Equipment (Studio-Realität):
 //   Langhantel: kleinste Scheibe 1,25 kg/Seite → 2,5 kg-Schritte
@@ -908,6 +920,11 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                     <p className="text-xs text-slate-400 mt-1">
                       Letztes Mal: {currentLog.previousBest.weight}kg × {currentLog.previousBest.reps}
                     </p>
+                  )}
+                  {currentLog.progressionHint && (
+                    <div className={`inline-flex items-center mt-2 px-2.5 py-1 rounded-full border text-xs font-medium ${hintToneClasses(currentLog.progressionTone)}`}>
+                      {currentLog.progressionHint}
+                    </div>
                   )}
                   {/* Ersatzübung */}
                   {currentLog.exercise.alternative_name && !currentLog.sets.some(s => s.logged) && (
