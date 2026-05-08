@@ -83,7 +83,197 @@ function formatDuration(seconds: number): string {
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+// ── Equipment-Inkremente & Algorithmus ────────────────────────────────────────
+// Reale Gewichts-Schritte je nach Equipment (Studio-Realität):
+//   Langhantel: kleinste Scheibe 1,25 kg/Seite → 2,5 kg-Schritte
+//   SZ-Stange:  ebenfalls 2,5 kg-Schritte
+//   Kabelzug/Maschine: typischer Stack 5 kg-Schritte
+//   Kurzhanteln: 2 kg-Abstände
+function inferEquipmentIncrement(exerciseName: string): number {
+  const name = exerciseName.toLowerCase();
+  if (/\b(kurzhantel|kh|dumbbell|db)\b/.test(name)) return 2;
+  if (/\b(kabel|cable|kabelzug|seilzug|lat)\b/.test(name)) return 5;
+  if (/\b(maschine|machine|gerät|geraet|stack)\b/.test(name)) return 5;
+  // Default: Langhantel-Standard 2,5 kg (deckt LH, SZ-Stange, Kreuzheben, Kniebeuge etc.)
+  return 2.5;
+}
 
+function roundDownToIncrement(weight: number, increment: number): number {
+  if (weight <= 0 || increment <= 0) return 0;
+  return Math.floor(weight / increment) * increment;
+}
+
+const TARGET_RPE = 8;
+const REPS_CAP = 13;
+const SETS_CAP = 6;
+
+interface PrevSet {
+  weight_kg: number;
+  reps_done: number;
+  rpe: number | null;
+}
+
+interface ProgressionResult {
+  recommendedReps: string;
+  recommendedWeight: string;
+  hint: string;
+  hintTone: 'info' | 'success' | 'warning' | 'neutral';
+}
+
+function parseRepRange(repsTarget: string): { min: number; max: number } {
+  if (!repsTarget) return { min: 8, max: REPS_CAP };
+  // "12–15" (Unicode-Bindestrich) und "10-12" (ASCII-Bindestrich)
+  const range = repsTarget.match(/^(\d+)\s*[–\-]\s*(\d+)/);
+  if (range) return { min: parseInt(range[1]), max: parseInt(range[2]) };
+  const single = repsTarget.match(/^(\d+)/);
+  if (single) {
+    const n = parseInt(single[1]);
+    return { min: n, max: n };
+  }
+  return { min: 8, max: REPS_CAP };
+}
+
+/**
+ * Liefert Pre-Fill-Empfehlung für die nächste Set-Eingabe.
+ * Reine Funktion, keine DB-Calls. Reihenfolge der Regeln (erste passende gewinnt):
+ *   1. Erste Begegnung mit Übung → Plan-Werte oder leer
+ *   2. Deload-Phase            → letztes Gewicht × 0,8
+ *   3. Pause ≥ 56 Tage          → Plan-Reset
+ *   4. Pause ≥ 28 Tage          → letztes Gewicht × 0,8
+ *   5. Pause ≥ 14 Tage          → letztes Gewicht × 0,9
+ *   6. Kein RPE erfasst         → Heuristik anhand erreichter Wdh
+ *   7. RPE-Schnitt ≤ 7         → progressieren (Caps: Wdh ≥ 13 oder Sätze ≥ 6 → Gewicht hoch)
+ *   8. RPE-Schnitt = 8         → halten (Zielbereich)
+ *   9. RPE-Schnitt ≥ 9         → halten + Warnung
+ */
+function computeProgression(
+  prevSets: PrevSet[],
+  planEx: { reps_target: string; weight_target: string | null; sets: number | null; name: string },
+  phaseType: string | null,
+  daysSinceLastWorkout: number | null
+): ProgressionResult {
+  const repRange = parseRepRange(planEx.reps_target);
+  const planTargetReps = String(repRange.min);
+  const planTargetWeight = planEx.weight_target?.match(/[\d.]+/)?.[0] ?? '';
+  const increment = inferEquipmentIncrement(planEx.name);
+
+  // Regel 1: Erste Begegnung
+  if (prevSets.length === 0) {
+    return {
+      recommendedReps: planTargetReps,
+      recommendedWeight: planTargetWeight,
+      hint: '⭐ Erste Begegnung — trag deinen Startwert ein',
+      hintTone: 'info',
+    };
+  }
+
+  // Aggregate aus letzter Begegnung
+  const lastWeight = Math.max(...prevSets.map(s => Number(s.weight_kg) || 0));
+  const lastReps = Math.max(...prevSets.map(s => Number(s.reps_done) || 0));
+  const rpeValues = prevSets.map(s => s.rpe).filter((r): r is number => r !== null);
+  const avgRpe = rpeValues.length > 0
+    ? rpeValues.reduce((a, b) => a + b, 0) / rpeValues.length
+    : null;
+  const allRepsHit = prevSets.every(s => (Number(s.reps_done) || 0) >= repRange.min);
+
+  // Regel 2: Deload-Phase
+  if (phaseType === 'deload') {
+    const reduced = roundDownToIncrement(lastWeight * 0.8, increment);
+    return {
+      recommendedReps: String(lastReps),
+      recommendedWeight: String(reduced),
+      hint: '🪶 Deload-Woche — bewusst leichter',
+      hintTone: 'info',
+    };
+  }
+
+  // Regeln 3-5: Pause-Erkennung
+  if (daysSinceLastWorkout !== null) {
+    if (daysSinceLastWorkout >= 56) {
+      return {
+        recommendedReps: planTargetReps,
+        recommendedWeight: planTargetWeight,
+        hint: '🌱 Längere Pause — sanfter Wiedereinstieg mit Plan-Werten',
+        hintTone: 'info',
+      };
+    }
+    if (daysSinceLastWorkout >= 28) {
+      const reduced = roundDownToIncrement(lastWeight * 0.8, increment);
+      return {
+        recommendedReps: String(lastReps),
+        recommendedWeight: String(reduced),
+        hint: '🌱 Du hast pausiert — Gewicht angepasst (-20 %)',
+        hintTone: 'info',
+      };
+    }
+    if (daysSinceLastWorkout >= 14) {
+      const reduced = roundDownToIncrement(lastWeight * 0.9, increment);
+      return {
+        recommendedReps: String(lastReps),
+        recommendedWeight: String(reduced),
+        hint: '🌱 Pause erkannt — leicht reduziert (-10 %)',
+        hintTone: 'info',
+      };
+    }
+  }
+
+  // Regel 6: Kein RPE → Heuristik
+  if (avgRpe === null) {
+    if (allRepsHit) {
+      return {
+        recommendedReps: String(lastReps + 1),
+        recommendedWeight: String(lastWeight),
+        hint: '↗ Alle Wdh. geschafft — versuch +1 Wdh.',
+        hintTone: 'success',
+      };
+    }
+    return {
+      recommendedReps: String(lastReps),
+      recommendedWeight: String(lastWeight),
+      hint: '🔁 Letztes Mal war nicht alles drin — gleiche Werte',
+      hintTone: 'neutral',
+    };
+  }
+
+  // Regel 7: RPE niedrig (≤ 7) → progressieren
+  if (avgRpe <= 7) {
+    const repsCap = lastReps >= REPS_CAP;
+    const setsCap = (planEx.sets ?? 0) >= SETS_CAP;
+    if (repsCap || setsCap) {
+      const trigger = repsCap ? `${REPS_CAP} Wdh erreicht` : `${SETS_CAP} Sätze erreicht`;
+      return {
+        recommendedReps: planTargetReps,
+        recommendedWeight: String(lastWeight + increment),
+        hint: `💪 ${trigger} — +${increment} kg, Wdh zurück auf ${planTargetReps}`,
+        hintTone: 'success',
+      };
+    }
+    return {
+      recommendedReps: String(lastReps + 1),
+      recommendedWeight: String(lastWeight),
+      hint: '↗ Letzte Session war locker — versuch +1 Wdh.',
+      hintTone: 'success',
+    };
+  }
+
+  // Regel 8: RPE = 8 → halten (Zielbereich)
+  if (avgRpe === TARGET_RPE) {
+    return {
+      recommendedReps: String(lastReps),
+      recommendedWeight: String(lastWeight),
+      hint: '🎯 Genau richtig — gleiche Werte halten',
+      hintTone: 'neutral',
+    };
+  }
+
+  // Regel 9: RPE ≥ 9 → halten + Warnung
+  return {
+    recommendedReps: String(lastReps),
+    recommendedWeight: String(lastWeight),
+    hint: '⚠️ Letzte Session war hart — gleiche Werte, Form-Check',
+    hintTone: 'warning',
+  };
+}
 async function withRetry(
   fn: () => Promise<{ data: any; error: any }>,
   maxAttempts = 3
