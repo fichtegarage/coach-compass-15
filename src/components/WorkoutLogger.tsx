@@ -582,6 +582,12 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
   const [saving, setSaving] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const startTimeRef = useRef<Date>(new Date());
+  const [pendingRpe, setPendingRpe] = useState<{
+    setLogId: string | null;
+    exerciseName: string;
+    exIdx: number;
+    isLastExercise: boolean;
+  } | null>(null);
 
   // ── Init: workout_log anlegen + Algorithmus-Pre-Fill laden ────────────────
   useEffect(() => {
@@ -718,12 +724,14 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
       return next;
     });
 
-    // ── 2. Rest-Timer sofort (nicht auf DB warten) ────────────────────────────
+    // ── 2. Rest-Timer sofort, ODER RPE-Modal beim letzten Satz ────────────────
     const isLastSet = capturedSetIdx === currentLog.sets.length - 1;
+    const isLastExercise = capturedExIdx === exerciseLogs.length - 1;
     if (!isLastSet) {
       setRestSeconds(exercise.rest_seconds || 90);
       setShowRestTimer(true);
     }
+    // Hinweis: pendingRpe wird unten gesetzt, sobald die DB-Antwort die set_log-ID liefert
 
     // ── 3. DB-Sync im Hintergrund mit Retry ───────────────────────────────────
     const { data: setData, error } = await withRetry(() =>
@@ -752,7 +760,17 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
       next[capturedExIdx] = { ...next[capturedExIdx], sets };
       return next;
     });
-  }, [workoutLogId, currentLog, activeSetIndex, currentExerciseIndex]);
+
+    // ── 4. RPE-Modal triggern, wenn das der letzte Satz war ───────────────────
+    if (isLastSet) {
+      setPendingRpe({
+        setLogId: setData?.id ?? null,
+        exerciseName: exercise.name,
+        exIdx: capturedExIdx,
+        isLastExercise,
+      });
+    }
+  }, [workoutLogId, currentLog, activeSetIndex, currentExerciseIndex, exerciseLogs.length]);
 
   const handleRetrySync = useCallback(async (exIdx: number, setIdx: number) => {
     if (!workoutLogId) return;
@@ -796,6 +814,30 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
     });
   }, [workoutLogId, exerciseLogs]);
 
+  const handleRpeSubmit = useCallback(async (rpe: number | null) => {
+    if (!pendingRpe) return;
+    const { setLogId, exIdx, isLastExercise } = pendingRpe;
+
+    // Modal sofort schließen — DB-Update läuft im Hintergrund
+    setPendingRpe(null);
+
+    // RPE in DB schreiben (nur wenn nicht übersprungen UND set_logs-ID vorhanden)
+    if (rpe !== null && setLogId) {
+      // Fire-and-forget; bei Fehler nur loggen, nicht den UX-Fluss blockieren
+      supabase
+        .from('set_logs')
+        .update({ rpe })
+        .eq('id', setLogId)
+        .then(({ error }) => {
+          if (error) console.warn('RPE-Update fehlgeschlagen:', error);
+        });
+    }
+
+    // Auto-Advance zur nächsten Übung, außer es war die letzte
+    if (!isLastExercise) {
+      setCurrentExerciseIndex(exIdx + 1);
+    }
+  }, [pendingRpe]);
   const handleFinish = async () => {
     if (!workoutLogId) return;
 
@@ -910,7 +952,12 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
           onDone={() => setShowRestTimer(false)}
         />
       )}
-
+      {pendingRpe && (
+        <RpeRatingModal
+          exerciseName={pendingRpe.exerciseName}
+          onSubmit={handleRpeSubmit}
+        />
+      )}
       <div className="fixed inset-0 bg-slate-50 z-40 flex flex-col" style={{ fontFamily: "'Montserrat', sans-serif" }}>
 
         {/* Header */}
