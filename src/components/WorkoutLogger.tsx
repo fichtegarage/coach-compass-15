@@ -377,23 +377,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
       setRestSeconds(restTime);
       setShowRestTimer(true);
     } else {
-      // Letzter Satz der Übung → prüfen ob Superset
-      const currentExercise = exerciseLogs[currentExerciseIndex]?.exercise;
-      const nextExercise = exerciseLogs[currentExerciseIndex + 1]?.exercise;
-      
-      // Ist die NÄCHSTE Übung im gleichen Superset?
-      const isInSameSuperset = 
-        currentExercise?.superset_label && 
-        nextExercise?.superset_label &&
-        currentExercise.superset_label === nextExercise.superset_label;
-      
-      if (!isInSameSuperset) {
-        // Kein Superset oder letzte Übung im Superset → Timer starten
-        const restTime = exercise.rest_seconds || 90;
-        setRestSeconds(restTime);
-        setShowRestTimer(true);
-      }
-      // Wenn isInSameSuperset = true → KEIN Timer, direkt weiter zur nächsten Übung
+      // Letzter Satz der Übung → kein Timer (Pause nur zwischen Sätzen, nicht danach)
     }
     // ══════════════════════════════════════════════════════════════════════════
   }, [workoutLogId, currentLog, activeSetIndex, currentExerciseIndex, exerciseLogs]);
