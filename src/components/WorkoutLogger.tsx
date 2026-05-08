@@ -345,6 +345,90 @@ const RestTimer: React.FC<{ seconds: number; onDone: () => void }> = ({ seconds,
   );
 };
 
+// ── RPE Rating Modal ──────────────────────────────────────────────────────────
+// Erscheint nach dem letzten Satz einer Übung. Designprinzip:
+//   - RPE 8 visuell hervorgehoben (Zielbereich → Default-Pfad fürs Auge)
+//   - Skip als kleiner Text-Link, erst nach 1,5s sichtbar (Friction-Nudge)
+//   - Pro-Knopf-Label statt nackter Zahl
+const RpeRatingModal: React.FC<{
+  exerciseName: string;
+  onSubmit: (rpe: number | null) => void;
+}> = ({ exerciseName, onSubmit }) => {
+  const [skipVisible, setSkipVisible] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSkipVisible(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
+
+  const options: Array<{ rpe: number; label: string; isTarget?: boolean }> = [
+    { rpe: 6,  label: 'Easy' },
+    { rpe: 7,  label: 'Moderat' },
+    { rpe: 8,  label: 'Genau richtig', isTarget: true },
+    { rpe: 9,  label: 'Sehr hart' },
+    { rpe: 10, label: 'Maximal' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl">
+        <p className="text-xs text-slate-400 uppercase tracking-widest mb-1">{exerciseName}</p>
+        <h3 className="text-xl font-bold text-slate-900 mb-1">Wie hart war's?</h3>
+        <p className="text-sm text-slate-500 mb-5">
+          Hilft deinem Coach, deinen Plan an dich anzupassen 💪
+        </p>
+
+        <div className="grid grid-cols-5 gap-2 mb-2">
+          {options.map(({ rpe, label, isTarget }) => (
+            <button
+              key={rpe}
+              onClick={() => onSubmit(rpe)}
+              className={
+                isTarget
+                  ? 'flex flex-col items-center justify-center py-4 rounded-2xl bg-primary text-white font-bold transition-transform active:scale-95 shadow-lg shadow-primary/30 ring-2 ring-primary/40 ring-offset-2 ring-offset-white'
+                  : 'flex flex-col items-center justify-center py-4 rounded-2xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition-transform active:scale-95'
+              }
+            >
+              <span className={isTarget ? 'text-2xl leading-none' : 'text-xl leading-none'}>{rpe}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Labels-Reihe unter den Knöpfen, kompakt, mit Zielbereich-Markierung */}
+        <div className="grid grid-cols-5 gap-2 mb-6">
+          {options.map(({ rpe, label, isTarget }) => (
+            <div key={rpe} className="text-center">
+              <p className={
+                isTarget
+                  ? 'text-[10px] font-bold text-primary leading-tight'
+                  : 'text-[10px] text-slate-400 leading-tight'
+              }>
+                {label}
+              </p>
+              {isTarget && (
+                <p className="text-[9px] text-primary/70 mt-0.5">🎯 Ziel</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Skip — bewusst dezent, verzögert, rechts unten */}
+        <div className="flex justify-end min-h-[20px]">
+          {skipVisible && (
+            <button
+              onClick={() => onSubmit(null)}
+              className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-opacity"
+              style={{ animation: 'fadeIn 0.3s ease-in' }}
+            >
+              Überspringen
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Set Input Row ─────────────────────────────────────────────────────────────
 
 const SetRow: React.FC<{
