@@ -10,7 +10,7 @@
  * - Rest-Timer startet automatisch nach jedem Satz
  * - SUPERSET-SUPPORT: Timer nur nach letzter Übung im Superset
  * - PR-Erkennung in Echtzeit (🏆)
- * - Zusammenfassung nach Abschluss
+ * - Zusammenfasssung nach Abschluss
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
