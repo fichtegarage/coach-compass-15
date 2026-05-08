@@ -959,7 +959,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
               <div className="space-y-2">
                 {currentLog.sets.map((set, si) => (
                   <SetRow
-                    key={si}
+                    key={`${currentLog.exercise.id}-${si}`}
                     set={set}
                     isActive={si === activeSetIndex}
                     targetReps={parseRepsTarget(currentLog.exercise.reps_target)}
