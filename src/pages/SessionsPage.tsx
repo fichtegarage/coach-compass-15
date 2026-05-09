@@ -164,6 +164,24 @@ const SessionsPage: React.FC = () => {
 
   const handleStartSessionLogger = async () => {
     if (!selectedSession) return;
+
+    // NEU-28: Konflikt-Check — existiert bereits ein Workout-Log für diese Session?
+    const { data: existingLog } = await supabase
+      .from('workout_logs')
+      .select('id, logged_by, completed_at')
+      .eq('session_id', selectedSession.id)
+      .maybeSingle();
+
+    if (existingLog) {
+      const wer = existingLog.logged_by === 'coach' ? 'dir' : 'der Kundin';
+      toast.error(
+        `Für diese Session existiert bereits ein Workout-Log (${
+          existingLog.completed_at ? 'abgeschlossen' : 'in Bearbeitung'
+        } von ${wer}). Im Kundenprofil → Verlauf ansehen.`
+      );
+      return;
+    }
+
     await loadPlanWorkouts(selectedSession.client_id);
     setActiveLoggerSessionId(selectedSession.id);
     setActiveLoggerClientId(selectedSession.client_id);
@@ -344,6 +362,7 @@ const { error } = await supabase.from('sessions').insert({
           workout={activeLoggerWorkout}
           clientId={activeLoggerClientId}
           sessionId={activeLoggerSessionId || undefined}
+          mode="coach"
           onClose={() => { setActiveLoggerWorkout(null); setActiveLoggerSessionId(null); setActiveLoggerClientId(null); }}
           onComplete={(summary) => {
             setActiveLoggerWorkout(null);
@@ -677,8 +696,10 @@ const { error } = await supabase.from('sessions').insert({
                 </p>
               </div>
 
-              {/* ── Phase 3: Training loggen Button ── */}
-              {selectedSession.status === 'Scheduled' && (
+              {/* ── Phase 3: Training loggen Button ── (NEU-28: erweiterte Sichtbarkeit) */}
+              {(selectedSession.status === 'Scheduled' || selectedSession.status === 'Completed') &&
+               selectedSession.session_type !== 'Duo Training' &&
+               selectedSession.session_type !== 'Free Intro' && (
                 <Button
                   variant="outline"
                   className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5"
