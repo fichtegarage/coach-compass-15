@@ -30,6 +30,9 @@ interface PlanExercise {
   alternative_name: string | null;
   superset_label: string | null;
   superset_order: number;
+  is_timed: boolean;
+  duration_seconds: number | null;
+  weight_target: string | null;
 }
 
 interface PlanWorkout {
@@ -42,6 +45,7 @@ interface SetEntry {
   setNumber: number;
   reps: string;
   weight: string;
+  duration?: number;
   logged: boolean;
   isPR: boolean;
   syncStatus: 'synced' | 'pending' | 'error';
@@ -51,8 +55,10 @@ interface ExerciseLog {
      exercise: PlanExercise;
      sets: SetEntry[];
      previousBest: { weight: number; reps: number } | null;
+     previousBestDuration?: number | null;
      progressionHint?: string;
      progressionTone?: 'info' | 'success' | 'warning' | 'neutral';
+     progressionDuration?: number;
    }
 
 interface WorkoutLoggerProps {
@@ -125,6 +131,7 @@ interface PrevSet {
   weight_kg: number;
   reps_done: number;
   rpe: number | null;
+  duration_seconds: number | null;
 }
 
 interface ProgressionResult {
@@ -288,6 +295,68 @@ function computeProgression(
     hintTone: 'warning',
   };
 }
+// ── Time-Based Progression ────────────────────────────────────────────────────
+const TIMED_PROGRESSION_STEPS = [
+  20, 30, 40, 45, 50, 53, 57, 60, 62, 65, 67, 70, 73, 76, 79, 82, 85, 88, 91, 95, 100, 105, 110, 115, 120,
+];
+function findTimedStepIndex(seconds: number): number {
+  let closest = 0;
+  let minDiff = Math.abs(TIMED_PROGRESSION_STEPS[0] - seconds);
+  for (let i = 1; i < TIMED_PROGRESSION_STEPS.length; i++) {
+    const diff = Math.abs(TIMED_PROGRESSION_STEPS[i] - seconds);
+    if (diff < minDiff) { minDiff = diff; closest = i; }
+  }
+  return closest;
+}
+interface TimedProgressionResult {
+  recommendedDuration: number;
+  hint: string;
+  hintTone: 'info' | 'success' | 'warning' | 'neutral';
+}
+function computeTimedProgression(
+  prevSets: PrevSet[],
+  planEx: { duration_seconds: number | null; name: string },
+  daysSinceLastWorkout: number | null,
+): TimedProgressionResult {
+  const planTarget = planEx.duration_seconds ?? TIMED_PROGRESSION_STEPS[0];
+  if (prevSets.length === 0) {
+    return { recommendedDuration: planTarget, hint: '⭐ Erste Begegnung — starte mit diesem Zielwert', hintTone: 'info' };
+  }
+  const prevDurations = prevSets.map(s => s.duration_seconds ?? 0).filter(d => d > 0);
+  const lastDuration = prevDurations.length > 0 ? Math.max(...prevDurations) : planTarget;
+  const currentIdx = findTimedStepIndex(lastDuration);
+  const rpeValues = prevSets.map(s => s.rpe).filter((r): r is number => r !== null);
+  const avgRpe = rpeValues.length > 0 ? rpeValues.reduce((a, b) => a + b, 0) / rpeValues.length : null;
+  const allHeld = prevDurations.length > 0 && prevDurations.every(d => d >= TIMED_PROGRESSION_STEPS[currentIdx]);
+  if (daysSinceLastWorkout !== null && daysSinceLastWorkout >= 56) {
+    return { recommendedDuration: TIMED_PROGRESSION_STEPS[0], hint: '🌱 Längere Pause — sanfter Wiedereinstieg', hintTone: 'info' };
+  }
+  if (daysSinceLastWorkout !== null && daysSinceLastWorkout >= 28) {
+    const backIdx = Math.max(0, currentIdx - 1);
+    return { recommendedDuration: TIMED_PROGRESSION_STEPS[backIdx], hint: `🌱 Pause erkannt — eine Stufe zurück (${TIMED_PROGRESSION_STEPS[backIdx]}s)`, hintTone: 'info' };
+  }
+  if (daysSinceLastWorkout !== null && daysSinceLastWorkout >= 14) {
+    return { recommendedDuration: TIMED_PROGRESSION_STEPS[currentIdx], hint: `🌱 Kurze Pause — aktuelle Stufe halten (${TIMED_PROGRESSION_STEPS[currentIdx]}s)`, hintTone: 'info' };
+  }
+  if (avgRpe === null) {
+    if (allHeld && currentIdx < TIMED_PROGRESSION_STEPS.length - 1) {
+      const nextIdx = currentIdx + 1;
+      return { recommendedDuration: TIMED_PROGRESSION_STEPS[nextIdx], hint: `↗ Alle Sätze gehalten — nächste Stufe: ${TIMED_PROGRESSION_STEPS[nextIdx]}s`, hintTone: 'success' };
+    }
+    return { recommendedDuration: TIMED_PROGRESSION_STEPS[currentIdx], hint: `🔁 Aktuelle Stufe halten: ${TIMED_PROGRESSION_STEPS[currentIdx]}s`, hintTone: 'neutral' };
+  }
+  if (avgRpe <= 7 && allHeld && currentIdx < TIMED_PROGRESSION_STEPS.length - 1) {
+    const nextIdx = currentIdx + 1;
+    return { recommendedDuration: TIMED_PROGRESSION_STEPS[nextIdx], hint: `💪 Locker gehalten — nächste Stufe: ${TIMED_PROGRESSION_STEPS[nextIdx]}s`, hintTone: 'success' };
+  }
+  if (avgRpe <= 8) {
+    return { recommendedDuration: TIMED_PROGRESSION_STEPS[currentIdx], hint: `🎯 Zielbereich — ${TIMED_PROGRESSION_STEPS[currentIdx]}s halten`, hintTone: 'neutral' };
+  }
+  if (!allHeld) {
+    return { recommendedDuration: TIMED_PROGRESSION_STEPS[currentIdx], hint: `⚠️ Nicht alle Sätze vollständig — ${TIMED_PROGRESSION_STEPS[currentIdx]}s Ziel`, hintTone: 'warning' };
+  }
+  return { recommendedDuration: TIMED_PROGRESSION_STEPS[currentIdx], hint: `⚠️ War sehr anstrengend — aktuelle Stufe halten`, hintTone: 'warning' };
+}
 async function withRetry(
   fn: () => Promise<{ data: any; error: any }>,
   maxAttempts = 3
@@ -434,13 +503,30 @@ const RpeRatingModal: React.FC<{
 const SetRow: React.FC<{
   set: SetEntry;
   isActive: boolean;
-  onLog: (reps: string, weight: string) => void;
+  onLog: (reps: string, weight: string, durationSeconds?: number) => void;
   targetReps: string;
   previousWeight: string;
+  isTimed?: boolean;
+  targetDuration?: number;
+  showWeightField?: boolean;
   onRetry?: () => void;
-}> = ({ set, isActive, onLog, targetReps, previousWeight, onRetry }) => {
+}> = ({ set, isActive, onLog, targetReps, previousWeight, isTimed, targetDuration, showWeightField, onRetry }) => {
   const [reps, setReps] = useState(set.reps || targetReps);
   const [weight, setWeight] = useState(set.weight || previousWeight);
+  const [elapsed, setElapsed] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerStopped, setTimerStopped] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (timerRunning) {
+      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [timerRunning]);
+  const handleTimerStart = () => setTimerRunning(true);
+  const handleTimerStop = () => { setTimerRunning(false); setTimerStopped(true); };
 
   if (set.logged) {
     const isError = set.syncStatus === 'error';
@@ -464,7 +550,7 @@ const SetRow: React.FC<{
         </div>
         <span className="text-sm text-slate-500">Satz {set.setNumber}</span>
         <span className="ml-auto text-sm font-semibold text-slate-700 tabular-nums">
-          {set.reps} × {set.weight} kg
+          {set.duration !== undefined ? `${set.duration}s` : `${set.reps} × ${set.weight} kg`}
         </span>
         {isError && (
           <button
@@ -490,6 +576,65 @@ const SetRow: React.FC<{
           <span className="text-xs text-slate-400">{set.setNumber}</span>
         </div>
         <span className="text-sm text-slate-400">Satz {set.setNumber}</span>
+      </div>
+    );
+  }
+
+  // Active set – timed exercise
+  if (isTimed) {
+    return (
+      <div className="py-3 px-4 rounded-xl bg-white border-2 border-primary shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+            <span className="text-xs font-bold text-white">{set.setNumber}</span>
+          </div>
+          <span className="text-sm font-medium text-slate-700">Satz {set.setNumber}</span>
+          {targetDuration && (
+            <span className="ml-auto text-xs text-slate-400">Ziel: {targetDuration}s</span>
+          )}
+        </div>
+        <div className="text-center mb-4">
+          <div className="text-6xl font-bold tabular-nums text-slate-900 mb-2">
+            {formatDuration(elapsed)}
+          </div>
+          {targetDuration && (
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden mx-4">
+              <div
+                className={`h-full rounded-full transition-all ${elapsed >= targetDuration ? 'bg-emerald-500' : 'bg-primary'}`}
+                style={{ width: `${Math.min(100, (elapsed / targetDuration) * 100)}%` }}
+              />
+            </div>
+          )}
+          {targetDuration && elapsed >= targetDuration && (
+            <p className="text-xs font-medium text-emerald-600 mt-2">✓ Zielzeit erreicht!</p>
+          )}
+        </div>
+        {showWeightField && (
+          <div className="mb-3">
+            <p className="text-xs text-slate-400 mb-1">Gewicht (kg)</p>
+            <input
+              type="number" inputMode="decimal" value={weight}
+              onChange={e => setWeight(e.target.value)} onFocus={e => e.target.select()}
+              placeholder="0"
+              className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        )}
+        {!timerStopped ? (
+          <button
+            onClick={timerRunning ? handleTimerStop : handleTimerStart}
+            className={`w-full py-4 rounded-xl font-bold text-base transition-colors active:scale-95 text-white ${timerRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:bg-primary/90'}`}
+          >
+            {timerRunning ? '■ Stopp' : '▶ Start'}
+          </button>
+        ) : (
+          <button
+            onClick={() => onLog('', weight, elapsed)}
+            className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base transition-colors active:scale-95"
+          >
+            Satz abschließen ✓
+          </button>
+        )}
       </div>
     );
   }
@@ -636,7 +781,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
       if (prevWorkout?.id && exerciseNames.length > 0) {
         const { data: prevSets } = await supabase
           .from('set_logs')
-          .select('exercise_name, weight_kg, reps_done, rpe')
+          .select('exercise_name, weight_kg, reps_done, rpe, duration_seconds')
           .eq('workout_log_id', prevWorkout.id)
           .in('exercise_name', exerciseNames);
 
@@ -647,6 +792,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
             weight_kg: Number(s.weight_kg) || 0,
             reps_done: Number(s.reps_done) || 0,
             rpe: s.rpe !== null && s.rpe !== undefined ? Number(s.rpe) : null,
+            duration_seconds: s.duration_seconds !== null && s.duration_seconds !== undefined ? Number(s.duration_seconds) : null,
           });
         });
       }
@@ -654,38 +800,56 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
       // 5. Pro Übung: Empfehlung berechnen, ExerciseLog bauen
       const logs: ExerciseLog[] = workout.exercises.map((ex) => {
         const prevForEx = prevSetsByExercise[ex.name] ?? [];
-        const recommendation = computeProgression(
-          prevForEx,
-          {
-            reps_target: ex.reps_target,
-            weight_target: (ex as any).weight_target ?? null,
-            sets: ex.sets,
-            name: ex.name,
-          },
-          phaseType,
-          daysSinceLastWorkout,
-        );
-
-        // previousBest weiterhin für „Letztes Mal:"-Anzeige bereitstellen
-        const bestPrev = prevForEx.length > 0
+        const setsCount = ex.sets || 3;
+        let progressionHint: string;
+        let progressionTone: ExerciseLog['progressionTone'];
+        let progressionDuration: number | undefined;
+        let initReps: string;
+        let initWeight: string;
+        if (ex.is_timed) {
+          const timedRec = computeTimedProgression(
+            prevForEx,
+            { duration_seconds: ex.duration_seconds, name: ex.name },
+            daysSinceLastWorkout,
+          );
+          progressionHint = timedRec.hint;
+          progressionTone = timedRec.hintTone;
+          progressionDuration = timedRec.recommendedDuration;
+          initReps = '';
+          initWeight = ex.weight_target?.match(/[\d.]+/)?.[0] ?? '';
+        } else {
+          const recommendation = computeProgression(
+            prevForEx,
+            { reps_target: ex.reps_target, weight_target: ex.weight_target ?? null, sets: ex.sets, name: ex.name },
+            phaseType,
+            daysSinceLastWorkout,
+          );
+          progressionHint = recommendation.hint;
+          progressionTone = recommendation.hintTone;
+          initReps = recommendation.recommendedReps;
+          initWeight = recommendation.recommendedWeight;
+        }
+        const prevDurations = prevForEx.map(s => s.duration_seconds ?? 0).filter(d => d > 0);
+        const previousBestDuration = ex.is_timed && prevDurations.length > 0
+          ? Math.max(...prevDurations)
+          : null;
+        const bestPrev = !ex.is_timed && prevForEx.length > 0
           ? prevForEx.reduce((best, s) =>
               (s.weight_kg > best.weight_kg ||
                 (s.weight_kg === best.weight_kg && s.reps_done > best.reps_done))
                 ? s : best, prevForEx[0])
           : null;
-
-        const setsCount = ex.sets || 3;
         return {
           exercise: ex,
-          previousBest: bestPrev
-            ? { weight: bestPrev.weight_kg, reps: bestPrev.reps_done }
-            : null,
-          progressionHint: recommendation.hint,
-          progressionTone: recommendation.hintTone,
+          previousBest: bestPrev ? { weight: bestPrev.weight_kg, reps: bestPrev.reps_done } : null,
+          previousBestDuration,
+          progressionHint,
+          progressionTone,
+          progressionDuration,
           sets: Array.from({ length: setsCount }, (_, i) => ({
             setNumber: i + 1,
-            reps: recommendation.recommendedReps,
-            weight: recommendation.recommendedWeight,
+            reps: initReps,
+            weight: initWeight,
             logged: false,
             isPR: false,
             syncStatus: 'synced' as const,
@@ -704,7 +868,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
   const currentLog = exerciseLogs[currentExerciseIndex];
   const activeSetIndex = currentLog?.sets.findIndex(s => !s.logged) ?? -1;
 
-  const handleLogSet = useCallback(async (reps: string, weight: string) => {
+  const handleLogSet = useCallback(async (reps: string, weight: string, durationSeconds?: number) => {
     if (!workoutLogId || !currentLog) return;
 
     const exercise = currentLog.exercise;
@@ -716,7 +880,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
     setExerciseLogs(prev => {
       const next = [...prev];
       const sets = [...next[capturedExIdx].sets];
-      sets[capturedSetIdx] = { ...sets[capturedSetIdx], reps, weight, logged: true, isPR: false, syncStatus: 'pending' };
+      sets[capturedSetIdx] = { ...sets[capturedSetIdx], reps, weight, duration: durationSeconds, logged: true, isPR: false, syncStatus: 'pending' };
       if (capturedSetIdx + 1 < sets.length && !sets[capturedSetIdx + 1].logged) {
         sets[capturedSetIdx + 1] = { ...sets[capturedSetIdx + 1], reps, weight };
       }
@@ -738,14 +902,15 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
       supabase
         .from('set_logs')
         .insert({
-          workout_log_id: workoutLogId,
-          plan_exercise_id: exercise.id,
-          exercise_name: exercise.name,
-          set_number: capturedSetIdx + 1,
-          reps_done: parseInt(reps),
-          weight_kg: parseFloat(weight),
-          logged_at: loggedAt,
-        })
+            workout_log_id: workoutLogId,
+            plan_exercise_id: exercise.id,
+            exercise_name: exercise.name,
+            set_number: capturedSetIdx + 1,
+            reps_done: durationSeconds !== undefined ? null : (parseInt(reps) || null),
+            weight_kg: parseFloat(weight) || null,
+            duration_seconds: durationSeconds ?? null,
+            logged_at: loggedAt,
+          })
         .select()
         .single()
     );
@@ -794,8 +959,9 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
           plan_exercise_id: log.exercise.id,
           exercise_name: log.exercise.name,
           set_number: set.setNumber,
-          reps_done: parseInt(set.reps),
-          weight_kg: parseFloat(set.weight),
+          reps_done: set.duration !== undefined ? null : (parseInt(set.reps) || null),
+          weight_kg: parseFloat(set.weight) || null,
+          duration_seconds: set.duration ?? null,
           logged_at: new Date().toISOString(),
         })
         .select()
@@ -1044,14 +1210,24 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                   
                   <h2 className="text-xl font-bold text-slate-900">{currentLog.exercise.name}</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    {currentLog.exercise.sets} Sätze · {currentLog.exercise.reps_target} Wdh.
+                    {currentLog.exercise.sets} Sätze ·{' '}
+                    {currentLog.exercise.is_timed
+                      ? `${currentLog.progressionDuration ?? currentLog.exercise.duration_seconds ?? '?'}s halten`
+                      : `${currentLog.exercise.reps_target} Wdh.`}
                     {currentLog.exercise.rest_seconds && ` · ${currentLog.exercise.rest_seconds}s Pause`}
                   </p>
-                  {currentLog.previousBest && (
-                    <p className="text-xs text-slate-400 mt-1">
-                      Letztes Mal: {currentLog.previousBest.weight}kg × {currentLog.previousBest.reps}
-                    </p>
-                  )}
+                  {currentLog.exercise.is_timed
+                    ? currentLog.previousBestDuration != null && (
+                        <p className="text-xs text-slate-400 mt-1">
+                          Letztes Mal: {currentLog.previousBestDuration}s
+                        </p>
+                      )
+                    : currentLog.previousBest && (
+                        <p className="text-xs text-slate-400 mt-1">
+                          Letztes Mal: {currentLog.previousBest.weight}kg × {currentLog.previousBest.reps}
+                        </p>
+                      )
+                  }
                   {currentLog.progressionHint && (
                     <div className={`inline-flex items-center mt-2 px-2.5 py-1 rounded-full border text-xs font-medium ${hintToneClasses(currentLog.progressionTone)}`}>
                       {currentLog.progressionHint}
@@ -1112,7 +1288,10 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
                     isActive={si === activeSetIndex}
                     targetReps={parseRepsTarget(currentLog.exercise.reps_target)}
                     previousWeight={currentLog.previousBest ? String(currentLog.previousBest.weight) : ''}
-                    onLog={(reps, weight) => handleLogSet(reps, weight)}
+                    isTimed={currentLog.exercise.is_timed}
+                    targetDuration={currentLog.progressionDuration ?? currentLog.exercise.duration_seconds ?? undefined}
+                    showWeightField={!!currentLog.exercise.weight_target}
+                    onLog={(reps, weight, dur) => handleLogSet(reps, weight, dur)}
                     onRetry={() => handleRetrySync(currentExerciseIndex, si)}
                   />
                 ))}
