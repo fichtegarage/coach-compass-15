@@ -66,6 +66,7 @@ interface WorkoutLoggerProps {
   clientId: string;
   planId?: string;      // für Zeiger-Vorrücken nach Abschluss
   sessionId?: string;   // optional – verknüpft Log mit PT-Session
+  mode?: 'client' | 'coach';  // NEU-28: Coach-Side-Logging via SessionsPage
   onClose: () => void;
   onComplete: (summary: WorkoutSummary) => void;
 }
@@ -718,7 +719,7 @@ const SetRow: React.FC<{
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId, sessionId, onClose, onComplete }) => {
+  const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId, sessionId, mode = 'client', onClose, onComplete }) => {
   const [workoutLogId, setWorkoutLogId] = useState<string | null>(null);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -745,6 +746,7 @@ const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId
           plan_workout_id: workout.id,
           session_id: sessionId || null,
           started_at: new Date().toISOString(),
+          logged_by: mode,  // NEU-28: 'client' (Default) oder 'coach' (aus SessionsPage)
         })
         .select()
         .single();
