@@ -48,6 +48,7 @@ interface WorkoutLog {
   notes: string | null;
   rating: number | null;
   energy_level: number | null;
+  logged_by: 'client' | 'coach' | 'assessment';  // NEU-28
   plan_workouts: { day_label: string } | null;
   set_logs: SetLog[];
   feedback?: WorkoutFeedback | null;
@@ -177,6 +178,11 @@ const WorkoutLogCard: React.FC<{
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-sm font-semibold truncate">{workoutName}</p>
+                {log.logged_by === 'coach' && (
+                  <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 text-xs gap-1">
+                    <Dumbbell className="w-3 h-3" /> mit Coach
+                  </Badge>
+                )}
                 {prCount > 0 && (
                   <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-xs gap-1">
                     <Trophy className="w-3 h-3" /> {prCount} PR{prCount > 1 ? 's' : ''}
@@ -344,10 +350,10 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
   const load = useCallback(async () => {
     setLoading(true);
 
-    // Workout-Logs
+   // Workout-Logs
     const { data: logsData } = await supabase
       .from('workout_logs')
-      .select('id, started_at, completed_at, notes, rating, energy_level, plan_workout_id, plan_workouts ( day_label )')
+      .select('id, started_at, completed_at, notes, rating, energy_level, logged_by, plan_workout_id, plan_workouts ( day_label )')
       .eq('client_id', clientId)
       .order('started_at', { ascending: false })
       .limit(50);
