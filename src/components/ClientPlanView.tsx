@@ -30,6 +30,9 @@ interface PlanExercise {
   order_in_workout: number;
   superset_label: string | null;
   superset_order: number;
+  is_timed?: boolean;
+  duration_seconds?: number | null;
+  weight_target?: string | null;
 }
 
 interface PlanWorkout {
@@ -166,12 +169,14 @@ const ExerciseRow: React.FC<{
         </div>
         
         <div className="flex items-center gap-3 text-right flex-shrink-0">
-          {exercise.sets && exercise.reps_target && (
+          {exercise.sets && (exercise.reps_target || exercise.is_timed) && (
             <div className="text-center">
               <p className="text-sm font-bold text-orange-400 tabular-nums">
-                {exercise.sets} × {exercise.reps_target}
+                {exercise.sets} × {exercise.is_timed ? `${exercise.duration_seconds ?? '?'}s` : exercise.reps_target}
               </p>
-              <p className="text-[10px] text-slate-500">Sätze × Wdh.</p>
+              <p className="text-[10px] text-slate-500">
+                {exercise.is_timed ? 'Sätze × Haltezeit' : 'Sätze × Wdh.'}
+              </p>
             </div>
           )}
           {exercise.rest_seconds && !exercise.superset_label && (
