@@ -1108,8 +1108,11 @@ const SetRow: React.FC<{
     }
 
 
-    // ── Zeiger vorrücken ──────────────────────────────────────────────────────
-    if (planId && workout.id) {
+    // ── Zeiger vorrücken + Coach-Benachrichtigungen ───────────────────────────
+    //    Nur im Coach-Modus: dieser Block schreibt in coach_alerts / plan_end_alerts /
+    //    training_plans — Tabellen, auf die der login-lose Kunden-Pfad keinen
+    //    Schreibzugriff hat (RLS). Im Kunden-Modus wird er übersprungen (NEU-53).
+    if (mode === 'coach' && planId && workout.id) {
       // Nächstes Workout ermitteln
       const { data: nextWorkout } = await supabase
         .from('plan_workouts')
