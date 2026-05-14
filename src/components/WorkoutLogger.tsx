@@ -1,3 +1,4 @@
+q
 /**
  * WorkoutLogger.tsx
  *
@@ -995,25 +996,49 @@ const SetRow: React.FC<{
       return next;
     });
 
-    const { data: setData, error } = await withRetry(() =>
-      supabase
-        .from('set_logs')
-        .insert({
-          workout_log_id: workoutLogId,
-          plan_exercise_id: log.exercise.id,
-          exercise_name: log.exercise.name,
-          set_number: set.setNumber,
-          reps_done: set.duration !== undefined ? null : (parseInt(set.reps) || null),
-          weight_kg: parseFloat(set.weight) || null,
-          duration_seconds: set.duration ?? null,
-          logged_at: new Date().toISOString(),
+        //    Kunden-Pfad: via SECURITY-DEFINER-RPC (Token-validiert)
+    //    Coach-Pfad:  direkter Insert via Trainer-JWT (NEU-28)
+    const repsValue = set.duration !== undefined ? null : (parseInt(set.reps) || null);
+    const weightValue = parseFloat(set.weight) || null;
+    const durationValue = set.duration ?? null;
+
+    const { data: setData, error } = await withRetry(() => {
+      if (mode === 'coach') {
+        return supabase
+          .from('set_logs')
+          .insert({
+            workout_log_id: workoutLogId,
+            plan_exercise_id: log.exercise.id,
+            exercise_name: log.exercise.name,
+            set_number: set.setNumber,
+            reps_done: repsValue,
+            weight_kg: weightValue,
+            duration_seconds: durationValue,
+            logged_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+      }
+      return supabase
+        .rpc('rpc_insert_set_log', {
+          p_token: clientToken,
+          p_workout_log_id: workoutLogId,
+          p_plan_exercise_id: log.exercise.id,
+          p_exercise_name: log.exercise.name,
+          p_set_number: set.setNumber,
+          p_reps_done: repsValue,
+          p_weight_kg: weightValue,
+          p_duration_seconds: durationValue,
         })
-        .select()
-        .single()
-    );
+        .then(res => ({
+          data: Array.isArray(res.data) ? res.data[0] : res.data,
+          error: res.error,
+        }));
+    });
 
     const isPR = setData?.is_pr || false;
     const newStatus: SetEntry['syncStatus'] = error ? 'error' : 'synced';
+
 
     setExerciseLogs(prev => {
       const next = [...prev];
