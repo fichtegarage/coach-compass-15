@@ -189,11 +189,26 @@ const BookingPage: React.FC = () => {
     setClientId(client.id);
     setClientName(client.full_name);
     setClientEmail(client.email || null);
-    setCodeLoading(false);
-    const newToken = crypto.randomUUID();
+    // Server-seitige Session anlegen (SECURITY DEFINER RPC).
+    // Der Token wird von der DB erzeugt und zurückgegeben — NICHT im Frontend.
+    const { data: tokenData, error: sessionError } = await supabase
+      .rpc('create_client_session', { p_client_id: client.id });
+
+    if (sessionError || !tokenData) {
+      setCodeError('Anmeldung fehlgeschlagen. Bitte versuche es erneut.');
+      setCodeLoading(false);
+      // angefangenen Login-State zurücksetzen, damit kein halb-eingeloggter Zustand bleibt
+      ['booking_client_id', 'booking_client_name', 'booking_client_email'].forEach(k => storage.removeItem(k));
+      setClientId(null);
+      setClientName('');
+      setClientEmail(null);
+      return;
+    }
+
+    const newToken = tokenData as string;
     storage.setItem('booking_client_token', newToken);
     setClientToken(newToken);
-    supabase.from('client_sessions').insert({ token: newToken, client_id: client.id });
+    setCodeLoading(false);
   };
 const handleLogout = () => {
     ['booking_client_id', 'booking_client_name', 'booking_client_email', 'booking_client_token'].forEach(k => {
