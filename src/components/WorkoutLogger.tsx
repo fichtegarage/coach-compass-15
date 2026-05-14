@@ -917,23 +917,50 @@ const SetRow: React.FC<{
     }
     // Hinweis: pendingRpe wird unten gesetzt, sobald die DB-Antwort die set_log-ID liefert
 
-    // ── 3. DB-Sync im Hintergrund mit Retry ───────────────────────────────────
-    const { data: setData, error } = await withRetry(() =>
-      supabase
-        .from('set_logs')
-        .insert({
+        // ── 3. DB-Sync im Hintergrund mit Retry ───────────────────────────────────
+    //    Kunden-Pfad: via SECURITY-DEFINER-RPC (Token-validiert)
+    //    Coach-Pfad:  direkter Insert via Trainer-JWT (NEU-28)
+    const repsValue = durationSeconds !== undefined ? null : (parseInt(reps) || null);
+    const weightValue = parseFloat(weight) || null;
+    const durationValue = durationSeconds ?? null;
+
+    const { data: setData, error } = await withRetry(() => {
+      if (mode === 'coach') {
+        return supabase
+          .from('set_logs')
+          .insert({
             workout_log_id: workoutLogId,
             plan_exercise_id: exercise.id,
             exercise_name: exercise.name,
             set_number: capturedSetIdx + 1,
-            reps_done: durationSeconds !== undefined ? null : (parseInt(reps) || null),
-            weight_kg: parseFloat(weight) || null,
-            duration_seconds: durationSeconds ?? null,
+            reps_done: repsValue,
+            weight_kg: weightValue,
+            duration_seconds: durationValue,
             logged_at: loggedAt,
           })
-        .select()
-        .single()
-    );
+          .select()
+          .single();
+      }
+      return supabase
+        .rpc('rpc_insert_set_log', {
+          p_token: clientToken,
+          p_workout_log_id: workoutLogId,
+          p_plan_exercise_id: exercise.id,
+          p_exercise_name: exercise.name,
+          p_set_number: capturedSetIdx + 1,
+          p_reps_done: repsValue,
+          p_weight_kg: weightValue,
+          p_duration_seconds: durationValue,
+        })
+        .then(res => ({
+          data: Array.isArray(res.data) ? res.data[0] : res.data,
+          error: res.error,
+        }));
+    });
+
+    const isPR = setData?.is_pr || false;
+    const newStatus: SetEntry['syncStatus'] = error ? 'error' : 'synced';
+
 
     const isPR = setData?.is_pr || false;
     const newStatus: SetEntry['syncStatus'] = error ? 'error' : 'synced';
