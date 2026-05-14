@@ -962,9 +962,6 @@ const SetRow: React.FC<{
     const newStatus: SetEntry['syncStatus'] = error ? 'error' : 'synced';
 
 
-    const isPR = setData?.is_pr || false;
-    const newStatus: SetEntry['syncStatus'] = error ? 'error' : 'synced';
-
     setExerciseLogs(prev => {
       const next = [...prev];
       const sets = [...next[capturedExIdx].sets];
