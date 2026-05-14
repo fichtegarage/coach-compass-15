@@ -1088,14 +1088,26 @@ const SetRow: React.FC<{
       setCurrentExerciseIndex(exIdx + 1);
     }
   }, [pendingRpe]);
-  const handleFinish = async () => {
+    const handleFinish = async () => {
     if (!workoutLogId) return;
 
     const now = new Date();
-    await supabase
-      .from('workout_logs')
-      .update({ completed_at: now.toISOString() })
-      .eq('id', workoutLogId);
+    // workout_log abschließen
+    //    Kunden-Pfad: via SECURITY-DEFINER-RPC (Token-validiert)
+    //    Coach-Pfad:  direkter Update via Trainer-JWT (NEU-28)
+    if (mode === 'coach') {
+      await supabase
+        .from('workout_logs')
+        .update({ completed_at: now.toISOString() })
+        .eq('id', workoutLogId);
+    } else {
+      await supabase
+        .rpc('rpc_complete_workout_log', {
+          p_token: clientToken,
+          p_workout_log_id: workoutLogId,
+        });
+    }
+
 
     // ── Zeiger vorrücken ──────────────────────────────────────────────────────
     if (planId && workout.id) {
