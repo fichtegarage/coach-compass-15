@@ -719,7 +719,9 @@ const SetRow: React.FC<{
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-  const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId, sessionId, mode = 'client', onClose, onComplete }) => {
+    const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({ workout, clientId, planId, sessionId, mode = 'client', onClose, onComplete }) => {
+  // Kunden-Session-Token (nur im 'client'-Modus relevant; im 'coach'-Modus läuft alles über Trainer-JWT)
+  const clientToken = localStorage.getItem('booking_client_token') || sessionStorage.getItem('booking_client_token');
   const [workoutLogId, setWorkoutLogId] = useState<string | null>(null);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -738,21 +740,37 @@ const SetRow: React.FC<{
   // ── Init: workout_log anlegen + Algorithmus-Pre-Fill laden ────────────────
   useEffect(() => {
     const init = async () => {
-      // 1. Neues workout_log anlegen
-      const { data: logData, error: logErr } = await supabase
-        .from('workout_logs')
-        .insert({
-          client_id: clientId,
-          plan_workout_id: workout.id,
-          session_id: sessionId || null,
-          started_at: new Date().toISOString(),
-          logged_by: mode,  // NEU-28: 'client' (Default) oder 'coach' (aus SessionsPage)
-        })
-        .select()
-        .single();
+            // 1. Neues workout_log anlegen
+      //    Kunden-Pfad: via SECURITY-DEFINER-RPC (Token-validiert)
+      //    Coach-Pfad:  direkter Insert via Trainer-JWT (NEU-28)
+      let newLogId: string | null = null;
+      if (mode === 'coach') {
+        const { data: logData, error: logErr } = await supabase
+          .from('workout_logs')
+          .insert({
+            client_id: clientId,
+            plan_workout_id: workout.id,
+            session_id: sessionId || null,
+            started_at: new Date().toISOString(),
+            logged_by: 'coach',
+          })
+          .select()
+          .single();
+        if (logErr || !logData) { setInitializing(false); return; }
+        newLogId = logData.id;
+      } else {
+        if (!clientToken) { setInitializing(false); return; }
+        const { data: logId, error: logErr } = await supabase
+          .rpc('rpc_create_workout_log', {
+            p_token: clientToken,
+            p_plan_workout_id: workout.id,
+            p_session_id: sessionId || null,
+          });
+        if (logErr || !logId) { setInitializing(false); return; }
+        newLogId = logId as string;
+      }
+      setWorkoutLogId(newLogId);
 
-      if (logErr || !logData) { setInitializing(false); return; }
-      setWorkoutLogId(logData.id);
 
       // 2. phase_type des aktuellen Plan-Workouts laden (für Deload-Erkennung)
       const { data: planWorkoutMeta } = await supabase
@@ -767,7 +785,7 @@ const SetRow: React.FC<{
         .from('workout_logs')
         .select('id, started_at')
         .eq('client_id', clientId)
-        .neq('id', logData.id)
+        .neq('id', newLogId)
         .not('completed_at', 'is', null)
         .order('started_at', { ascending: false })
         .limit(1)
