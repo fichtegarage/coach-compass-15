@@ -1056,17 +1056,32 @@ const SetRow: React.FC<{
     // Modal sofort schließen — DB-Update läuft im Hintergrund
     setPendingRpe(null);
 
-    // RPE in DB schreiben (nur wenn nicht übersprungen UND set_logs-ID vorhanden)
+        // RPE in DB schreiben (nur wenn nicht übersprungen UND set_logs-ID vorhanden)
+    //    Kunden-Pfad: via SECURITY-DEFINER-RPC (Token-validiert)
+    //    Coach-Pfad:  direkter Update via Trainer-JWT (NEU-28)
     if (rpe !== null && setLogId) {
       // Fire-and-forget; bei Fehler nur loggen, nicht den UX-Fluss blockieren
-      supabase
-        .from('set_logs')
-        .update({ rpe })
-        .eq('id', setLogId)
-        .then(({ error }) => {
-          if (error) console.warn('RPE-Update fehlgeschlagen:', error);
-        });
+      if (mode === 'coach') {
+        supabase
+          .from('set_logs')
+          .update({ rpe })
+          .eq('id', setLogId)
+          .then(({ error }) => {
+            if (error) console.warn('RPE-Update fehlgeschlagen:', error);
+          });
+      } else {
+        supabase
+          .rpc('rpc_update_set_log_rpe', {
+            p_token: clientToken,
+            p_set_log_id: setLogId,
+            p_rpe: rpe,
+          })
+          .then(({ error }) => {
+            if (error) console.warn('RPE-Update fehlgeschlagen:', error);
+          });
+      }
     }
+
 
     // Auto-Advance zur nächsten Übung, außer es war die letzte
     if (!isLastExercise) {
