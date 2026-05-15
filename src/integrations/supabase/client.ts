@@ -7,11 +7,24 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
-
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  global: {
+    // Injiziert pro Request einen X-Client-Token-Header, wenn ein Kunden-Session-Token
+    // im Browser-Storage liegt. current_client_id() in der DB liest diesen Header.
+    fetch: (input, init = {}) => {
+      const token =
+        localStorage.getItem('booking_client_token') ??
+        sessionStorage.getItem('booking_client_token');
+      const headers = new Headers(init.headers);
+      if (token && token.length > 0) {
+        headers.set('X-Client-Token', token);
+      }
+      return fetch(input, { ...init, headers });
+    },
+  },
 });
