@@ -233,7 +233,7 @@ const handleLogout = () => {
     const filePath = `${clientId}/profile-${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from('client-photos')
-      .upload(filePath, file, { upsert: true });
+      .upload(filePath, file);
     if (uploadError) {
       toast.error('Foto konnte nicht hochgeladen werden');
       setUploadingPhoto(false);
