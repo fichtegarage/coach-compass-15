@@ -597,6 +597,7 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
     .replace(/\s+/g, '-')          // Spaces to hyphens
     .replace(/-+/g, '-')           // Remove duplicate hyphens
     .replace(/^-|-$/g, '');        // Trim hyphens
+  };
 
   const handleSave = async () => {
     if (!name.trim() || !nameDe.trim() || muscleGroups.length === 0 || !movementPattern) {
