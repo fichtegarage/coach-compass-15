@@ -649,9 +649,9 @@ const SetRow: React.FC<{
         </div>
         <span className="text-sm font-medium text-slate-700">Satz {set.setNumber}</span>
       </div>
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className={`grid ${showWeightField !== false ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-3`}>
         {/* Weight */}
-        <div>
+        {showWeightField !== false && <div>
           <p className="text-xs text-slate-400 mb-1">Gewicht (kg)</p>
           <input
             type="number"
@@ -1389,7 +1389,7 @@ if (alertErr) console.warn('plan_end_alerts insert fehlgeschlagen:', alertErr.me
                     previousWeight={currentLog.previousBest ? String(currentLog.previousBest.weight) : ''}
                     isTimed={currentLog.exercise.is_timed}
                     targetDuration={currentLog.progressionDuration ?? currentLog.exercise.duration_seconds ?? undefined}
-                    showWeightField={!!currentLog.exercise.weight_target}
+                    showWeightField={!currentLog.exercise.is_bodyweight && (!!currentLog.exercise.weight_target || !currentLog.exercise.is_timed)}
                     onLog={(reps, weight, dur) => handleLogSet(reps, weight, dur)}
                     onRetry={() => handleRetrySync(currentExerciseIndex, si)}
                   />
