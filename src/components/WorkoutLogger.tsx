@@ -1167,11 +1167,12 @@ const SetRow: React.FC<{
             title: 'Plan-Ende naht',
             message: `⚠️ ${clientData?.full_name ?? 'Unbekannte Kundin'} erreicht die letzte Woche des Trainingsplans. Bitte neuen Plan vorbereiten.`,
           });
-          await supabase.from('plan_end_alerts').insert({
-            client_id: clientId,
-            plan_id: planId,
-            alerted_at: now.toISOString(),
-          }).catch(() => {}); // Tabelle existiert noch nicht → ignorieren bis Migration
+          const { error: alertErr } = await supabase.from('plan_end_alerts').insert({
+  client_id: clientId,
+  plan_id: planId,
+  alerted_at: now.toISOString(),
+});
+if (alertErr) console.warn('plan_end_alerts insert fehlgeschlagen:', alertErr.message);
         }
       }
     }
