@@ -613,9 +613,10 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
         .filter(c => c.length > 0);
 
       const slug = generateSlug(name);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id ?? null;
 
-      const { error } = await supabase.from('exercises').insert({
+      const payload = {
         name: name.trim(),
         name_de: nameDe.trim(),
         description_de: descriptionDe.trim() || null,
@@ -628,8 +629,10 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
         context,
         required_equipment: requiredEquipment,
         is_custom: true,
-        created_by: user?.id ?? null,
-      });
+        created_by: userId,
+      };
+
+      const { error } = await supabase.from('exercises').insert(payload);
 
       if (error) throw error;
 
