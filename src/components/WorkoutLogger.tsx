@@ -650,34 +650,34 @@ const SetRow: React.FC<{
         <span className="text-sm font-medium text-slate-700">Satz {set.setNumber}</span>
       </div>
       <div className={`grid ${showWeightField !== false ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-3`}>
-        {/* Weight */}
-        {showWeightField !== false && <div>
-          <p className="text-xs text-slate-400 mb-1">Gewicht (kg)</p>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={weight}
-            onChange={e => setWeight(e.target.value)}
-            onFocus={e => e.target.select()}
-            placeholder="0"
-            className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          />
-          {/* Quick +/- */}
-          <div className="flex gap-1 mt-1.5">
-            {['-5', '-2.5', '+2.5', '+5'].map(v => (
-              <button
-                key={v}
-                onClick={() => setWeight(w => {
-                  const n = parseFloat(w || '0') + parseFloat(v);
-                  return Math.max(0, n).toString();
-                })}
-                className="flex-1 text-xs py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors font-medium"
-              >
-                {v}
-              </button>
-            ))}
+        {showWeightField !== false && (
+          <div>
+            <p className="text-xs text-slate-400 mb-1">Gewicht (kg)</p>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={weight}
+              onChange={e => setWeight(e.target.value)}
+              onFocus={e => e.target.select()}
+              placeholder="0"
+              className="w-full text-center text-2xl font-bold text-slate-900 bg-slate-50 rounded-xl py-3 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+            <div className="flex gap-1 mt-1.5">
+              {['-5', '-2.5', '+2.5', '+5'].map(v => (
+                <button
+                  key={v}
+                  onClick={() => setWeight(w => {
+                    const n = parseFloat(w || '0') + parseFloat(v);
+                    return Math.max(0, n).toString();
+                  })}
+                  className="flex-1 text-xs py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors font-medium"
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         {/* Reps */}
         <div>
           <p className="text-xs text-slate-400 mb-1">Wiederholungen</p>
@@ -708,7 +708,7 @@ const SetRow: React.FC<{
       </div>
       <button
         onClick={() => onLog(reps, weight)}
-        disabled={!reps || !weight}
+        disabled={!reps || (showWeightField !== false && !weight)}
         className="w-full py-4 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-base transition-colors active:scale-95"
       >
         Satz abschließen ✓
