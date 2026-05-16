@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Loader2, Camera, User } from 'lucide-react';
+import { PhotoImg } from '@/lib/photoUrls';
 import { toast } from 'sonner';
 
 const fitnessGoals = ['Abnehmen', 'Muskelaufbau', 'Ausdauer', 'Reha', 'Allgemeine Fitness', 'Wettkampfvorbereitung'];
@@ -21,7 +22,8 @@ const ClientFormPage: React.FC = () => {
   const isEdit = Boolean(id);
   const [saving, setSaving] = useState(false);
   const [loadingClient, setLoadingClient] = useState(isEdit);
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [profilePhotoPath, setProfilePhotoPath] = useState<string | null>(null);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,7 +69,7 @@ const ClientFormPage: React.FC = () => {
           city: data.city || '',
           gender: data.gender || '',
         });
-        setProfilePhotoUrl(data.profile_photo_url || null);
+        setProfilePhotoPath(data.profile_photo_url || null);
       }
       setLoadingClient(false);
     });
@@ -83,8 +85,8 @@ const ClientFormPage: React.FC = () => {
     const filePath = `${user.id}/${id || 'new'}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('client-photos').upload(filePath, file, { upsert: true });
     if (error) { toast.error('Foto konnte nicht hochgeladen werden'); setUploadingPhoto(false); return; }
-    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
-    setProfilePhotoUrl(urlData.publicUrl);
+    setProfilePhotoPath(filePath);
+    setLocalPreviewUrl(URL.createObjectURL(file));
     if (isEdit && id) {
           await supabase.from('clients').update({ profile_photo_url: filePath }).eq('id', id);
       toast.success('Profilbild aktualisiert');
@@ -101,7 +103,7 @@ const ClientFormPage: React.FC = () => {
       gender: form.gender || null,
       date_of_birth: form.date_of_birth || null,
       whatsapp_link: form.phone ? `https://wa.me/${form.phone.replace(/\D/g, '')}` : null,
-      profile_photo_url: profilePhotoUrl,
+      profile_photo_url: profilePhotoPath,
     };
     if (isEdit && id) {
       const { error } = await supabase.from('clients').update(payload).eq('id', id);
@@ -148,8 +150,10 @@ const ClientFormPage: React.FC = () => {
                 className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center overflow-hidden cursor-pointer relative group"
                 onClick={() => fileInputRef.current?.click()}
               >
-                {profilePhotoUrl
-                  ? <img src={profilePhotoUrl} alt="Profilbild" className="w-full h-full object-cover" />
+                {localPreviewUrl
+                  ? <img src={localPreviewUrl} alt="Profilbild" className="w-full h-full object-cover" />
+                  : profilePhotoPath
+                  ? <PhotoImg src={profilePhotoPath} bucket="client-photos" alt="Profilbild" className="w-full h-full object-cover" fallback={<User className="w-8 h-8 text-muted-foreground" />} />
                   : <User className="w-8 h-8 text-muted-foreground" />}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   {uploadingPhoto ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Camera className="w-5 h-5 text-white" />}
