@@ -84,10 +84,6 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
       return;
     }
 
-    const { data: urlData } = supabase.storage
-      .from('progress-photos')
-      .getPublicUrl(path);
-
     await supabase.from('progress_photos').insert({
       client_id: clientId,
       user_id: user.id,
@@ -262,8 +258,9 @@ const ProgressPhotos: React.FC<Props> = ({ clientId }) => {
                       }
                     }}
                   >
-                    <img
+                    <PhotoImg
                       src={p.photo_url}
+                      bucket="progress-photos"
                       alt={`Foto vom ${p.taken_at}`}
                       className="w-full h-full object-cover"
                     />
