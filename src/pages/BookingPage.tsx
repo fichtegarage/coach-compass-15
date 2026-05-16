@@ -14,6 +14,7 @@ import ClientPlanView from '@/components/ClientPlanView';
 import ClientMetricsWidget from '@/components/ClientMetricsWidget';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
 import CycleTracker from '@/components/CycleTracker';
+import { usePhotoUrl } from '@/lib/photoUrls';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
@@ -137,8 +138,12 @@ const BookingPage: React.FC = () => {
     localStorage.getItem('booking_client_token') || sessionStorage.getItem('booking_client_token') || null
   );
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [clientCode, setClientCode] = useState<string>(() =>
+    localStorage.getItem('booking_client_code') || sessionStorage.getItem('booking_client_code') || ''
+  );
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const { url: signedProfileUrl } = usePhotoUrl(profilePhotoUrl, 'client-photos', clientCode || undefined);
 
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
@@ -207,11 +212,13 @@ const BookingPage: React.FC = () => {
 
     const newToken = tokenData as string;
     storage.setItem('booking_client_token', newToken);
+    storage.setItem('booking_client_code', code);
     setClientToken(newToken);
+    setClientCode(code);
     setCodeLoading(false);
   };
 const handleLogout = () => {
-    ['booking_client_id', 'booking_client_name', 'booking_client_email', 'booking_client_token'].forEach(k => {
+    ['booking_client_id', 'booking_client_name', 'booking_client_email', 'booking_client_token', 'booking_client_code'].forEach(k => {
       localStorage.removeItem(k);
       sessionStorage.removeItem(k);
     });
@@ -220,6 +227,7 @@ const handleLogout = () => {
     setClientEmail(null);
     setClientToken(null);
     setPackageInfo(null);
+    setClientCode('');
     setProfilePhotoUrl(null);
   };
 
@@ -463,7 +471,7 @@ const { error } = await supabase.rpc('rpc_insert_booking_request', {
               >
                 <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-600 flex items-center justify-center ring-2 ring-orange-500/40 group-hover:ring-orange-500/80 transition-all">
                   {profilePhotoUrl ? (
-                    <img src={profilePhotoUrl} alt={clientName} className="w-full h-full object-cover" />
+                    <img src={signedProfileUrl ?? undefined} alt={clientName} className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-white font-bold text-lg leading-none">{initials}</span>
                   )}
