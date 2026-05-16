@@ -587,13 +587,16 @@ const AddExerciseDialog: React.FC<AddExerciseDialogProps> = ({ open, onClose, on
   // Generate URL-friendly slug from exercise name
   const generateSlug = (text: string): string => {
     return text
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
-      .replace(/\s+/g, '-')          // Spaces to hyphens
-      .replace(/-+/g, '-')           // Remove duplicate hyphens
-      .replace(/^-|-$/g, '');        // Trim hyphens
-  };
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+    .replace(/\s+/g, '-')          // Spaces to hyphens
+    .replace(/-+/g, '-')           // Remove duplicate hyphens
+    .replace(/^-|-$/g, '');        // Trim hyphens
 
   const handleSave = async () => {
     if (!name.trim() || !nameDe.trim() || muscleGroups.length === 0 || !movementPattern) {
