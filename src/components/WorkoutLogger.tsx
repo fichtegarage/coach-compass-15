@@ -33,6 +33,7 @@ interface PlanExercise {
   is_timed: boolean;
   duration_seconds: number | null;
   weight_target: string | null;
+  is_bodyweight: boolean | null;
 }
 
 interface PlanWorkout {
