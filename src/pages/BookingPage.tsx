@@ -247,10 +247,8 @@ const handleLogout = () => {
       setUploadingPhoto(false);
       return;
     }
-    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(filePath);
-    const newUrl = urlData.publicUrl;
-    setProfilePhotoUrl(newUrl);
-    const { error: rpcError } = await supabase.rpc('rpc_update_client_profile_photo', { p_token: clientToken, p_photo_url: newUrl });
+    setProfilePhotoUrl(filePath);
+    const { error: rpcError } = await supabase.rpc('rpc_update_client_profile_photo', { p_token: clientToken, p_photo_url: filePath });
     if (rpcError) { toast.error('Profilbild konnte nicht gespeichert werden'); setUploadingPhoto(false); return; }
     toast.success('Profilbild gespeichert ✓');
     setUploadingPhoto(false);
