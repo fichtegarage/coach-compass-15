@@ -274,8 +274,14 @@ export function parsePlan(markdown: string): ParsedPlan | null {
     // Skip if not in a workout context
     if (!currentWorkout) continue;
 
-    // Table header row: | Übung | Sätze | ...
+    // Table header row: | Übung | Sätze | ... (nur Tabellen mit "Übung"/"Exercise" in der ersten Spalte)
     if (line.trim().startsWith('|') && !inTable) {
+      const headerCells = parseTableRow(line);
+      const firstCol = (headerCells[0] || '').toLowerCase();
+      if (!firstCol.includes('übung') && !firstCol.includes('uebung') && !firstCol.includes('exercise')) {
+        // Keine Übungstabelle (z. B. Wochen-/Phasen-Übersicht) – überspringen
+        continue;
+      }
       inTable = true;
       tableHeaderParsed = false;
       continue;
@@ -291,8 +297,14 @@ export function parsePlan(markdown: string): ParsedPlan | null {
     if (inTable && tableHeaderParsed && line.trim().startsWith('|')) {
       const cells = parseTableRow(line);
       if (cells.length >= 2) {
-        const exerciseName = cells[0];
-        if (!exerciseName || exerciseName === '...' || exerciseName === '') continue;
+        // Markdown-Präfix entfernen (z. B. "**Superset A1:** Bankdrücken" → "Bankdrücken")
+        const exerciseName = (cells[0] || '').replace(/^\*\*[^*]+\*\*\s*:?\s*/g, '').trim();
+
+        // Skip wenn leer, Platzhalter, oder reines Header-/Phasen-/Zahlen-Artefakt
+        if (!exerciseName || exerciseName === '...' || /^\*\*[^*]+\*\*$/.test(exerciseName)) continue;
+        if (/^\d+$/.test(exerciseName)) continue; // reine Zahlen wie "1", "2"
+        if (/^(Aufbau|Basis|Intensivierung|Deload|Realisierung|Akkumulation)$/i.test(exerciseName)) continue;
+        if (/^Woche\s*\d+$/i.test(exerciseName)) continue;
 
         const exercise: ParsedExercise = {
           name: exerciseName,
