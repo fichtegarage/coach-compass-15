@@ -914,19 +914,27 @@ const ExerciseLibrary: React.FC = () => {
       // Vorcheck: Wird die Übung in Plänen verwendet?
       const { data: usages, error: usageError } = await supabase
         .from('plan_exercises')
-        .select('workout_id, plan_workouts!inner(training_plan_id, training_plans!inner(name))')
+        .select('workout_id')
         .eq('exercise_id', exerciseToDelete.id)
         .limit(10);
 
       if (usageError) throw usageError;
 
       if (usages && usages.length > 0) {
-        // Plan-Namen deduplizieren
-        const planNames: string[] = [];
-        usages.forEach((u: any) => {
-          const name = u.plan_workouts?.training_plans?.name;
-          if (name && !planNames.includes(name)) planNames.push(name);
-        });
+        // Workout-IDs → Plan-Namen holen
+        const workoutIds = usages.map((u: any) => u.workout_id);
+        const { data: workouts } = await supabase
+          .from('plan_workouts')
+          .select('training_plan_id')
+          .in('id', workoutIds);
+
+        const planIds = [...new Set((workouts ?? []).map((w: any) => w.training_plan_id))];
+        const { data: plans } = await supabase
+          .from('training_plans')
+          .select('name')
+          .in('id', planIds);
+
+        const planNames: string[] = (plans ?? []).map((p: any) => p.name);
         const planList = planNames.join(', ');
         toast.error(
           `"${exerciseToDelete.name_de}" wird in ${planNames.length === 1 ? 'einem Plan' : `${planNames.length} Plänen`} verwendet (${planList}). Bitte zuerst dort entfernen.`,
