@@ -145,7 +145,7 @@ function inferMuscleGroups(name: string): string[] {
   }
   
   // Schultern
-  if (n.includes('shoulder') || n.includes('schulter') || n.includes('press') && !n.includes('bench') || n.includes('raise') || n.includes('delt')) {
+  if (n.includes('shoulder') || n.includes('schulter') || (n.includes('press') && !n.includes('bench')) || n.includes('raise') || n.includes('delt')) {
     groups.push('shoulders');
   }
   
@@ -161,12 +161,12 @@ function inferMuscleGroups(name: string): string[] {
   }
   
   // Hamstrings
-  if (n.includes('deadlift') || n.includes('kreuzheben') || n.includes('curl') && n.includes('leg') || n.includes('hamstring') || n.includes('beinbeuger')) {
+  if (n.includes('deadlift') || n.includes('kreuzheben') || (n.includes('curl') && n.includes('leg')) || n.includes('hamstring') || n.includes('beinbeuger')) {
     groups.push('hamstrings');
   }
   
   // Bizeps
-  if (n.includes('bicep') || n.includes('bizeps') || n.includes('curl') && !n.includes('leg')) {
+  if (n.includes('bicep') || n.includes('bizeps') || (n.includes('curl') && !n.includes('leg'))) {
     groups.push('biceps');
   }
   
@@ -281,6 +281,7 @@ export async function matchAndAddExercises(exerciseNames: string[]): Promise<Map
         matchedName: null,
       });
     }
+  }
   
   return results;
 }
