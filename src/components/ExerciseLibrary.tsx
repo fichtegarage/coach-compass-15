@@ -925,10 +925,10 @@ const ExerciseLibrary: React.FC = () => {
         const workoutIds = usages.map((u: any) => u.workout_id);
         const { data: workouts } = await supabase
           .from('plan_workouts')
-          .select('training_plan_id')
+          .select('plan_id')
           .in('id', workoutIds);
 
-        const planIds = [...new Set((workouts ?? []).map((w: any) => w.training_plan_id))];
+        const planIds = [...new Set((workouts ?? []).map((w: any) => w.plan_id))];
         const { data: plans } = await supabase
           .from('training_plans')
           .select('name')
