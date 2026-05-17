@@ -188,16 +188,43 @@ function inferMuscleGroups(name: string): string[] {
   return [...new Set(groups)];
 }
 
+// Slug-Generator (Pattern 2.20, analog #24)
+function generateSlug(text: string): string {
+  return text.toLowerCase().trim()
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 // Neue Übung zum Katalog hinzufügen
 async function addExerciseToCatalog(name: string): Promise<string | null> {
   const pattern = inferMovementPattern(name);
   const muscles = inferMuscleGroups(name);
-  
+
+  // Auth-Kontext für created_by (Pattern 2.20: getSession statt getUser)
+  const { data: { session } } = await supabase.auth.getSession();
+  const createdBy = session?.user?.id || null;
+
+  // Slug erzeugen + Kollisions-Safe-Variante
+  const baseSlug = generateSlug(name);
+  let slug = baseSlug;
+  const { data: existing } = await supabase
+    .from('exercises')
+    .select('id')
+    .eq('exercise_slug', baseSlug)
+    .maybeSingle();
+  if (existing) {
+    slug = baseSlug + '-' + Math.random().toString(36).substring(2, 8);
+  }
+
   const { data, error } = await supabase
     .from('exercises')
     .insert({
-      name: normalize(name).replace(/\s+/g, '_'),
+      name: name,
       name_de: name,
+      exercise_slug: slug,
       description: `Automatisch hinzugefügt beim Plan-Import.`,
       muscle_groups: muscles,
       movement_pattern: pattern,
@@ -205,15 +232,17 @@ async function addExerciseToCatalog(name: string): Promise<string | null> {
       difficulty: 2,
       coaching_cues: [],
       context: ['gym'],
+      is_custom: true,
+      created_by: createdBy,
     })
     .select('id')
     .single();
-  
+
   if (error) {
-    console.error('Error adding exercise:', error);
-    return null;
+    console.error('Error adding exercise to catalog:', name, error);
+    throw new Error(`Konnte Übung "${name}" nicht zum Katalog hinzufügen: ${error.message}`);
   }
-  
+
   return data?.id || null;
 }
 
@@ -240,8 +269,11 @@ export async function matchAndAddExercises(exerciseNames: string[]): Promise<Map
         matchedName: match.exercise.name_de,
       });
     } else {
-      // Kein Match - neue Übung hinzufügen
+      // Kein Match - neue Übung hinzufügen (throwt bei Fehler)
       const newId = await addExerciseToCatalog(name);
+      if (!newId) {
+        throw new Error(`Übung "${name}" konnte nicht angelegt werden (kein ID-Rückgabewert).`);
+      }
       results.set(name, {
         exerciseId: newId,
         isNew: true,
@@ -249,7 +281,6 @@ export async function matchAndAddExercises(exerciseNames: string[]): Promise<Map
         matchedName: null,
       });
     }
-  }
   
   return results;
 }
