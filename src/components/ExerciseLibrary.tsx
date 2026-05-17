@@ -934,7 +934,7 @@ const ExerciseLibrary: React.FC = () => {
           .select('name')
           .in('id', planIds);
 
-        const planNames: string[] = (plans ?? []).map((p: any) => p.name);
+        const planNames: string[] = [...new Set((plans ?? []).map((p: any) => p.name))];
         const planList = planNames.join(', ');
         toast.error(
           `"${exerciseToDelete.name_de}" wird in ${planNames.length === 1 ? 'einem Plan' : `${planNames.length} Plänen`} verwendet (${planList}). Bitte zuerst dort entfernen.`,
