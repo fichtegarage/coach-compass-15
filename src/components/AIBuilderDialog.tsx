@@ -89,10 +89,19 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({
       const systemPrompt = generateSystemPrompt(data, config);
       const userPrompt = generateUserPrompt(clientName, config);
 
+      // Auth-Token holen (Pattern 2.2: claude-proxy verlangt JWT)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Nicht eingeloggt – bitte App neu laden und erneut versuchen.');
+      }
+
       // Claude via Proxy aufrufen
       const response = await fetch('/api/claude-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
