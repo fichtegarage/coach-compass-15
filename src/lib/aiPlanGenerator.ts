@@ -236,7 +236,7 @@ export async function loadClientDataForPrompt(
   // Equipment Query vereinfachen - separate Abfragen
   const { data: equipmentData } = await supabase
     .from('client_equipment')
-    .select('equipment_id, location')
+    .select('equipment_id')
     .eq('client_id', clientId);
 
   const equipment: EquipmentItem[] = [];
@@ -254,7 +254,7 @@ export async function loadClientDataForPrompt(
     
     equipmentData.forEach((e: any) => {
       const name_de = catalogMap.get(e.equipment_id) || 'Unbekannt';
-      equipment.push({ name_de, location: e.location });
+      equipment.push({ name_de, location: 'both' });
     });
   }
 
