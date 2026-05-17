@@ -309,16 +309,16 @@ const EditExerciseDialog: React.FC<EditExerciseDialogProps> = ({ open, exercise,
 
   useEffect(() => {
     if (exercise) {
-      setName(exercise.name);
-      setNameDe(exercise.name_de);
-      setDescriptionDe(exercise.description_de || '');
-      setMuscleGroups(exercise.muscle_groups);
-      setMovementPattern(exercise.movement_pattern);
-      setExerciseType(exercise.exercise_type);
-      setDifficulty(exercise.difficulty);
-      setCoachingCues(exercise.coaching_cues.join('\n'));
-      setContext(exercise.context);
-      setRequiredEquipment(exercise.required_equipment);
+      setName(exercise.name ?? '');
+      setNameDe(exercise.name_de ?? '');
+      setDescriptionDe(exercise.description_de ?? '');
+      setMuscleGroups(exercise.muscle_groups ?? []);
+      setMovementPattern(exercise.movement_pattern ?? '');
+      setExerciseType(exercise.exercise_type ?? 'compound');
+      setDifficulty(exercise.difficulty ?? 3);
+      setCoachingCues((exercise.coaching_cues ?? []).join('\n'));
+      setContext(exercise.context ?? ['gym']);
+      setRequiredEquipment(exercise.required_equipment ?? []);
     }
   }, [exercise]);
 
