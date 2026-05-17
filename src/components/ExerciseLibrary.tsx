@@ -154,14 +154,14 @@ const ExerciseCard: React.FC<{
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="text-right">
               <p className="text-xs text-muted-foreground">
-                {movementPatternLabels[exercise.movement_pattern] || exercise.movement_pattern}
+                {movementPatternLabels[exercise.movement_pattern] || exercise.movement_pattern || '—'}
               </p>
               <div className="flex items-center gap-0.5 justify-end mt-0.5">
                 {[1, 2, 3, 4, 5].map(level => (
                   <div
                     key={level}
                     className={`w-1.5 h-1.5 rounded-full ${
-                      level <= exercise.difficulty ? 'bg-primary' : 'bg-muted'
+                      level <= (exercise.difficulty ?? 0) ? 'bg-primary' : 'bg-muted'
                     }`}
                   />
                 ))}
@@ -301,7 +301,7 @@ const EditExerciseDialog: React.FC<EditExerciseDialogProps> = ({ open, exercise,
   const [muscleGroups, setMuscleGroups] = useState<string[]>([]);
   const [movementPattern, setMovementPattern] = useState('');
   const [exerciseType, setExerciseType] = useState('compound');
-  const [difficulty, setDifficulty] = useState(3);
+  const [difficulty, setDifficulty] = useState<number>(3);
   const [coachingCues, setCoachingCues] = useState('');
   const [context, setContext] = useState<string[]>(['gym']);
   const [requiredEquipment, setRequiredEquipment] = useState<string[]>([]);
