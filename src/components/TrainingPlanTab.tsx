@@ -852,8 +852,17 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({ open, onClose, onImpo
       if (!data.client) { toast.error('Kundendaten nicht gefunden'); setStep('config'); setLoading(false); return; }
       const systemPrompt = generateSystemPrompt(data, config);
       const userPrompt = generateUserPrompt(clientName, config);
+      // Auth-Token holen (Pattern 2.2)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Nicht eingeloggt – bitte App neu laden und erneut versuchen.');
+      }
       const response = await fetch('/api/claude-proxy', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ messages: [{ role: 'user', content: systemPrompt + '\n\n' + userPrompt }], max_tokens: 8000 }),
       });
       if (!response.ok) throw new Error('API-Fehler');
