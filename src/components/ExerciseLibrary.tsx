@@ -911,6 +911,34 @@ const ExerciseLibrary: React.FC = () => {
 
     setDeleting(true);
     try {
+      // Vorcheck: Wird die Übung in Plänen verwendet?
+      const { data: usages, error: usageError } = await supabase
+        .from('plan_exercises')
+        .select('workout_id, plan_workouts!inner(training_plan_id, training_plans!inner(name))')
+        .eq('exercise_id', exerciseToDelete.id)
+        .limit(10);
+
+      if (usageError) throw usageError;
+
+      if (usages && usages.length > 0) {
+        // Plan-Namen deduplizieren
+        const planNames: string[] = [];
+        usages.forEach((u: any) => {
+          const name = u.plan_workouts?.training_plans?.name;
+          if (name && !planNames.includes(name)) planNames.push(name);
+        });
+        const planList = planNames.join(', ');
+        toast.error(
+          `"${exerciseToDelete.name_de}" wird in ${planNames.length === 1 ? 'einem Plan' : `${planNames.length} Plänen`} verwendet (${planList}). Bitte zuerst dort entfernen.`,
+          { duration: 6000 }
+        );
+        setDeleting(false);
+        setDeleteDialogOpen(false);
+        setExerciseToDelete(null);
+        return;
+      }
+
+      // Kein Treffer → sicher löschen
       const { error } = await supabase
         .from('exercises')
         .delete()
