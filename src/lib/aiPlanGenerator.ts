@@ -205,7 +205,6 @@ export async function loadClientDataForPrompt(
     pinned_note,
     general_notes,
     health_notes,
-  `)
   .eq('id', clientId)
   .single();
 
