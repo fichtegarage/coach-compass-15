@@ -214,6 +214,17 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({
           const { error: exError } = await supabase.from('plan_exercises').insert(
             workout.exercises.map(ex => {
               const match = matchResults.get(ex.name);
+
+              // Validation: exercise_id MUSS gesetzt sein (Phase 5 erzwingt NOT NULL)
+              if (!match?.exerciseId) {
+                throw new Error(`Übung "${ex.name}" konnte nicht zugeordnet werden. Import abgebrochen.`);
+              }
+
+              // Slot-Detection analog TrainingPlanTab.tsx
+              let slot: string = 'main';
+              if (/^warm.?up:/i.test(ex.name) || /^aufwärm/i.test(ex.name)) slot = 'warmup';
+              else if (/^cool.?down:/i.test(ex.name)) slot = 'cooldown';
+
               return {
                 workout_id: workoutData.id,
                 name: ex.name,
@@ -223,7 +234,8 @@ const AIBuilderDialog: React.FC<AIBuilderDialogProps> = ({
                 rest_seconds: ex.rest_seconds,
                 notes: ex.notes || null,
                 order_in_workout: ex.order_in_workout,
-                exercise_id: match?.exerciseId || null,
+                exercise_id: match.exerciseId,
+                exercise_slot: slot,
               };
             })
           );
