@@ -103,17 +103,6 @@ const VolumeChart: React.FC<VolumeChartProps> = ({ workoutLogs }) => {
 
   const data = buildChartData(workoutLogs, selectedExercise);
 
-  if (data.length < 2) {
-    return (
-      <div className="rounded-xl border border-border p-4 text-center">
-        <TrendingUp className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-        <p className="text-xs text-muted-foreground">
-          Mindestens 2 Workouts mit der gleichen Übung nötig für Progressionsdiagramm.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-xl border border-border p-4 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -149,50 +138,60 @@ const VolumeChart: React.FC<VolumeChartProps> = ({ workoutLogs }) => {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis
-            dataKey="date"
-            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={v => `${v}kg`}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Line
-            type="monotone"
-            dataKey={metric}
-            name={metric === 'volume' ? 'Volumen' : 'Max. Gewicht'}
-            stroke="#10b981"
-            strokeWidth={2}
-            dot={{ r: 4, fill: '#10b981' }}
-            activeDot={{ r: 6 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      {data.length < 2 ? (
+        <div className="py-6 text-center">
+          <TrendingUp className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-xs text-muted-foreground">
+            Mindestens 2 Workouts mit „{selectedExercise}" nötig für Progressionsdiagramm.
+          </p>
+        </div>
+      ) : (
+        <>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => `${v}kg`}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Line
+                type="monotone"
+                dataKey={metric}
+                name={metric === 'volume' ? 'Volumen' : 'Max. Gewicht'}
+                stroke="#10b981"
+                strokeWidth={2}
+                dot={{ r: 4, fill: '#10b981' }}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
 
-      {/* Mini-Stats */}
-      {data.length >= 2 && (() => {
-        const first = data[0]![metric as 'volume' | 'maxWeight'] as number;
-        const last = data[data.length - 1]![metric as 'volume' | 'maxWeight'] as number;
-        const diff = last - first;
-        const pct = first > 0 ? ((diff / first) * 100).toFixed(0) : '0';
-        return (
-          <div className="flex gap-4 pt-1 text-xs text-muted-foreground border-t border-border">
-            <span>Start: <strong className="text-foreground">{first}kg</strong></span>
-            <span>Aktuell: <strong className="text-foreground">{last}kg</strong></span>
-            <span className={`ml-auto font-semibold ${diff >= 0 ? 'text-primary' : 'text-red-500'}`}>
-              {diff >= 0 ? '+' : ''}{diff}kg ({pct}%)
-            </span>
-          </div>
-        );
-      })()}
+          {data.length >= 2 && (() => {
+            const first = data[0]![metric as 'volume' | 'maxWeight'] as number;
+            const last = data[data.length - 1]![metric as 'volume' | 'maxWeight'] as number;
+            const diff = last - first;
+            const pct = first > 0 ? ((diff / first) * 100).toFixed(0) : '0';
+            return (
+              <div className="flex gap-4 pt-1 text-xs text-muted-foreground border-t border-border">
+                <span>Start: <strong className="text-foreground">{first}kg</strong></span>
+                <span>Aktuell: <strong className="text-foreground">{last}kg</strong></span>
+                <span className={`ml-auto font-semibold ${diff >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                  {diff >= 0 ? '+' : ''}{diff}kg ({pct}%)
+                </span>
+              </div>
+            );
+          })()}
+        </>
+      )}
     </div>
   );
 };
