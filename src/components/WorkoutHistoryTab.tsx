@@ -33,6 +33,7 @@ interface SetLog {
   weight_kg: number;
   is_pr: boolean;
   logged_at: string;
+  duration_seconds: number | null;
 }
 
 interface WorkoutFeedback {
@@ -243,7 +244,11 @@ const WorkoutLogCard: React.FC<{
                     {exSets.map(set => (
                       <div key={set.id} className="flex items-center gap-3 text-sm">
                         <span className="text-muted-foreground text-xs w-14 flex-shrink-0">Satz {set.set_number}</span>
-                        <span className="font-medium tabular-nums">{Number(set.weight_kg)}kg × {set.reps_done}</span>
+                        <span className="font-medium tabular-nums">
+                          {set.duration_seconds && set.duration_seconds > 0
+                            ? `${set.duration_seconds}sek`
+                            : `${Number(set.weight_kg)}kg × ${set.reps_done}`}
+                        </span>
                         <span className="text-xs text-muted-foreground">
                           = {Math.round(Number(set.weight_kg) * set.reps_done)}kg
                         </span>
