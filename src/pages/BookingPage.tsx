@@ -15,6 +15,7 @@ import ClientMetricsWidget from '@/components/ClientMetricsWidget';
 import WeeklyCheckin from '@/components/WeeklyCheckin';
 import CycleTracker from '@/components/CycleTracker';
 import { usePhotoUrl } from '@/lib/photoUrls';
+import WorkoutHistoryCalendar, { WorkoutLogForCalendar } from '@/components/WorkoutHistoryCalendar';
 
 const sendEmail = async (to: string, subject: string, html: string) => {
   try {
@@ -157,7 +158,10 @@ const BookingPage: React.FC = () => {
   const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
   const [bookingMessage, setBookingMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [activeView, setActiveView] = useState<'calendar' | 'bookings' | 'plan'>('plan');
+  const [activeView, setActiveView] = useState<'calendar' | 'bookings' | 'plan' | 'history'>('plan');
+  const [clientWorkoutLogs, setClientWorkoutLogs] = useState<WorkoutLogForCalendar[]>([]);
+  const [workoutHistoryLoading, setWorkoutHistoryLoading] = useState(false);
+  const [workoutHistoryLoaded, setWorkoutHistoryLoaded] = useState(false);
   const [summaryEnabled, setSummaryEnabled] = useState(true);
   const [showCheckin, setShowCheckin] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -254,6 +258,39 @@ const handleLogout = () => {
     setUploadingPhoto(false);
   };
 
+  const loadWorkoutHistory = async () => {
+    if (!clientId || workoutHistoryLoaded) return;
+    setWorkoutHistoryLoading(true);
+
+    const { data: logsData } = await supabase
+      .from('workout_logs')
+      .select('id, started_at, completed_at, notes, rating, energy_level, logged_by, plan_workout_id, plan_workouts ( day_label )')
+      .eq('client_id', clientId)
+      .order('started_at', { ascending: false })
+      .limit(50);
+
+    const logIds = (logsData || []).map((l: any) => l.id);
+
+    const { data: setsData } = logIds.length > 0
+      ? await supabase.from('set_logs').select('*').in('workout_log_id', logIds)
+      : { data: [] };
+
+    const normalised: WorkoutLogForCalendar[] = (logsData || []).map((log: any) => ({
+      ...log,
+      plan_workouts: Array.isArray(log.plan_workouts)
+        ? (log.plan_workouts[0] ?? null)
+        : log.plan_workouts,
+      set_logs: ((setsData || []) as any[])
+        .filter((s: any) => s.workout_log_id === log.id)
+        .sort((a: any, b: any) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()),
+      feedback: null,
+    }));
+
+    setClientWorkoutLogs(normalised);
+    setWorkoutHistoryLoaded(true);
+    setWorkoutHistoryLoading(false);
+  };
+  
   const loadData = async () => {
     if (!clientId) return;
     setLoading(true);
@@ -514,8 +551,8 @@ const { error } = await supabase.rpc('rpc_insert_booking_request', {
 
           {/* Tab Navigation */}
           <div className="flex gap-1 bg-slate-700/50 rounded-xl p-1">
-            {[{ id: 'plan', label: '🏋️ Training' }, { id: 'calendar', label: '📅 Buchen' }, { id: 'bookings', label: '📋 Termine' }].map(tab => (
-              <button key={tab.id} onClick={() => setActiveView(tab.id as any)} className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === tab.id ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+            {[{ id: 'plan', label: '🏋️ Training' }, { id: 'calendar', label: '📅 Buchen' }, { id: 'bookings', label: '📋 Termine' }, { id: 'history', label: '📊 Verlauf' }].map(tab => (
+              <button key={tab.id} onClick={() => { setActiveView(tab.id as any); if (tab.id === 'history') loadWorkoutHistory(); }} className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === tab.id ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
                 {tab.label}
               </button>
             ))}
@@ -668,6 +705,22 @@ const { error } = await supabase.rpc('rpc_insert_booking_request', {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── VERLAUF TAB ── */}
+        {activeView === 'history' && (
+          <div className="space-y-4">
+            {workoutHistoryLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+              </div>
+            ) : (
+              <WorkoutHistoryCalendar
+                workoutLogs={clientWorkoutLogs}
+                mode="client"
+              />
             )}
           </div>
         )}
