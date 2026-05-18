@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import VolumeChart from '@/components/VolumeChart';
 import ClaudeBriefing from '@/components/ClaudeBriefing';
 import AdherenceWidget from '@/components/AdherenceWidget';
+import WorkoutHistoryCalendar from '@/components/WorkoutHistoryCalendar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -519,23 +520,12 @@ const WorkoutHistoryTab: React.FC<WorkoutHistoryTabProps> = ({ clientId }) => {
 
       {/* ── VERLAUF ── */}
       {activeTab === 'history' && (
-        workoutLogs.length === 0 ? (
-          <div className="text-center py-10 space-y-2">
-            <Dumbbell className="w-8 h-8 text-muted-foreground/30 mx-auto" />
-            <p className="text-sm text-muted-foreground">Noch keine Workouts geloggt.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {workoutLogs.map(log => (
-              <WorkoutLogCard
-                key={log.id}
-                log={log}
-                trainerId={user?.id || ''}
-                onFeedbackSaved={handleFeedbackSaved}
-              />
-            ))}
-          </div>
-        )
+        <WorkoutHistoryCalendar
+          workoutLogs={workoutLogs}
+          mode="coach"
+          trainerId={user?.id || ''}
+          onFeedbackSaved={handleFeedbackSaved}
+        />
       )}
 
       {/* ── PROGRESSION ── */}
